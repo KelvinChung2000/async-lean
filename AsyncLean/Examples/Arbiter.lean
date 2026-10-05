@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Checker.Petri
+import AsyncLean.Checker.Tactic
 import AsyncLean.Petri.Invariant
 import AsyncLean.AxiomAudit
 import Mathlib.Data.Fin.VecNotation
@@ -74,6 +74,10 @@ theorem arbiter_mutex {M : Marking (Fin 7)} (hr : arbiter.toNet.lts.Reachable ar
   rw [e₂, e₅, e₆] at h
   omega
 
-#assert_standard_axioms handshake_correct arbiter_correct arbiter_mutex
+/-- Both designs are 1-safe (checked by `async_decide`). -/
+theorem handshake_safe : handshake.Safe := by async_decide
+theorem arbiter_safe : arbiter.Safe := by async_decide
+
+#assert_standard_axioms handshake_correct arbiter_correct arbiter_mutex handshake_safe arbiter_safe
 
 end AsyncLean.Examples

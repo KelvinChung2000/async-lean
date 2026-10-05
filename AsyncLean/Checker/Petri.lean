@@ -2,8 +2,12 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Checker.Explicit
+import AsyncLean.Checker.Invariant
+import AsyncLean.Checker.Diagnose
 import AsyncLean.Petri.Basic
 import Mathlib.Data.List.FinRange
+import Mathlib.Data.Set.Finite.Lattice
+import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # Concrete Petri nets and their verified analysis
@@ -34,6 +38,9 @@ structure PTrans where
   post : List ℕ
   /-- Internal (silent / dummy) transition, relevant for livelock. -/
   internal : Bool := false
+  /-- Signal edge labelling the transition when the net is used as a signal transition graph
+  (`some (z, true)` is `z+`, `some (z, false)` is `z-`, `none` a dummy); ignored by `PNet`. -/
+  edge : Option (ℕ × Bool) := none
 
 /-- A concrete Petri net with places `0 … places - 1`. -/
 structure PNet where
@@ -70,6 +77,12 @@ def Correct : Prop :=
   N.toNet.lts.DeadlockFree N.M₀ ∧ N.toNet.lts.LivelockFree N.Internal N.M₀ ∧
     N.toNet.lts.Live N.M₀
 
+/-- No reachable marking puts more than `k` tokens on a place. -/
+def Bounded (k : ℕ) : Prop := ∀ M, N.toNet.lts.Reachable N.M₀ M → ∀ p, M p ≤ k
+
+/-- The net is 1-safe: no place ever holds two tokens. -/
+def Safe : Prop := N.Bounded 1
+
 /-- Well-formedness: the initial marking has the right length and all arcs refer to
 existing places. -/
 def wf : Bool :=
@@ -94,6 +107,11 @@ def succ (m : List ℕ) : List (Fin N.trans.length × List ℕ) :=
 
 /-- The executable LTS. -/
 def explicit : ExplicitLTS (List ℕ) (Fin N.trans.length) := ⟨N.succ⟩
+
+/-- The executable semantics with transitions labelled by their *names*: the form used to
+compose nets, which synchronise on shared names (`ExplicitLTS.par`). -/
+def named : ExplicitLTS (List ℕ) String :=
+  ⟨fun m => (N.succ m).map fun e => ((N.tr e.1).name, e.2)⟩
 
 /-- Encoding of abstract markings as lists. -/
 def enc (M : Marking (Fin N.places)) : List ℕ := List.ofFn M
@@ -250,6 +268,26 @@ def checkCert (c : ExplicitLTS.Cert (List ℕ)) : Bool :=
     (List.finRange N.trans.length) N.init c
 
 variable (N) in
+/-- Compute a home-state certificate (untrusted). -/
+def mkCertHome (fuel : ℕ := 100000) : ExplicitLTS.HomeCert (List ℕ) :=
+  N.explicit.mkCertHome lexCmp (fun t => (N.tr t).internal) (List.finRange N.trans.length) fuel
+    N.init
+
+variable (N) in
+/-- Check a home-state certificate for `Correct` (trusted). -/
+def checkCertHome (c : ExplicitLTS.HomeCert (List ℕ)) : Bool :=
+  N.wf && N.explicit.checkCertHome lexCmp (fun t => (N.tr t).internal)
+    (List.finRange N.trans.length) N.init c
+
+theorem correct_of_checkCertHome {c : ExplicitLTS.HomeCert (List ℕ)}
+    (h : N.checkCertHome c = true) : N.Correct := by
+  simp only [checkCertHome, Bool.and_eq_true] at h
+  obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCertHome (List.mem_finRange) h.2
+  rw [← enc_M₀ h.1] at hd hl hv
+  exact ⟨(bisim h.1).deadlockFree_iff.1 hd, (bisim h.1).livelockFree_iff.1 hl,
+    (bisim h.1).live_iff.1 hv⟩
+
+variable (N) in
 /-- Check a certificate for persistence (trusted). -/
 def checkCertPersistent (c : ExplicitLTS.Cert (List ℕ)) : Bool :=
   N.wf && N.explicit.checkCertPersistent lexCmp N.init c
@@ -280,6 +318,35 @@ theorem persistent_of_check {fuel : ℕ} (h : N.checkPersistent fuel = true) :
   have := ExplicitLTS.persistent_of_checkPersistent h.2
   rw [← enc_M₀ h.1] at this
   exact (bisim h.1).persistent_iff.1 this
+
+/-! ### Boundedness -/
+
+variable (N) in
+/-- Compute a certificate for boundedness (untrusted). -/
+def mkBoundCert (fuel : ℕ := 100000) : ExplicitLTS.InvCert (List ℕ) Unit :=
+  N.explicit.mkInvCert lexCmp (fun _ => ()) fuel N.init
+
+variable (N) in
+/-- Check that every reachable marking has at most `k` tokens per place. -/
+def checkBounded (k : ℕ) (c : ExplicitLTS.InvCert (List ℕ) Unit) : Bool :=
+  N.wf && N.explicit.checkInv lexCmp (fun m _ _ => m.all (· ≤ k)) N.init c
+
+theorem bounded_of_check {k : ℕ} {c : ExplicitLTS.InvCert (List ℕ) Unit}
+    (h : N.checkBounded k c = true) : N.Bounded k := by
+  simp only [checkBounded, Bool.and_eq_true] at h
+  obtain ⟨hwf, hc⟩ := h
+  intro M hM p
+  have hr := (bisim hwf).reachable_map hM
+  rw [enc_M₀ hwf] at hr
+  have := ExplicitLTS.of_checkInv hc _ hr
+  simp only [List.all_eq_true, decide_eq_true_eq] at this
+  exact this _ (by simp [enc, List.mem_ofFn])
+
+/-- A bounded net has finitely many reachable markings. -/
+theorem reachable_finite_of_bounded {k : ℕ} (h : N.Bounded k) :
+    {M | N.toNet.lts.Reachable N.M₀ M}.Finite :=
+  (Set.Finite.pi (t := fun _ => Set.Iic k) fun _ => Set.finite_Iic k).subset
+    fun M hM p _ => h M hM p
 
 /-! ### Verified refutation of concrete nets
 

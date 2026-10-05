@@ -403,6 +403,205 @@ theorem persistent_iff {s₀ : S} : B.Persistent (f s₀) ↔ A.Persistent s₀ 
 
 end FunBisim
 
+/-! ### Functional bisimulation on an invariant -/
+
+/-- `f` is a functional bisimulation from `A` to `B` on the states satisfying `I`, and `I` is
+preserved by the steps of `A`. -/
+structure FunBisimOn (A : LTS S L) (B : LTS S' L) (f : S → S') (I : S → Prop) : Prop where
+  step_iff : ∀ s, I s → ∀ l t, B.step (f s) l t ↔ ∃ s', A.step s l s' ∧ f s' = t
+  inv : ∀ s, I s → ∀ l s', A.step s l s' → I s'
+
+namespace FunBisimOn
+
+variable {B : LTS S' L} {f : S → S'} {I : S → Prop} (hf : FunBisimOn A B f I)
+include hf
+
+theorem step_map {s s' : S} {l : L} (hs : I s) (h : A.step s l s') : B.step (f s) l (f s') :=
+  (hf.step_iff s hs _ _).2 ⟨s', h, rfl⟩
+
+theorem enabled_iff {s : S} (hs : I s) {l : L} : B.Enabled (f s) l ↔ A.Enabled s l := by
+  constructor
+  · rintro ⟨t, ht⟩
+    obtain ⟨s', hs', -⟩ := (hf.step_iff s hs _ _).1 ht
+    exact ⟨s', hs'⟩
+  · rintro ⟨s', hs'⟩
+    exact ⟨_, hf.step_map hs hs'⟩
+
+theorem inv_reachable {s₀ s : S} (h₀ : I s₀) (h : A.Reachable s₀ s) : I s :=
+  h.invariant h₀ fun s l s' hs hst => hf.inv s hs l s' hst
+
+theorem reachable_map {s₀ s : S} (h₀ : I s₀) (h : A.Reachable s₀ s) :
+    B.Reachable (f s₀) (f s) := by
+  induction h with
+  | refl => exact Reachable.refl _
+  | tail hr hst ih =>
+    obtain ⟨l, hl⟩ := hst
+    exact ih.tail ⟨l, hf.step_map (hf.inv_reachable h₀ hr) hl⟩
+
+theorem reachable_lift {s₀ : S} (h₀ : I s₀) {t : S'} (h : B.Reachable (f s₀) t) :
+    ∃ s, A.Reachable s₀ s ∧ f s = t := by
+  induction h with
+  | refl => exact ⟨s₀, Reachable.refl _, rfl⟩
+  | tail _ hst ih =>
+    obtain ⟨s, hs, rfl⟩ := ih
+    obtain ⟨l, hl⟩ := hst
+    obtain ⟨s', hs', rfl⟩ := (hf.step_iff s (hf.inv_reachable h₀ hs) _ _).1 hl
+    exact ⟨s', hs.tail ⟨l, hs'⟩, rfl⟩
+
+theorem deadlockFree_iff {s₀ : S} (h₀ : I s₀) :
+    B.DeadlockFree (f s₀) ↔ A.DeadlockFree s₀ := by
+  simp only [LTS.deadlockFree_iff]
+  constructor
+  · intro h s hs
+    obtain ⟨l, t, ht⟩ := h _ (hf.reachable_map h₀ hs)
+    obtain ⟨s', hs', -⟩ := (hf.step_iff s (hf.inv_reachable h₀ hs) _ _).1 ht
+    exact ⟨l, s', hs'⟩
+  · intro h t ht
+    obtain ⟨s, hs, rfl⟩ := hf.reachable_lift h₀ ht
+    obtain ⟨l, s', hs'⟩ := h s hs
+    exact ⟨l, _, hf.step_map (hf.inv_reachable h₀ hs) hs'⟩
+
+theorem acc_iff {internal : L → Prop} {s : S} (hs : I s) :
+    Acc (B.IRel internal) (f s) ↔ Acc (A.IRel internal) s := by
+  constructor
+  · intro h
+    generalize ht : f s = t at h
+    induction h generalizing s with
+    | intro t _ ih =>
+      subst ht
+      exact Acc.intro s fun s' ⟨l, hl, hst⟩ =>
+        ih (f s') ⟨l, hl, hf.step_map hs hst⟩ (hf.inv s hs l s' hst) rfl
+  · intro h
+    induction h with
+    | intro s _ ih =>
+      refine Acc.intro (f s) fun t ⟨l, hl, hst⟩ => ?_
+      obtain ⟨s', hs', rfl⟩ := (hf.step_iff s hs _ _).1 hst
+      exact ih s' ⟨l, hl, hs'⟩ (hf.inv s hs l s' hs')
+
+theorem livelockFree_iff {internal : L → Prop} {s₀ : S} (h₀ : I s₀) :
+    B.LivelockFree internal (f s₀) ↔ A.LivelockFree internal s₀ := by
+  simp only [livelockFree_iff_acc]
+  constructor
+  · intro h s hs
+    exact (hf.acc_iff (hf.inv_reachable h₀ hs)).1 (h _ (hf.reachable_map h₀ hs))
+  · intro h t ht
+    obtain ⟨s, hs, rfl⟩ := hf.reachable_lift h₀ ht
+    exact (hf.acc_iff (hf.inv_reachable h₀ hs)).2 (h s hs)
+
+theorem liveLabel_iff {s₀ : S} (h₀ : I s₀) {l : L} :
+    B.LiveLabel (f s₀) l ↔ A.LiveLabel s₀ l := by
+  constructor
+  · intro h s hs
+    obtain ⟨t, ht, hen⟩ := h _ (hf.reachable_map h₀ hs)
+    obtain ⟨s', hs', rfl⟩ := hf.reachable_lift (hf.inv_reachable h₀ hs) ht
+    exact ⟨s', hs', (hf.enabled_iff (hf.inv_reachable h₀ (hs.trans hs'))).1 hen⟩
+  · intro h t ht
+    obtain ⟨s, hs, rfl⟩ := hf.reachable_lift h₀ ht
+    obtain ⟨s', hs', hen⟩ := h s hs
+    exact ⟨f s', hf.reachable_map (hf.inv_reachable h₀ hs) hs',
+      (hf.enabled_iff (hf.inv_reachable h₀ (hs.trans hs'))).2 hen⟩
+
+theorem live_iff {s₀ : S} (h₀ : I s₀) : B.Live (f s₀) ↔ A.Live s₀ :=
+  forall_congr' fun _ => hf.liveLabel_iff h₀
+
+end FunBisimOn
+
+/-! ### Systems that agree on their reachable states -/
+
+/-- `A` and `B` have the same steps out of every state reachable (in `A`) from `s₀`.  Then
+they have the same reachable states and the same deadlock, livelock, liveness and persistence
+properties from `s₀`. -/
+def StepEqOn (A B : LTS S L) (s₀ : S) : Prop :=
+  ∀ s, A.Reachable s₀ s → ∀ l s', A.step s l s' ↔ B.step s l s'
+
+namespace StepEqOn
+
+variable {A B : LTS S L} {s₀ : S} (h : StepEqOn A B s₀)
+include h
+
+theorem reachable_from {s : S} (hs : A.Reachable s₀ s) {s' : S} :
+    A.Reachable s s' ↔ B.Reachable s s' := by
+  constructor
+  · intro hr
+    induction hr with
+    | refl => exact Reachable.refl _
+    | tail hr' hst ih =>
+      obtain ⟨l, hl⟩ := hst
+      exact ih.tail ⟨l, (h _ (hs.trans hr') l _).1 hl⟩
+  · intro hr
+    induction hr with
+    | refl => exact Reachable.refl _
+    | tail _ hst ih =>
+      obtain ⟨l, hl⟩ := hst
+      exact ih.tail ⟨l, (h _ (hs.trans ih) l _).2 hl⟩
+
+theorem reachable_iff {s : S} : A.Reachable s₀ s ↔ B.Reachable s₀ s :=
+  h.reachable_from (Reachable.refl s₀)
+
+theorem enabled_iff {s : S} (hs : A.Reachable s₀ s) {l : L} : A.Enabled s l ↔ B.Enabled s l :=
+  ⟨fun ⟨s', h'⟩ => ⟨s', (h s hs l s').1 h'⟩, fun ⟨s', h'⟩ => ⟨s', (h s hs l s').2 h'⟩⟩
+
+theorem deadlockFree_iff : A.DeadlockFree s₀ ↔ B.DeadlockFree s₀ := by
+  simp only [LTS.deadlockFree_iff]
+  constructor
+  · intro hd s hs
+    obtain ⟨l, s', h'⟩ := hd s (h.reachable_iff.2 hs)
+    exact ⟨l, s', (h s (h.reachable_iff.2 hs) l s').1 h'⟩
+  · intro hd s hs
+    obtain ⟨l, s', h'⟩ := hd s (h.reachable_iff.1 hs)
+    exact ⟨l, s', (h s hs l s').2 h'⟩
+
+theorem acc_iff {internal : L → Prop} {s : S} (hs : A.Reachable s₀ s) :
+    Acc (A.IRel internal) s ↔ Acc (B.IRel internal) s := by
+  constructor
+  · intro hacc
+    induction hacc with
+    | intro s _ ih =>
+      refine Acc.intro s fun s' ⟨l, hl, hst⟩ => ?_
+      have hA : A.step s l s' := (h s hs l s').2 hst
+      exact ih s' ⟨l, hl, hA⟩ (hs.tail ⟨l, hA⟩)
+  · intro hacc
+    induction hacc with
+    | intro s _ ih =>
+      refine Acc.intro s fun s' ⟨l, hl, hst⟩ => ?_
+      exact ih s' ⟨l, hl, (h s hs l s').1 hst⟩ (hs.tail ⟨l, hst⟩)
+
+theorem livelockFree_iff {internal : L → Prop} :
+    A.LivelockFree internal s₀ ↔ B.LivelockFree internal s₀ := by
+  simp only [LTS.livelockFree_iff_acc]
+  constructor
+  · intro hl s hs
+    exact (h.acc_iff (h.reachable_iff.2 hs)).1 (hl s (h.reachable_iff.2 hs))
+  · intro hl s hs
+    exact (h.acc_iff hs).2 (hl s (h.reachable_iff.1 hs))
+
+theorem liveLabel_iff {l : L} : A.LiveLabel s₀ l ↔ B.LiveLabel s₀ l := by
+  constructor
+  · intro hl s hs
+    have hsA := h.reachable_iff.2 hs
+    obtain ⟨s', h1, h2⟩ := hl s hsA
+    exact ⟨s', (h.reachable_from hsA).1 h1, (h.enabled_iff (hsA.trans h1)).1 h2⟩
+  · intro hl s hs
+    obtain ⟨s', h1, h2⟩ := hl s (h.reachable_iff.1 hs)
+    have h1' := (h.reachable_from hs).2 h1
+    exact ⟨s', h1', (h.enabled_iff (hs.trans h1')).2 h2⟩
+
+theorem live_iff : A.Live s₀ ↔ B.Live s₀ := forall_congr' fun _ => h.liveLabel_iff
+
+theorem persistent_iff : A.Persistent s₀ ↔ B.Persistent s₀ := by
+  constructor
+  · intro hp s hs l l' s' hne hen hst
+    have hsA := h.reachable_iff.2 hs
+    have hA := (h s hsA l' s').2 hst
+    exact (h.enabled_iff (hsA.tail ⟨l', hA⟩)).1
+      (hp s hsA l l' s' hne ((h.enabled_iff hsA).2 hen) hA)
+  · intro hp s hs l l' s' hne hen hst
+    have hB := (h s hs l' s').1 hst
+    exact (h.enabled_iff (hs.tail ⟨l', hst⟩)).2
+      (hp s (h.reachable_iff.1 hs) l l' s' hne ((h.enabled_iff hs).1 hen) hB)
+
+end StepEqOn
+
 end LTS
 
 end AsyncLean

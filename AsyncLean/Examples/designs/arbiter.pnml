@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A two-client mutual exclusion element -->
+<pnml xmlns="http://www.pnml.org/version-2009/grammar/pnml">
+  <net id="arbiter" type="http://www.pnml.org/version-2009/grammar/ptnet">
+    <page id="page0">
+      <place id="idle1"><initialMarking><text>1</text></initialMarking></place>
+      <place id="req1"/>
+      <place id="cs1"/>
+      <place id="idle2"><initialMarking><text>1</text></initialMarking></place>
+      <place id="req2"/>
+      <place id="cs2"/>
+      <place id="mutex"><initialMarking><text>1</text></initialMarking></place>
+      <transition id="r1p"><name><text>r1+</text></name></transition>
+      <transition id="g1"><name><text>g1</text></name></transition>
+      <transition id="r1m"><name><text>r1-</text></name></transition>
+      <transition id="r2p"><name><text>r2+</text></name></transition>
+      <transition id="g2"><name><text>g2</text></name></transition>
+      <transition id="r2m"><name><text>r2-</text></name></transition>
+      <arc id="a1" source="idle1" target="r1p"/>
+      <arc id="a2" source="r1p" target="req1"/>
+      <arc id="a3" source="req1" target="g1"/>
+      <arc id="a4" source="mutex" target="g1"/>
+      <arc id="a5" source="g1" target="cs1"/>
+      <arc id="a6" source="cs1" target="r1m"/>
+      <arc id="a7" source="r1m" target="idle1"/>
+      <arc id="a8" source="r1m" target="mutex"/>
+      <arc id="b1" source="idle2" target="r2p"/>
+      <arc id="b2" source="r2p" target="req2"/>
+      <arc id="b3" source="req2" target="g2"/>
+      <arc id="b4" source="mutex" target="g2"/>
+      <arc id="b5" source="g2" target="cs2"/>
+      <arc id="b6" source="cs2" target="r2m"/>
+      <arc id="b7" source="r2m" target="idle2"/>
+      <arc id="b8" source="r2m" target="mutex"/>
+    </page>
+  </net>
+</pnml>

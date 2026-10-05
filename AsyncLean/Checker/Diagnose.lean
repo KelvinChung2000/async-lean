@@ -68,6 +68,24 @@ def findNonPersistent [DecidableEq L] (fuel : ℕ) (s₀ : S) : Option (List L �
     (E.succ p.1).findSome? fun e => (E.succ p.1).findSome? fun e' =>
       if e.1 ≠ e'.1 ∧ !E.enabledB e'.2 e.1 then some (p.2, e.1, e'.1) else none
 
+/-- Compute a home-state certificate (untrusted): ranks, distances back to `s₀`, and for each
+label a shortest trace of states to a state enabling it. -/
+def mkCertHome [DecidableEq L] (internal : L → Bool) (labels : List L) (fuel : ℕ) (s₀ : S) :
+    HomeCert S :=
+  let t := E.explore cmp fuel s₀
+  let rk := E.autoRank cmp internal t
+  let states := t.toListAcc []
+  let home := (E.distAux cmp states states.length 0
+    (({} : BStore (S × ℕ)).pushKV cmp s₀ 0) (BTree.ofList [s₀])).tree.rebalance
+  let tree := BTree.ofList (states.map fun s =>
+    (s, (tblFn cmp rk s, tblFn cmp home s, (E.succ s).map Prod.snd)))
+  let paths := E.bfsPaths cmp fuel s₀
+  let traces := labels.map fun l =>
+    match paths.find? (fun p => E.enabledB p.1 l) with
+    | some p => (E.labelTrace s₀ p.2).map Prod.snd
+    | none => []
+  (tree, traces)
+
 end ExplicitLTS
 
 end AsyncLean
