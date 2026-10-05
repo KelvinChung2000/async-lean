@@ -28,16 +28,17 @@ namespace AsyncLean
 
 namespace Circuit
 
-variable {C : Circuit} {iso : List ℕ}
+variable {C : Circuit} {iso : Forks}
 
 /-! ### Structure of the circuit with wires -/
 
 theorem mem_branches {k i : ℕ} (h : (k, i) ∈ C.branches iso) : i < C.signals := by
-  simp only [branches, List.mem_flatMap, List.mem_map, List.mem_filter, Bool.and_eq_true,
-    decide_eq_true_eq] at h
-  obtain ⟨_, _, _, ⟨_, h, _⟩, he⟩ := h
-  cases he
-  exact h.2
+  simp only [branches, List.mem_eraseDups, List.mem_flatMap, List.mem_map, List.mem_filter,
+    Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨_, _, j, ⟨_, h, _⟩, he⟩ := h
+  have := congrArg Prod.snd he
+  simp only [Forks.key_snd] at this
+  exact this ▸ h.2
 
 theorem withWires_length :
     (C.withWires iso).gates.length = C.gates.length + (C.branches iso).length := by
@@ -128,7 +129,7 @@ theorem val_settle_wireOf (s : Fin C.signals → Bool) (k : ℕ) :
       obtain ⟨hj, hji, -⟩ := List.idxOf?_eq_some_iff.1 hj
       have h1 : C.signals + j < (C.withWires iso).signals := by simp only [withWires]; omega
       have h2 : ¬ C.signals + j < C.signals := by omega
-      simp only [val, settle, h1, h2, ↓reduceDIte, Nat.add_sub_cancel_left, hji]
+      simp only [val, settle, h1, h2, ↓reduceDIte, Nat.add_sub_cancel_left, hji, Forks.key_snd]
     · rw [val_lt _ hi, proj_settle]
   · have h1 : ¬ C.signals + (C.branches iso).length < (C.withWires iso).signals := by
       simp only [withWires]; omega
