@@ -1,6 +1,7 @@
 import AsyncLean.LTS.Basic
 import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Compose
+import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.Basic
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
@@ -34,3 +35,4 @@ import AsyncLean.Examples.StgImpl
 import AsyncLean.Examples.Compositional
 import AsyncLean.Examples.Imported
 import AsyncLean.Examples.Structural
+import AsyncLean.Examples.Fairness

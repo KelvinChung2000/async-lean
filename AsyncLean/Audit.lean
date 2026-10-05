@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.LTS.Properties
+import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -34,6 +35,11 @@ open LTS
   FunBisim.deadlockFree_iff FunBisim.livelockFree_iff FunBisim.live_iff FunBisim.persistent_iff
   StepEqOn.reachable_iff StepEqOn.deadlockFree_iff StepEqOn.livelockFree_iff StepEqOn.live_iff
   StepEqOn.persistent_iff
+
+-- Fairness
+#assert_standard_axioms
+  Run.infOften_label_of_live Run.infOften_external_of_progress
+  Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
 
 -- Compositional verification
 #assert_standard_axioms

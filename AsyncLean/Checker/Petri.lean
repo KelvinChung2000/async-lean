@@ -6,6 +6,8 @@ import AsyncLean.Checker.Invariant
 import AsyncLean.Checker.Diagnose
 import AsyncLean.Petri.Basic
 import Mathlib.Data.List.FinRange
+import Mathlib.Data.Set.Finite.Lattice
+import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # Concrete Petri nets and their verified analysis
@@ -339,6 +341,12 @@ theorem bounded_of_check {k : ℕ} {c : ExplicitLTS.InvCert (List ℕ) Unit}
   have := ExplicitLTS.of_checkInv hc _ hr
   simp only [List.all_eq_true, decide_eq_true_eq] at this
   exact this _ (by simp [enc, List.mem_ofFn])
+
+/-- A bounded net has finitely many reachable markings. -/
+theorem reachable_finite_of_bounded {k : ℕ} (h : N.Bounded k) :
+    {M | N.toNet.lts.Reachable N.M₀ M}.Finite :=
+  (Set.Finite.pi (t := fun _ => Set.Iic k) fun _ => Set.finite_Iic k).subset
+    fun M hM p _ => h M hM p
 
 /-! ### Verified refutation of concrete nets
 
