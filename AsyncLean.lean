@@ -24,6 +24,8 @@ import AsyncLean.Import.Pnml
 import AsyncLean.Import.Verilog
 import AsyncLean.Auto.Simplex
 import AsyncLean.Petri.FreeChoice
+import AsyncLean.Circuit.Wires
+import AsyncLean.Circuit.QDI
 import AsyncLean.Auto.Structural
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
@@ -38,3 +40,4 @@ import AsyncLean.Examples.Imported
 import AsyncLean.Examples.Structural
 import AsyncLean.Examples.Fairness
 import AsyncLean.Examples.FreeChoice
+import AsyncLean.Examples.QDI

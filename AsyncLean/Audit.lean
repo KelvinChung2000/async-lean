@@ -4,6 +4,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
+import AsyncLean.Circuit.QDI
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -41,6 +42,11 @@ open LTS
 #assert_standard_axioms
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
+
+-- Wire delays: QDI implies speed independence
+#assert_standard_axioms
+  Circuit.speedIndependent_of_qdi Circuit.correct_of_qdi Circuit.deadlockFree_of_withWires
+  Circuit.livelockFree_of_withWires Circuit.reachable_settle Circuit.reachable_proj
 
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms

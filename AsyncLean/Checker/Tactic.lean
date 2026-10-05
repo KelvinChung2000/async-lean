@@ -4,6 +4,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.Checker.Petri
 import AsyncLean.Checker.Diagnose
 import AsyncLean.Circuit.Basic
+import AsyncLean.Circuit.Wires
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
@@ -324,6 +325,8 @@ def matchCircuit (tgt : Expr) : Option (Expr × Goal) :=
   match tgt.getAppFnArgs with
   | (``Circuit.Correct, #[C]) => some (C, .correct)
   | (``Circuit.SpeedIndependent, #[C]) => some (C, .persistent)
+  | (``Circuit.QDI, #[C, iso]) => some (mkApp2 (mkConst ``Circuit.withWires) C iso, .persistent)
+  | (``Circuit.QDICorrect, #[C, iso]) => some (mkApp2 (mkConst ``Circuit.withWires) C iso, .correct)
   | (``LTS.DeadlockFree, #[_, _, A, _]) => (circOf A).map (·, .deadlock)
   | (``LTS.LivelockFree, #[_, _, A, _, _]) => (circOf A).map (·, .livelock)
   | (``LTS.Live, #[_, _, A, _]) => (circOf A).map (·, .live)
