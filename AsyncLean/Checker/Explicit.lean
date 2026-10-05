@@ -75,6 +75,11 @@ def enabledB [DecidableEq L] (s : S) (l : L) : Bool :=
 def progressB [DecidableEq L] (l : L) (d : S → ℕ) (t : BTree S) : Bool :=
   t.all fun s => E.enabledB s l || (E.succ s).any fun e => decide (d e.2 < d s)
 
+/-- No step out of `t` disables a different enabled label. -/
+def persistentB [DecidableEq L] (t : BTree S) : Bool :=
+  t.all fun s => (E.succ s).all fun e => (E.succ s).all fun e' =>
+    decide (e.1 = e'.1) || E.enabledB e'.2 e.1
+
 /-! ### Soundness of the checker -/
 
 variable {E} {cmp}
@@ -129,6 +134,18 @@ theorem liveLabel_of_check [DecidableEq L] {t : BTree S} {s₀ : S} {l : L} {d :
   rcases hp s hs with h | ⟨⟨l', s'⟩, hmem, hlt⟩
   · exact Or.inl (enabledB_iff.1 h)
   · exact Or.inr ⟨l', s', hmem, hlt⟩
+
+theorem persistent_of_check [DecidableEq L] {t : BTree S} {s₀ : S}
+    (h₀ : t.find cmp s₀ = true) (hc : E.closedB cmp t = true)
+    (hp : E.persistentB t = true) : E.toLTS.Persistent s₀ := by
+  intro s hs l l' s' hne hen hst
+  have hmem := mem_of_reachable (BTree.mem_toList_of_find h₀) hc hs
+  obtain ⟨s₁, h₁⟩ := hen
+  simp only [persistentB, BTree.all_eq_true, List.all_eq_true, Bool.or_eq_true,
+    decide_eq_true_eq] at hp
+  rcases hp s hmem (l, s₁) h₁ (l', s') hst with h | h
+  · exact absurd h hne
+  · exact enabledB_iff.1 h
 
 end Checker
 
@@ -236,7 +253,17 @@ def checkAll [DecidableEq L] (internal : L → Bool) (labels : List L) (fuel : �
     E.rankDecreasesB internal (tblFn cmp (E.autoRank cmp internal t)) t &&
     labels.all fun l => E.progressB l (tblFn cmp (E.autoDist cmp l t)) t
 
+/-- Explore from `s₀` and check persistence (speed independence / hazard freedom). -/
+def checkPersistent [DecidableEq L] (fuel : ℕ) (s₀ : S) : Bool :=
+  let t := E.explore cmp fuel s₀
+  t.find cmp s₀ && E.closedB cmp t && E.persistentB t
+
 variable {E} {cmp}
+
+theorem persistent_of_checkPersistent [DecidableEq L] {fuel : ℕ} {s₀ : S}
+    (h : E.checkPersistent cmp fuel s₀ = true) : E.toLTS.Persistent s₀ := by
+  simp only [checkPersistent, Bool.and_eq_true] at h
+  exact persistent_of_check h.1.1 h.1.2 h.2
 
 theorem deadlockFree_of_checkDeadlockFree {fuel : ℕ} {s₀ : S}
     (h : E.checkDeadlockFree cmp fuel s₀ = true) : E.toLTS.DeadlockFree s₀ := by
@@ -266,6 +293,204 @@ theorem of_checkAll [DecidableEq L] {internal : L → Bool} {labels : List L}
     fun l => liveLabel_of_check h₀ hc (hp l (hl l))⟩
 
 end OneShot
+
+/-! ### Certificates as data
+
+For larger systems it is much faster to compute the certificate *outside* the kernel (in
+compiled code, at elaboration time) and to hand it to the kernel as a literal term: the kernel
+then only runs the trusted checker.  A `Cert` is a search tree mapping every candidate state
+to its rank (for livelock freedom) and its distance to each label (for liveness); `mkCert`
+computes it (untrusted) and `checkCert` validates it in a single pass with one lookup per
+transition (trusted, `of_checkCert`).  The `async_decide` tactic automates this. -/
+
+/-- A certificate: each state with its rank, its distances to the labels, and (as literal
+data, so that the kernel does not recompute them during lookups) its successor states in the
+order produced by `succ`. -/
+abbrev Cert (S : Type*) := BTree (S × (ℕ × List ℕ × List S))
+
+section CertSection
+
+variable [DecidableEq S] [DecidableEq L] (cmp : S → S → Ordering)
+
+/-- Compute a certificate (untrusted). -/
+def mkCert (internal : L → Bool) (labels : List L) (fuel : ℕ) (s₀ : S) : Cert S :=
+  let t := E.explore cmp fuel s₀
+  let rk := E.autoRank cmp internal t
+  let ds := labels.map fun l => E.autoDist cmp l t
+  BTree.ofList ((t.toListAcc []).map fun s =>
+    (s, (tblFn cmp rk s, ds.map (fun d => tblFn cmp d s), (E.succ s).map Prod.snd)))
+
+/-- The checks performed at one state of the certificate. -/
+def checkNode (internal : L → Bool) (labels : List L) (c : Cert S) (s : S) : Bool :=
+  match c.findData cmp s with
+  | none => false
+  | some (r, dv, ss) =>
+    let es := E.succ s
+    let ds := ((es.map Prod.fst).zip ss).map fun e => (e.1, c.findData cmp e.2)
+    decide (es.map Prod.snd = ss) && !ss.isEmpty &&
+    (ds.all fun p => match p.2 with
+      | none => false
+      | some (r', _, _) => !internal p.1 || decide (r' < r)) &&
+    ((labels.zip (List.range labels.length)).all fun li => E.enabledB s li.1 ||
+      ds.any fun p => match p.2 with
+        | none => false
+        | some (_, dv', _) => decide (dv'.getD li.2 0 < dv.getD li.2 0))
+
+/-- Check a certificate (trusted). -/
+def checkCert (internal : L → Bool) (labels : List L) (s₀ : S) (c : Cert S) : Bool :=
+  (c.findData cmp s₀).isSome && c.all fun x => E.checkNode cmp internal labels c x.1
+
+/-- The persistence checks at one state of the certificate. -/
+def checkNodePersistent (c : Cert S) (s : S) : Bool :=
+  match c.findData cmp s with
+  | none => false
+  | some (_, _, ss) =>
+    let es := E.succ s
+    let es' := (es.map Prod.fst).zip ss
+    decide (es.map Prod.snd = ss) && (ss.all fun s' => (c.findData cmp s').isSome) &&
+      es.all fun e => es'.all fun e' => decide (e.1 = e'.1) || E.enabledB e'.2 e.1
+
+/-- Check a certificate for persistence (trusted). -/
+def checkCertPersistent (s₀ : S) (c : Cert S) : Bool :=
+  (c.findData cmp s₀).isSome && c.all fun x => E.checkNodePersistent cmp c x.1
+
+variable {E} {cmp}
+
+/-- The states of a certificate. -/
+def Cert.Mem (c : Cert S) (s : S) : Prop := ∃ b, (s, b) ∈ c.toList
+
+omit [DecidableEq S] [DecidableEq L] in
+theorem zip_map_fst_snd {α β : Type*} (l : List (α × β)) :
+    (l.map Prod.fst).zip (l.map Prod.snd) = l := by
+  induction l with
+  | nil => rfl
+  | cons y l ih => simp [ih]
+
+theorem Cert.mem_of_findData {c : Cert S} {s : S} {b : ℕ × List ℕ × List S}
+    (h : c.findData cmp s = some b) : c.Mem s :=
+  ⟨b, BTree.mem_toList_of_findData h⟩
+
+theorem Cert.mem_of_isSome {c : Cert S} {s : S} (h : (c.findData cmp s).isSome = true) :
+    c.Mem s := by
+  obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 h
+  exact Cert.mem_of_findData hb
+
+/-- Unpack the checks at a state of the certificate. -/
+theorem checkNode_spec {internal : L → Bool} {labels : List L} {c : Cert S} {s : S}
+    (h : E.checkNode cmp internal labels c s = true) :
+    ∃ r dv, (∃ ss, c.findData cmp s = some (r, dv, ss)) ∧ (E.succ s ≠ []) ∧
+      (∀ l s', (l, s') ∈ E.succ s → ∃ r' dv' ss', c.findData cmp s' = some (r', dv', ss') ∧
+        (internal l = true → r' < r)) ∧
+      (∀ l i, (l, i) ∈ labels.zip (List.range labels.length) → E.enabledB s l = true ∨
+        ∃ l' s' r' dv' ss', (l', s') ∈ E.succ s ∧ c.findData cmp s' = some (r', dv', ss') ∧
+          dv'.getD i 0 < dv.getD i 0) := by
+  unfold checkNode at h
+  split at h
+  · cases h
+  · rename_i r dv ss hfind
+    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_eq_eq_not, Bool.not_true,
+      List.isEmpty_eq_false_iff, List.all_eq_true, List.any_eq_true, List.mem_map,
+      Bool.or_eq_true] at h
+    obtain ⟨⟨⟨hss, hne⟩, hr⟩, hp⟩ := h
+    subst hss
+    refine ⟨r, dv, ⟨_, hfind⟩, fun h => hne (by simp [h]), ?_, ?_⟩
+    · intro l s' hmem
+      have := hr _ ⟨(l, s'), by rw [zip_map_fst_snd]; exact hmem, rfl⟩
+      split at this
+      · cases this
+      · rename_i r' dv' ss' hf
+        refine ⟨r', dv', ss', hf, fun hl => ?_⟩
+        simp only [hl, Bool.not_true, Bool.false_or, decide_eq_true_eq] at this
+        exact this
+    · intro l i hli
+      rcases hp _ hli with h | ⟨p, ⟨e, he, rfl⟩, hlt⟩
+      · exact Or.inl h
+      · right
+        split at hlt
+        · cases hlt
+        · rename_i r' dv' ss' hf
+          have he' : e ∈ E.succ s := by
+            rw [zip_map_fst_snd] at he
+            exact he
+          exact ⟨e.1, e.2, r', dv', ss', he', hf, of_decide_eq_true hlt⟩
+
+theorem mem_of_reachable_cert {internal : L → Bool} {labels : List L} {c : Cert S} {s₀ s : S}
+    (h₀ : c.Mem s₀) (hc : c.all (fun x => E.checkNode cmp internal labels c x.1) = true)
+    (hr : E.toLTS.Reachable s₀ s) : c.Mem s := by
+  refine hr.invariant h₀ fun s l s' ⟨b, hs⟩ hst => ?_
+  rw [BTree.all_eq_true] at hc
+  obtain ⟨_, _, _, _, hsucc, _⟩ := checkNode_spec (hc _ hs)
+  obtain ⟨r', dv', ss', hf, -⟩ := hsucc l s' hst
+  exact Cert.mem_of_findData hf
+
+theorem of_checkCert {internal : L → Bool} {labels : List L} (hl : ∀ l, l ∈ labels) {s₀ : S}
+    {c : Cert S} (h : E.checkCert cmp internal labels s₀ c = true) :
+    E.toLTS.DeadlockFree s₀ ∧ E.toLTS.LivelockFree (fun l => internal l = true) s₀ ∧
+      E.toLTS.Live s₀ := by
+  simp only [checkCert, Bool.and_eq_true] at h
+  obtain ⟨h₀, hc⟩ := h
+  have hmem₀ := Cert.mem_of_isSome h₀
+  have hnode : ∀ s, c.Mem s → E.checkNode cmp internal labels c s = true :=
+    fun s ⟨b, hs⟩ => (BTree.all_eq_true.1 hc) _ hs
+  have hstep : ∀ s l s', c.Mem s → E.toLTS.step s l s' → c.Mem s' := fun s l s' hs hst =>
+    mem_of_reachable_cert hs hc (LTS.Reachable.of_step hst)
+  refine ⟨?_, ?_, ?_⟩
+  · refine LTS.DeadlockFree.of_invariant c.Mem hmem₀ hstep fun s hs => ?_
+    obtain ⟨_, _, _, hne, _⟩ := checkNode_spec (hnode s hs)
+    obtain ⟨⟨l, s'⟩, hmem⟩ := List.exists_mem_of_ne_nil _ hne
+    exact ⟨l, s', hmem⟩
+  · refine LTS.LivelockFree.of_ranking c.Mem hmem₀ hstep
+      (fun s => ((c.findData cmp s).map Prod.fst).getD 0) fun s l s' hs hl hst => ?_
+    obtain ⟨r, dv, ⟨ss, hf⟩, -, hsucc, -⟩ := checkNode_spec (hnode s hs)
+    obtain ⟨r', dv', ss', hf', hlt⟩ := hsucc l s' hst
+    simp only [hf, hf', Option.map_some, Option.getD_some]
+    exact hlt hl
+  · intro l
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem (hl l)
+    have hli : (labels[i], i) ∈ labels.zip (List.range labels.length) := by
+      have hi' : i < (labels.zip (List.range labels.length)).length := by
+        simp [List.length_zip, hi]
+      have := List.getElem_mem hi'
+      rwa [List.getElem_zip, List.getElem_range] at this
+    refine LTS.LiveLabel.of_ranking c.Mem hmem₀ hstep labels[i]
+      (fun s => ((c.findData cmp s).map fun b => b.2.1.getD i 0).getD 0) fun s hs => ?_
+    obtain ⟨r, dv, ⟨ss, hf⟩, -, -, hprog⟩ := checkNode_spec (hnode s hs)
+    rcases hprog _ _ hli with h | ⟨l', s', r', dv', ss', hmem, hf', hlt⟩
+    · exact Or.inl (enabledB_iff.1 h)
+    · refine Or.inr ⟨l', s', hmem, ?_⟩
+      simp only [hf, hf', Option.map_some, Option.getD_some]
+      exact hlt
+
+theorem persistent_of_checkCert {s₀ : S} {c : Cert S}
+    (h : E.checkCertPersistent cmp s₀ c = true) : E.toLTS.Persistent s₀ := by
+  simp only [checkCertPersistent, Bool.and_eq_true] at h
+  obtain ⟨h₀, hc⟩ := h
+  rw [BTree.all_eq_true] at hc
+  have hnode : ∀ s, c.Mem s → E.checkNodePersistent cmp c s = true :=
+    fun s ⟨b, hs⟩ => hc _ hs
+  have hspec : ∀ s, c.Mem s → (∀ l s', (l, s') ∈ E.succ s → c.Mem s') ∧
+      ∀ e ∈ E.succ s, ∀ e' ∈ E.succ s, e.1 = e'.1 ∨ E.enabledB e'.2 e.1 = true := by
+    intro s hs
+    have := hnode s hs
+    unfold checkNodePersistent at this
+    split at this
+    · cases this
+    · rename_i ss _
+      simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, Bool.or_eq_true] at this
+      obtain ⟨⟨hss, hmem⟩, hp⟩ := this
+      subst hss
+      rw [zip_map_fst_snd] at hp
+      refine ⟨fun l s' hst => Cert.mem_of_isSome (hmem s' (List.mem_map_of_mem hst)), hp⟩
+  have hstep : ∀ s l s', c.Mem s → E.toLTS.step s l s' → c.Mem s' :=
+    fun s l s' hs hst => (hspec s hs).1 l s' hst
+  intro s hs l l' s' hne hen hst
+  have hmem := hs.invariant (Cert.mem_of_isSome h₀) hstep
+  obtain ⟨s₁, h₁⟩ := hen
+  rcases (hspec s hmem).2 (l, s₁) h₁ (l', s') hst with h | h
+  · exact absurd h hne
+  · exact enabledB_iff.1 h
+
+end CertSection
 
 /-! ### Verified refutation: counterexample traces -/
 
@@ -351,6 +576,102 @@ theorem not_liveLabel_of_trace {l : L} {fuel : ℕ} {s₀ s : S} {tr : List (L �
   exact this hen
 
 end Refute
+
+/-! ### Refutation by label traces
+
+Counterexamples given just as a list of labels; the intermediate states are computed by an
+(untrusted) search and re-checked by `followB`. -/
+
+section RefuteLabels
+
+variable [DecidableEq S] [DecidableEq L]
+
+/-- The `(label, state)` trace obtained by repeatedly taking the first successor carrying
+the next label (untrusted). -/
+def labelTrace : S → List L → List (L × S)
+  | _, [] => []
+  | s, l :: ls =>
+    match (E.succ s).find? (fun e => decide (e.1 = l)) with
+    | some e => (l, e.2) :: labelTrace e.2 ls
+    | none => []
+
+/-- The state reached by following the labels `ls` from `s`. -/
+def runLabels (s : S) (ls : List L) : Option S := E.followB s (E.labelTrace s ls)
+
+/-- Following `ls` from `s₀` reaches a deadlock. -/
+def refuteDeadlockFreeB (s₀ : S) (ls : List L) : Bool :=
+  match E.runLabels s₀ ls with
+  | some s => (E.succ s).isEmpty
+  | none => false
+
+/-- Following `ls` from `s₀` reaches a state `s` from which the non-empty internal cycle
+`cyc` returns to `s`. -/
+def refuteLivelockFreeB (internal : L → Bool) (s₀ : S) (ls cyc : List L) : Bool :=
+  match E.runLabels s₀ ls with
+  | some s =>
+    match E.labelTrace s cyc with
+    | [] => false
+    | e :: tr =>
+      decide (E.followB s (e :: tr) = some s) && ((e :: tr).all fun e => internal e.1)
+  | none => false
+
+/-- Following `ls` from `s₀` reaches a state from which `l` is never enabled again. -/
+def refuteLiveB (cmp : S → S → Ordering) (fuel : ℕ) (s₀ : S) (ls : List L) (l : L) : Bool :=
+  match E.runLabels s₀ ls with
+  | some s => E.checkNeverEnabled cmp l fuel s
+  | none => false
+
+/-- Following `ls` from `s₀` reaches a state where performing `l'` disables `l`. -/
+def refutePersistentB (s₀ : S) (ls : List L) (l l' : L) : Bool :=
+  match E.runLabels s₀ ls with
+  | some s =>
+    !decide (l = l') && E.enabledB s l &&
+      (E.succ s).any fun e => decide (e.1 = l') && !E.enabledB e.2 l
+  | none => false
+
+variable {E}
+
+theorem not_deadlockFree_of_refuteB {s₀ : S} {ls : List L}
+    (h : E.refuteDeadlockFreeB s₀ ls = true) : ¬ E.toLTS.DeadlockFree s₀ := by
+  unfold refuteDeadlockFreeB at h
+  split at h
+  · rename_i s hs
+    exact not_deadlockFree_of_trace hs h
+  · cases h
+
+theorem not_livelockFree_of_refuteB {internal : L → Bool} {s₀ : S} {ls cyc : List L}
+    (h : E.refuteLivelockFreeB internal s₀ ls cyc = true) :
+    ¬ E.toLTS.LivelockFree (fun l => internal l = true) s₀ := by
+  unfold refuteLivelockFreeB at h
+  rcases hs : E.runLabels s₀ ls with _ | s
+  · simp [hs] at h
+  rcases ht : E.labelTrace s cyc with _ | ⟨e, tr⟩
+  · simp [hs, ht] at h
+  simp only [hs, ht, Bool.and_eq_true, decide_eq_true_eq] at h
+  exact not_livelockFree_of_trace hs h.1 h.2
+
+theorem not_liveLabel_of_refuteB {cmp : S → S → Ordering} {fuel : ℕ} {s₀ : S} {ls : List L}
+    {l : L} (h : E.refuteLiveB cmp fuel s₀ ls l = true) : ¬ E.toLTS.LiveLabel s₀ l := by
+  unfold refuteLiveB at h
+  split at h
+  · rename_i s hs
+    exact not_liveLabel_of_trace hs h
+  · cases h
+
+theorem not_persistent_of_refuteB {s₀ : S} {ls : List L} {l l' : L}
+    (h : E.refutePersistentB s₀ ls l l' = true) : ¬ E.toLTS.Persistent s₀ := by
+  unfold refutePersistentB at h
+  split at h
+  · rename_i s hs
+    simp only [Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not,
+      List.any_eq_true, decide_eq_true_eq] at h
+    obtain ⟨⟨hne, hen⟩, ⟨l'', s'⟩, hmem, rfl, hdis⟩ := h
+    refine LTS.not_persistent_of (path_of_followB hs).reachable hne (enabledB_iff.1 hen) hmem ?_
+    rw [← enabledB_iff, hdis]
+    simp
+  · cases h
+
+end RefuteLabels
 
 end ExplicitLTS
 

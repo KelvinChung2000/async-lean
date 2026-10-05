@@ -236,81 +236,104 @@ theorem correct_of_checkAll {fuel : ℕ} (h : N.checkAll fuel = true) : N.Correc
   exact ⟨(bisim h.1).deadlockFree_iff.1 hd, (bisim h.1).livelockFree_iff.1 hl,
     (bisim h.1).live_iff.1 hv⟩
 
-/-! ### Verified refutation of concrete nets -/
+/-! ### Certificates computed outside the kernel (used by the `pnet_decide` tactic) -/
+
+variable (N) in
+/-- Compute a certificate (untrusted). -/
+def mkCert (fuel : ℕ := 100000) : ExplicitLTS.Cert (List ℕ) :=
+  N.explicit.mkCert lexCmp (fun t => (N.tr t).internal) (List.finRange N.trans.length) fuel N.init
+
+variable (N) in
+/-- Check a certificate for `Correct` (trusted). -/
+def checkCert (c : ExplicitLTS.Cert (List ℕ)) : Bool :=
+  N.wf && N.explicit.checkCert lexCmp (fun t => (N.tr t).internal)
+    (List.finRange N.trans.length) N.init c
+
+variable (N) in
+/-- Check a certificate for persistence (trusted). -/
+def checkCertPersistent (c : ExplicitLTS.Cert (List ℕ)) : Bool :=
+  N.wf && N.explicit.checkCertPersistent lexCmp N.init c
+
+theorem correct_of_checkCert {c : ExplicitLTS.Cert (List ℕ)} (h : N.checkCert c = true) :
+    N.Correct := by
+  simp only [checkCert, Bool.and_eq_true] at h
+  obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCert (List.mem_finRange) h.2
+  rw [← enc_M₀ h.1] at hd hl hv
+  exact ⟨(bisim h.1).deadlockFree_iff.1 hd, (bisim h.1).livelockFree_iff.1 hl,
+    (bisim h.1).live_iff.1 hv⟩
+
+theorem persistent_of_checkCert {c : ExplicitLTS.Cert (List ℕ)}
+    (h : N.checkCertPersistent c = true) : N.toNet.lts.Persistent N.M₀ := by
+  simp only [checkCertPersistent, Bool.and_eq_true] at h
+  have := ExplicitLTS.persistent_of_checkCert h.2
+  rw [← enc_M₀ h.1] at this
+  exact (bisim h.1).persistent_iff.1 this
+
+variable (N) in
+/-- Run the verified checker for persistence (no transition is ever disabled by another). -/
+def checkPersistent (fuel : ℕ := 100000) : Bool :=
+  N.wf && N.explicit.checkPersistent lexCmp fuel N.init
+
+theorem persistent_of_check {fuel : ℕ} (h : N.checkPersistent fuel = true) :
+    N.toNet.lts.Persistent N.M₀ := by
+  simp only [checkPersistent, Bool.and_eq_true] at h
+  have := ExplicitLTS.persistent_of_checkPersistent h.2
+  rw [← enc_M₀ h.1] at this
+  exact (bisim h.1).persistent_iff.1 this
+
+/-! ### Verified refutation of concrete nets
+
+Counterexamples are given as lists of transition *indices*. -/
 
 variable (N)
-
-/-- The explicit trace obtained by firing `ts` from `m` (untrusted: it is re-checked). -/
-def traceOf : List ℕ → List (Fin N.trans.length) → List (Fin N.trans.length × List ℕ)
-  | _, [] => []
-  | m, t :: ts =>
-    let m' := fireL (N.tr t).pre (N.tr t).post 0 m
-    (t, m') :: traceOf m' ts
 
 /-- Transition indices as elements of `Fin` (out-of-range indices are dropped). -/
 def toFins (ts : List ℕ) : List (Fin N.trans.length) :=
   ts.filterMap fun i => if h : i < N.trans.length then some ⟨i, h⟩ else none
 
-/-- The marking reached by firing the transitions with indices `ts` from the initial
-marking, if all are enabled. -/
-def runTrace (ts : List ℕ) : Option (List ℕ) :=
-  N.explicit.followB N.init (N.traceOf N.init (N.toFins ts))
-
-/-- Check that firing `ts` from the initial marking reaches a dead marking. -/
+/-- Firing `ts` from the initial marking reaches a dead marking. -/
 def refuteDeadlockFree (ts : List ℕ) : Bool :=
-  N.wf && match N.runTrace ts with
-    | some m => (N.succ m).isEmpty
-    | none => false
+  N.wf && N.explicit.refuteDeadlockFreeB N.init (N.toFins ts)
 
-/-- Check that firing `ts` reaches a marking `m` from which the non-empty sequence of
-internal transitions `cyc` leads back to `m`. -/
+/-- Firing `ts` reaches a marking `m` from which the non-empty sequence of internal
+transitions `cyc` leads back to `m`. -/
 def refuteLivelockFree (ts cyc : List ℕ) : Bool :=
-  N.wf && match N.runTrace ts, N.toFins cyc with
-    | some m, c :: cs =>
-      decide (N.explicit.followB m (N.traceOf m (c :: cs)) = some m) &&
-        (N.traceOf m (c :: cs)).all fun e => (N.tr e.1).internal
-    | _, _ => false
+  N.wf && N.explicit.refuteLivelockFreeB (fun t => (N.tr t).internal) N.init (N.toFins ts)
+    (N.toFins cyc)
 
-/-- Check that firing `ts` reaches a marking from which `t` can never fire again. -/
-def refuteLive (ts : List ℕ) (t : Fin N.trans.length)
-    (fuel : ℕ := 100000) : Bool :=
-  N.wf && match N.runTrace ts with
-    | some m => N.explicit.checkNeverEnabled lexCmp t fuel m
-    | none => false
+/-- Firing `ts` reaches a marking from which `t` can never fire again. -/
+def refuteLive (ts : List ℕ) (t : Fin N.trans.length) (fuel : ℕ := 100000) : Bool :=
+  N.wf && N.explicit.refuteLiveB lexCmp fuel N.init (N.toFins ts) t
+
+/-- Firing `ts` reaches a marking where firing `t'` disables `t`. -/
+def refutePersistent (ts : List ℕ) (t t' : Fin N.trans.length) : Bool :=
+  N.wf && N.explicit.refutePersistentB N.init (N.toFins ts) t t'
 
 variable {N}
 
-theorem not_deadlockFree_of_refute {ts : List ℕ}
-    (h : N.refuteDeadlockFree ts = true) : ¬ N.toNet.lts.DeadlockFree N.M₀ := by
+theorem not_deadlockFree_of_refute {ts : List ℕ} (h : N.refuteDeadlockFree ts = true) :
+    ¬ N.toNet.lts.DeadlockFree N.M₀ := by
   simp only [refuteDeadlockFree, Bool.and_eq_true] at h
-  obtain ⟨hwf, h⟩ := h
-  split at h
-  · rename_i m hm
-    rw [← (bisim hwf).deadlockFree_iff, enc_M₀ hwf]
-    exact ExplicitLTS.not_deadlockFree_of_trace hm h
-  · cases h
+  rw [← (bisim h.1).deadlockFree_iff, enc_M₀ h.1]
+  exact ExplicitLTS.not_deadlockFree_of_refuteB h.2
 
-theorem not_livelockFree_of_refute {ts cyc : List ℕ}
-    (h : N.refuteLivelockFree ts cyc = true) : ¬ N.toNet.lts.LivelockFree N.Internal N.M₀ := by
+theorem not_livelockFree_of_refute {ts cyc : List ℕ} (h : N.refuteLivelockFree ts cyc = true) :
+    ¬ N.toNet.lts.LivelockFree N.Internal N.M₀ := by
   simp only [refuteLivelockFree, Bool.and_eq_true] at h
-  obtain ⟨hwf, h⟩ := h
-  rcases hm : N.runTrace ts with _ | m
-  · simp [hm] at h
-  rcases hc : N.toFins cyc with _ | ⟨c, cs⟩
-  · simp [hm, hc] at h
-  simp only [hm, hc, Bool.and_eq_true, decide_eq_true_eq] at h
-  rw [← (bisim hwf).livelockFree_iff, enc_M₀ hwf]
-  exact ExplicitLTS.not_livelockFree_of_trace (e := (c, _)) (cyc := N.traceOf _ cs) hm h.1 h.2
+  rw [← (bisim h.1).livelockFree_iff, enc_M₀ h.1]
+  exact ExplicitLTS.not_livelockFree_of_refuteB h.2
 
-theorem not_liveLabel_of_refute {ts : List ℕ} {t : Fin N.trans.length}
-    {fuel : ℕ} (h : N.refuteLive ts t fuel = true) : ¬ N.toNet.lts.LiveLabel N.M₀ t := by
+theorem not_liveLabel_of_refute {ts : List ℕ} {t : Fin N.trans.length} {fuel : ℕ}
+    (h : N.refuteLive ts t fuel = true) : ¬ N.toNet.lts.LiveLabel N.M₀ t := by
   simp only [refuteLive, Bool.and_eq_true] at h
-  obtain ⟨hwf, h⟩ := h
-  split at h
-  · rename_i m hm
-    rw [← (bisim hwf).liveLabel_iff, enc_M₀ hwf]
-    exact ExplicitLTS.not_liveLabel_of_trace hm h
-  · cases h
+  rw [← (bisim h.1).liveLabel_iff, enc_M₀ h.1]
+  exact ExplicitLTS.not_liveLabel_of_refuteB h.2
+
+theorem not_persistent_of_refute {ts : List ℕ} {t t' : Fin N.trans.length}
+    (h : N.refutePersistent ts t t' = true) : ¬ N.toNet.lts.Persistent N.M₀ := by
+  simp only [refutePersistent, Bool.and_eq_true] at h
+  rw [← (bisim h.1).persistent_iff, enc_M₀ h.1]
+  exact ExplicitLTS.not_persistent_of_refuteB h.2
 
 end PNet
 

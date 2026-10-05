@@ -73,6 +73,13 @@ def LiveLabel (s₀ : S) (l : L) : Prop :=
 /-- Every label is live (no partial deadlock / starvation). -/
 def Live (s₀ : S) : Prop := ∀ l, A.LiveLabel s₀ l
 
+/-- **Persistence** (semi-modularity, speed independence): an enabled action is never
+disabled by performing a *different* action — it stays enabled until it is performed.  For
+gate-level circuits this is the absence of hazards (Muller's semi-modularity); for Petri
+nets it is the absence of conflicts (persistent nets). -/
+def Persistent (s₀ : S) : Prop :=
+  ∀ s, A.Reachable s₀ s → ∀ l l' s', l ≠ l' → A.Enabled s l → A.step s l' s' → A.Enabled s' l
+
 /-- An external action is enabled in `s`. -/
 def ExternalEnabled (internal : L → Prop) (s : S) : Prop :=
   ∃ l s', ¬ internal l ∧ A.step s l s'
@@ -206,6 +213,14 @@ steps diverges. -/
 theorem not_livelockFree_of_cycle {internal : L → Prop} {s₀ s : S} (hs : A.Reachable s₀ s)
     (hc : Relation.TransGen (A.IStep internal) s s) : ¬ A.LivelockFree internal s₀ :=
   fun h => not_acc_of_transGen_self hc (h.acc hs)
+
+/-! ### Persistence -/
+
+/-- **Refuting persistence**: a reachable state where performing `l'` disables `l`. -/
+theorem not_persistent_of {s₀ s s' : S} {l l' : L} (hs : A.Reachable s₀ s) (hne : l ≠ l')
+    (hen : A.Enabled s l) (hst : A.step s l' s') (hdis : ¬ A.Enabled s' l) :
+    ¬ A.Persistent s₀ :=
+  fun h => hdis (h s hs l l' s' hne hen hst)
 
 /-! ### Liveness -/
 
@@ -375,6 +390,16 @@ theorem liveLabel_iff {s₀ : S} {l : L} : B.LiveLabel (f s₀) l ↔ A.LiveLabe
 
 theorem live_iff {s₀ : S} : B.Live (f s₀) ↔ A.Live s₀ :=
   forall_congr' fun _ => hf.liveLabel_iff
+
+theorem persistent_iff {s₀ : S} : B.Persistent (f s₀) ↔ A.Persistent s₀ := by
+  constructor
+  · intro h s hs l l' s' hne hen hst
+    exact hf.enabled_iff.1 (h _ (hf.reachable_map hs) l l' _ hne (hf.enabled_iff.2 hen)
+      (hf.step_map hst))
+  · intro h t ht l l' t' hne hen hst
+    obtain ⟨s, hs, rfl⟩ := hf.reachable_lift ht
+    obtain ⟨s', hs', rfl⟩ := (hf.step_iff _ _ _).1 hst
+    exact hf.enabled_iff.2 (h s hs l l' s' hne (hf.enabled_iff.1 hen) hs')
 
 end FunBisim
 

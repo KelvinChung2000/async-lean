@@ -77,6 +77,31 @@ theorem mem_toList_of_find [DecidableEq α] {cmp : α → α → Ordering} {a : 
     · exact Or.inr (Or.inr (ihr h))
     · exact Or.inr (Or.inl (of_decide_eq_true h))
 
+/-- Map lookup confirmed by decidable equality on the key. -/
+def findData [DecidableEq α] (cmp : α → α → Ordering) (a : α) : BTree (α × β) → Option β
+  | leaf => none
+  | node l x r =>
+    match cmp a x.1 with
+    | .lt => findData cmp a l
+    | .gt => findData cmp a r
+    | .eq => if a = x.1 then some x.2 else none
+
+/-- **Soundness of map lookup**: whatever the comparison function, a found entry is stored in
+the tree. -/
+theorem mem_toList_of_findData [DecidableEq α] {cmp : α → α → Ordering} {a : α} {b : β}
+    {t : BTree (α × β)} (h : t.findData cmp a = some b) : (a, b) ∈ t.toList := by
+  induction t with
+  | leaf => simp [findData] at h
+  | node l x r ihl ihr =>
+    simp only [toList, List.mem_append, List.mem_cons]
+    simp only [findData] at h
+    split at h
+    · exact Or.inl (ihl h)
+    · exact Or.inr (Or.inr (ihr h))
+    · split_ifs at h with hax
+      cases h
+      exact Or.inr (Or.inl (by rw [hax]))
+
 /-- Map lookup: the tree stores key–value pairs, compared on keys. -/
 def lookup (cmp : α → α → Ordering) (a : α) : BTree (α × β) → Option β
   | leaf => none
@@ -152,11 +177,18 @@ def pushKV (cmp : α → α → Ordering) (s : BStore (α × β)) (a : α) (b : 
 
 end BStore
 
-/-- Lexicographic comparison of lists of naturals (the default state order). -/
+/-- Lexicographic comparison of lists of naturals (the default state order).  Written with
+`Nat.blt` / `Nat.beq`, which the kernel evaluates natively. -/
 def lexCmp : List ℕ → List ℕ → Ordering
   | [], [] => .eq
   | [], _ :: _ => .lt
   | _ :: _, [] => .gt
-  | a :: as, b :: bs => if a < b then .lt else if a = b then lexCmp as bs else .gt
+  | a :: as, b :: bs =>
+    match Nat.blt a b with
+    | true => .lt
+    | false =>
+      match Nat.beq a b with
+      | true => lexCmp as bs
+      | false => .gt
 
 end AsyncLean
