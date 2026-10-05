@@ -1,0 +1,38 @@
+name: Docs
+
+# Builds the API documentation with doc-gen4 and publishes it with GitHub Pages
+# (enable Pages with "GitHub Actions" as the source in the repository settings).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # Builds the library (and fetches the Mathlib cache) first.
+      - uses: leanprover/lean-action@v1
+      - name: Build documentation
+        working-directory: docbuild
+        run: |
+          MATHLIB_NO_CACHE_ON_UPDATE=1 lake update doc-gen4
+          lake build AsyncLean:docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docbuild/.lake/build/doc
+      - id: deployment
+        uses: actions/deploy-pages@v4

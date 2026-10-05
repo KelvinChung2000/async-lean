@@ -1,0 +1,16 @@
+# Builds the API documentation with doc-gen4:
+#   cd docbuild && MATHLIB_NO_CACHE_ON_UPDATE=1 lake update doc-gen4 && lake build AsyncLean:docs
+# The site is written to docbuild/.lake/build/doc.
+name = "docbuild"
+reservoir = false
+version = "0.2.0"
+packagesDir = "../.lake/packages"
+
+[[require]]
+name = "AsyncLean"
+path = "../"
+
+[[require]]
+name = "doc-gen4"
+git = "https://github.com/leanprover/doc-gen4"
+rev = "v4.34.1"

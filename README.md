@@ -5,22 +5,34 @@ never deadlocks and never livelocks**. It is fully machine-checked, with **no `s
 axioms** beyond Lean's three standard foundational ones (`propext`, `Classical.choice`,
 `Quot.sound`).
 
-It covers three ways of describing a design:
+It covers four ways of describing a design:
 
 | Model | Lean type | Typical use |
 |---|---|---|
-| Place/transition Petri nets (incl. STG-style labelled nets) | `Net`, `PNet` | handshake protocols, arbiters, controllers |
-| Marked graphs | `MarkedGraph` | pipelines, rings, choice-free control |
-| Gate-level netlists, speed-independent semantics | `Circuit` | C-element circuits, hazard analysis |
+| Place/transition Petri nets | `Net`, `PNet` | handshake protocols, arbiters, controllers |
+| Signal transition graphs (STGs) | `StgModel`, `Stg` | specifications of asynchronous controllers, and their gate-level implementations |
+| Marked graphs, free-choice nets | `MarkedGraph`, `Net.FreeChoice` | pipelines, rings, choice-free and free-choice control |
+| Gate-level netlists | `Circuit` | C-element circuits, hazard analysis, speed independence, QDI |
 
-It also gives two ways to prove properties:
+Designs can be written in Lean or imported from `.g` (Petrify / Workcraft), PNML and
+structural Verilog.
 
-1. **Structural theorems that hold for whole families of designs.** Commoner's theorem,
-   P-invariants, siphons/traps, linear ranking functions and inductive invariants. For
-   example, every Muller ring of every size is proved live iff it has a token and a bubble.
-2. **A verified model checker for concrete designs.** The kernel checks a certificate, which
-   the `async_decide` tactic computes. Failures come with a counterexample, which the
-   refutation theorems turn into a proof of the negation.
+It gives three ways to prove properties:
+
+1. **A verified model checker** for concrete designs. The `async_decide` tactic explores the
+   state space at elaboration time and computes a certificate, which the kernel checks with a
+   proved-correct checker. Failures come with a counterexample, and the refutation theorems
+   turn it into a proof of the negation.
+2. **Automatic structural proofs** with no state exploration. `async_structural` finds place
+   invariants, linear ranking functions and Commoner certificates by linear programming or
+   graph search; the kernel checks them.
+3. **Theory for whole families of designs.** Commoner's theorems for marked graphs and
+   free-choice nets, invariants, siphons and traps, ranking functions, compositional
+   reasoning and fairness. For example, every Muller ring of every size is proved live iff it
+   has a token and a bubble.
+
+**New here? Start with [`AsyncLean/Tutorial.lean`](AsyncLean/Tutorial.lean)**, a checked
+walkthrough of all of the above.
 
 ## The properties
 
@@ -34,11 +46,13 @@ and transported to every model:
 | `Live s₀` | every action can always eventually happen again (no partial deadlock or starvation; Petri-net L4-liveness) |
 | `Persistent s₀` | an enabled action is never disabled by another one (semi-modularity, i.e. speed independence / hazard freedom for circuits) |
 
-`PNet.Correct` and `Circuit.Correct` bundle deadlock freedom, livelock freedom and liveness.
+`PNet.Correct`, `StgModel.Correct` and `Circuit.Correct` bundle deadlock freedom, livelock
+freedom and liveness. `PNet.Bounded k` and `PNet.Safe` bound the number of tokens per place.
 
 The progress theorem `LTS.inevitablyExternal` shows what deadlock freedom plus livelock
-freedom buys you. From every reachable state, *every* run of internal steps inevitably reaches
-a state offering an observable action.
+freedom buys you: from every reachable state, *every* run of internal steps inevitably
+reaches a state offering an observable action. Under a fair scheduler, liveness becomes
+"every action *will* happen infinitely often" (`LTS.Run.infOften_label_of_live`).
 
 ## Quick start: verify your own design
 
@@ -59,6 +73,8 @@ def handshake : PNet where
 
 -- deadlock free ∧ livelock free ∧ every transition live
 theorem handshake_correct : handshake.Correct := by async_decide
+-- at most one token per place, by state exploration or by place invariants
+theorem handshake_safe : handshake.Safe := by async_structural
 
 #assert_standard_axioms handshake_correct   -- fails the build on sorry / native_decide / axioms
 ```
@@ -76,7 +92,30 @@ Prove it with: PNet.not_deadlockFree_of_refute (ts := [0, 3, 6]) (by decide +ker
 
 `#eval N.diagnose` runs the same search directly.
 
-Gate-level netlists work the same way:
+### Specifications and implementations: STGs
+
+An STG is a Petri net whose transitions are signal edges. Read one from a `.g` file and its
+implementation from Verilog:
+
+```lean
+stg_from_g celement "designs/celement.g"
+gates_from_verilog celementGates "designs/celement.v" for celement
+
+theorem spec_ok : celement.model.Correct ∧ celement.model.Consistent ∧
+    celement.model.CSC ∧ celement.model.OutputPersistent :=
+  ⟨by async_decide, by async_decide, by async_decide, by async_decide⟩
+
+theorem impl_ok : celement.model.Conformant (celement.gateFn celementGates) := by
+  async_decide
+```
+
+*Conformance* (every output edge the gates can produce is allowed by the specification)
+implies that the closed loop of circuit and environment inherits deadlock freedom, livelock
+freedom and liveness (`Stg.implementation_correct`) and is hazard free
+(`StgModel.gate_persistent`). `StgModel.csc_iff_exists_conformant` proves that complete state
+coding is exactly implementability.
+
+### Gate-level circuits, gate delays and wire delays
 
 ```lean
 open BExpr in
@@ -91,54 +130,70 @@ def cRing : Circuit where
   init := [true, false, false, false, false]
 
 theorem cRing_ok : cRing.Correct ∧ cRing.SpeedIndependent := ⟨by async_decide, by async_decide⟩
+theorem cRing_qdi : cRing.QDI := by async_decide
 ```
 
 The environment is modelled by gates too, so the circuit is closed. A deadlock is a stable
-state; a livelock is endless switching of internal gates only.
+state; a livelock is endless switching of internal gates only. `SpeedIndependent` assumes
+arbitrary gate delays; `QDI iso` also puts an independent delay on every wire branch except
+the forks of the signals in `iso` (isochronic forks). `Circuit.speedIndependent_of_qdi`
+proves that QDI implies speed independence.
 
-### Proving whole families: structural theory
+### Large designs: structure and composition
 
-The model checker handles one finite instance at a time. For parameterised designs, use the
-theory:
+* `async_structural` proves safeness and boundedness (place invariants), livelock freedom
+  for **every** initial marking (linear ranking functions), and liveness of marked graphs and
+  small free-choice nets (Commoner's theorems). A 20-stage FIFO with over a million states is
+  proved safe and livelock free instantly.
+* `async_minimize` replaces a component of a parallel composition by its minimal quotient
+  modulo divergence-preserving weak bisimulation, certified by the kernel. Then
+  `async_decide` checks the much smaller composition (`Examples/Compositional.lean`).
 
-* **Marked graphs** (`AsyncLean/MarkedGraph/Basic.lean`). Commoner's theorem,
-  `live_iff_circuitsMarked`: a marked graph is live **iff every directed circuit carries a
-  token**. "All circuits marked" is certified by a ranking of transitions that increases
-  along every empty place (`circuitsMarked_iff_exists_rank`). Token counts on circuits are
-  invariant (`tokens_reachable`), which gives place bounds and safeness
-  (`safe_of_circuit_cover`). `Examples/MullerRing.lean` proves, for all `n` and `k`, that a
-  Muller ring with `n` stages and `k` tokens is live iff `1 ≤ k ≤ n - 1`, and is always
-  1-safe.
-* **P-invariants** (`AsyncLean/Petri/Invariant.lean`). Conservation laws, bounds and
-  safeness. `Examples/Arbiter.lean` uses one to prove mutual exclusion.
-* **Linear ranking functions** (`Net.livelockFree_of_linearRanking`). Place weights that
-  strictly decrease under every internal transition prove livelock freedom *for every
-  initial marking*. The side condition is decided by `decide`.
-* **Siphons and traps** (`AsyncLean/Petri/SiphonTrap.lean`). Commoner's siphon–trap
-  property implies deadlock freedom for ordinary nets.
-* **Generic rules** (`AsyncLean/LTS/Properties.lean`). Inductive invariants
-  (`DeadlockFree.of_invariant`), ranking functions into any well-founded order
-  (`LivelockFree.of_ranking_wf`), distance functions for liveness (`LiveLabel.of_ranking`),
-  and the characterisation `livelockFree_iff_acc`.
+### Proving whole families: the theory
+
+* **Marked graphs** (`MarkedGraph/Basic.lean`). Commoner's theorem, `live_iff_circuitsMarked`:
+  a marked graph is live **iff every directed circuit carries a token**; token conservation
+  on circuits; safeness from circuit covers. `Examples/MullerRing.lean` proves, for all `n`
+  and `k`, that a Muller ring with `n` stages and `k` tokens is live iff `1 ≤ k ≤ n - 1`, and
+  is always 1-safe.
+* **Free-choice nets** (`Petri/FreeChoice.lean`). Commoner's theorem for free-choice nets,
+  `live_of_siphonTrap`: an ordinary free-choice net in which every siphon contains an
+  initially marked trap is live.
+* **P-invariants, linear ranking functions, siphons and traps** (`Petri/`).
+* **Composition** (`LTS/Compose.lean`). Parallel composition, hiding and
+  divergence-preserving weak bisimulation (a congruence that preserves deadlock and livelock
+  freedom).
+* **Fairness** (`LTS/Fairness.lean`). Infinite runs and strong fairness: live actions happen
+  infinitely often, and progress holds even when internal cycles exist.
+* **Generic rules** (`LTS/Properties.lean`). Inductive invariants, ranking functions into any
+  well-founded order, distance functions for liveness, `livelockFree_iff_acc`, and transfer
+  of every property along (partial) bisimulations.
 
 ## Library map
 
 | File | Contents |
 |---|---|
+| `Tutorial.lean` | a checked walkthrough of the library |
 | `LTS/Basic.lean` | transition systems, reachability, traces |
-| `LTS/Properties.lean` | deadlock, livelock, liveness, persistence; proof and refutation rules; progress theorem; functional bisimulations transfer every property |
-| `Petri/Basic.lean` | Petri nets, firing, executable firing sequences, counterexamples |
-| `Petri/Invariant.lean` | P-invariants, bounds, safeness, linear ranking functions |
-| `Petri/SiphonTrap.lean` | siphons, traps, siphon–trap deadlock theorem (decidable) |
-| `MarkedGraph/Basic.lean` | Commoner's liveness theorem, circuit token conservation, safeness, rank certificates |
+| `LTS/Properties.lean` | deadlock, livelock, liveness, persistence; proof and refutation rules; progress theorem; transfer along bisimulations |
+| `LTS/Compose.lean` | parallel composition, hiding, divergence-preserving weak bisimulation |
+| `LTS/Fairness.lean` | infinite runs, strong fairness, "will happen" theorems |
+| `Petri/Basic.lean`, `Invariant.lean`, `SiphonTrap.lean` | Petri nets, P-invariants, bounds, ranking functions, siphons and traps |
+| `Petri/FreeChoice.lean` | free-choice nets, Commoner's liveness theorem |
+| `MarkedGraph/Basic.lean` | Commoner's theorem for marked graphs, circuit tokens, safeness, rank certificates |
+| `Stg/Basic.lean` | STGs: state graph, consistency, CSC, output persistence, implementation by gates, CSC ⇔ implementable |
+| `Stg/Concrete.lean` | concrete STGs `Stg`, checkers and refutations for all STG properties |
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
-| `Checker/BTree.lean` | search trees for the kernel-evaluated checker |
-| `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; untrusted search; certificates; counterexample traces |
-| `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, proof of bisimilarity with the abstract net |
-| `Checker/Diagnose.lean` | untrusted counterexample search |
-| `Checker/Tactic.lean` | the `async_decide` tactic |
+| `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, QDI, proof that QDI implies speed independence |
+| `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
+| `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
+| `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
+| `Checker/Diagnose.lean`, `Minimize.lean` | untrusted counterexample search, certificate and quotient computation |
+| `Checker/Tactic.lean` | the `async_decide` and `async_minimize` tactics |
+| `Auto/Simplex.lean`, `Auto/Structural.lean` | exact rational simplex (untrusted) and `async_structural` |
+| `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings (parametric), handshake, arbiter + mutual exclusion, deadlock / livelock / starvation counterexamples and fixes, dining philosophers, C-element ring, hazardous AND gate |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI |
 
 ## Why the results can be trusted
 
@@ -146,25 +201,34 @@ theory:
   run `#assert_standard_axioms`, which makes the build fail if a result depends on anything
   other than `propext`, `Classical.choice` and `Quot.sound`. That rules out `sorryAx` and
   `Lean.ofReduceBool`.
-* **Untrusted search, trusted check.** Exploring the state space and computing rankings and
-  distances is ordinary unverified code. It runs at elaboration time (`async_decide`) or in
-  the kernel (`PNet.checkAll` + `decide +kernel`). Only the small checker in
-  `Checker/Explicit.lean` is trusted, and its soundness is proved (`of_checkCert`,
-  `deadlockFree_of_check`, …). A buggy search can only make a check *fail*.
-* **The checked model is the specified model.** `PNet.bisim` and `Circuit.bisim` prove the
-  executable semantics bisimilar to the abstract ones, and `LTS.FunBisim` transfers every
-  property, so conclusions are about the abstract `Net` and `Circuit` semantics.
+* **Untrusted search, trusted check.** Exploring the state space, computing rankings,
+  distances, quotients and linear-programming solutions is ordinary unverified code that runs
+  at elaboration time. Only the checkers are trusted, and their soundness is proved
+  (`of_checkCert`, `correct_of_checkPacked`, `divBisim_of_checkQuot`, …). A buggy search can
+  only make a check *fail*.
+* **The checked model is the specified model.** `PNet.bisim`, `Circuit.bisim` and
+  `Stg.bisim` prove the executable semantics bisimilar to the abstract ones, and the
+  bisimulation theorems transfer every property. So conclusions are about the abstract
+  `Net`, `StgModel` and `Circuit` semantics.
+* **Importers are outside the trusted base too.** An imported design is an ordinary Lean
+  definition (`#print` it); the theorems are about that definition.
 
 ## Scope and limits
 
-* Semantics are interleaving: one transition, or one gate, at a time. For Petri nets and
-  speed-independent circuits this is the standard semantics for these properties.
-* Liveness is L4-liveness (every action can always be re-enabled), not a fairness-based
-  temporal property. Livelock is divergence: an infinite run of internal actions.
-* The model checker needs a finite reachable state space. Kernel checking costs roughly
-  50–150 ms per reachable state for nets of 15–30 transitions: about 5 s for 70 states and
-  about 1 minute for 400. That makes designs with hundreds to a few thousand states
-  practical. Beyond that, use the structural theory.
+* Semantics are interleaving: one transition, or one gate, at a time. For Petri nets, STGs
+  and speed-independent circuits this is the standard semantics for these properties.
+* Liveness is L4-liveness. Fairness-based "will happen" properties are derived from it in
+  `LTS/Fairness.lean`. Livelock is divergence: an infinite run of internal actions.
+* Free-choice liveness is proved in the sufficient direction (siphon–trap ⇒ live), which is
+  the one needed for verification. `async_structural` enumerates siphons, so it is meant for
+  nets with up to a dozen or so places.
+* The model checker needs a finite reachable state space. Kernel checking takes roughly
+  10–60 ms per reachable state. For example, 7 dining philosophers (408 states) take 8 s,
+  and two composed 8-stage FIFOs (65 536 states) take 36 s after minimisation. Designs with
+  up to a few thousand states are practical. Beyond that, use the structural tactics, the
+  theory, or composition.
+* Lake does not track design files read by the importers: after editing a `.g`, `.pnml` or
+  `.v` file, rebuild the Lean file that imports it (for example by touching it).
 
 ## Building
 
@@ -173,4 +237,13 @@ lake exe cache get   # download prebuilt Mathlib
 lake build
 ```
 
-Toolchain: Lean 4.34.1, Mathlib v4.34.1.
+API documentation is built with doc-gen4 (`.github/workflows/docs.yml` publishes it to
+GitHub Pages):
+
+```
+cd docbuild
+MATHLIB_NO_CACHE_ON_UPDATE=1 lake update doc-gen4
+lake build AsyncLean:docs      # output in docbuild/.lake/build/doc
+```
+
+Toolchain: Lean 4.34.1, Mathlib v4.34.1. See [CHANGELOG.md](CHANGELOG.md) for the history.

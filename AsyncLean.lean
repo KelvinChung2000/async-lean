@@ -41,3 +41,4 @@ import AsyncLean.Examples.Structural
 import AsyncLean.Examples.Fairness
 import AsyncLean.Examples.FreeChoice
 import AsyncLean.Examples.QDI
+import AsyncLean.Tutorial
