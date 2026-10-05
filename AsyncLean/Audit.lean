@@ -10,6 +10,7 @@ import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
+import AsyncLean.Auto.Structural
 import AsyncLean.AxiomAudit
 
 /-!
@@ -66,6 +67,8 @@ open LTS
   MarkedGraph.deadlockFree_of_circuitsMarked MarkedGraph.not_liveLabel_of_unmarked_circuit
   MarkedGraph.circuitsMarked_iff_exists_rank MarkedGraph.tokens_reachable
   MarkedGraph.safe_of_circuit_cover MarkedGraph.not_live_of_circuit
+  MarkedGraph.circuitsMarked_of_rankTable PNet.bounded_of_pinvTable
+  PNet.livelockFree_of_rankingTable
 
 -- Verified checker
 #assert_standard_axioms

@@ -18,6 +18,11 @@ open Lean Elab Command Meta
 
 /-! ### Literals for design data -/
 
+instance : Inhabited PTrans := ⟨{ pre := [], post := [] }⟩
+instance : Inhabited PNet := ⟨⟨0, [], []⟩⟩
+instance : Inhabited Stg := ⟨⟨default, [], []⟩⟩
+instance : Inhabited Circuit := ⟨⟨0, [], []⟩⟩
+
 instance : ToExpr SigKind where
   toTypeExpr := mkConst ``SigKind
   toExpr
