@@ -23,6 +23,7 @@ import AsyncLean.Import.G
 import AsyncLean.Import.Pnml
 import AsyncLean.Import.Verilog
 import AsyncLean.Auto.Simplex
+import AsyncLean.Petri.FreeChoice
 import AsyncLean.Auto.Structural
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
@@ -36,3 +37,4 @@ import AsyncLean.Examples.Compositional
 import AsyncLean.Examples.Imported
 import AsyncLean.Examples.Structural
 import AsyncLean.Examples.Fairness
+import AsyncLean.Examples.FreeChoice

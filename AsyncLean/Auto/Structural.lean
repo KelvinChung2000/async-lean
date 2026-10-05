@@ -5,6 +5,7 @@ import AsyncLean.Auto.Simplex
 import AsyncLean.Import.Basic
 import AsyncLean.Petri.Invariant
 import AsyncLean.MarkedGraph.Basic
+import AsyncLean.Petri.FreeChoice
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -19,6 +20,9 @@ search, in untrusted code) and has the kernel check them:
   (`PNet.bounded_of_pinvTable`);
 * `N.toNet.lts.LivelockFree N.Internal M₀` (for any `M₀`) — a linear ranking function
   (`PNet.livelockFree_of_rankingTable`);
+* `N.lts.Live M`, `N.lts.DeadlockFree M` for an ordinary free-choice net `N` — Commoner's
+  siphon–trap property (`Net.live_of_siphonTrap`), decided by enumerating siphons, so only
+  for nets with few places;
 * `G.CircuitsMarked M`, `G.toNet.lts.Live M`, `G.toNet.lts.DeadlockFree M` for a marked graph
   over `Fin` types — a rank certificate for Commoner's theorem
   (`MarkedGraph.circuitsMarked_of_rankTable`).
@@ -200,16 +204,27 @@ def structural : TacticM Unit := do
   | (``MarkedGraph.CircuitsMarked, #[_, _, _, _, M]) | (``LTS.Live, #[_, _, _, M])
   | (``LTS.DeadlockFree, #[_, _, _, M]) =>
     -- find the marked graph
-    let (G, P, T) ← match tgt.getAppFnArgs with
-      | (``MarkedGraph.CircuitsMarked, #[P, T, _, G, _]) => pure (G, P, T)
+    let mg? : Option (Expr × Expr × Expr) := match tgt.getAppFnArgs with
+      | (``MarkedGraph.CircuitsMarked, #[P, T, _, G, _]) => some (G, P, T)
       | (_, #[_, _, A, _]) =>
         match A.getAppFnArgs with
         | (``Net.lts, #[P, T, net]) =>
           match net.getAppFnArgs with
-          | (``MarkedGraph.toNet, #[_, _, _, G]) => pure (G, P, T)
-          | _ => fail "unsupported goal"
+          | (``MarkedGraph.toNet, #[_, _, _, G]) => some (G, P, T)
+          | _ => none
+        | _ => none
+      | _ => none
+    let some (G, P, T) := mg?
+      | -- not a marked graph: Commoner's theorem for free-choice nets
+        match tgt.getAppFnArgs with
+        | (``LTS.Live, #[_, _, A, _]) | (``LTS.DeadlockFree, #[_, _, A, _]) =>
+          unless A.isAppOf ``Net.lts do fail "unsupported goal"
+          if tgt.isAppOf ``LTS.Live then
+            evalTactic (← `(tactic| refine Net.live_of_siphonTrap ?_ ?_ ?_))
+          else
+            evalTactic (← `(tactic| refine Net.deadlockFree_of_siphonTrap_fc ?_ ?_ ?_))
+          evalTactic (← `(tactic| all_goals decide +kernel))
         | _ => fail "unsupported goal"
-      | _ => fail "unsupported goal"
     let some m := (← whnf P).getAppFnArgs |> fun | (``Fin, #[m]) => some m | _ => none
       | fail "the places must be `Fin m`"
     let some n := (← whnf T).getAppFnArgs |> fun | (``Fin, #[n]) => some n | _ => none
@@ -237,7 +252,7 @@ end Tactic
 
 /-- `async_structural` proves boundedness / safeness of a `PNet` (place invariants), livelock
 freedom of a `PNet` for any initial marking (linear ranking function), or liveness / deadlock
-freedom of a marked graph (Commoner's theorem), by kernel-checked certificates found by
+freedom of a marked graph or a small free-choice net (Commoner's theorems), by kernel-checked certificates found by
 linear programming or graph search. -/
 elab "async_structural" : tactic =>
   withTheReader Lean.Core.Context (fun ctx => { ctx with

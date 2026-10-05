@@ -3,6 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Fairness
+import AsyncLean.Petri.FreeChoice
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -40,6 +41,10 @@ open LTS
 #assert_standard_axioms
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
+
+-- Free-choice nets (Commoner's theorem)
+#assert_standard_axioms
+  Net.live_of_siphonTrap Net.deadlockFree_of_siphonTrap_fc Net.le_of_deadAt
 
 -- Compositional verification
 #assert_standard_axioms
