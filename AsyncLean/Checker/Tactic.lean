@@ -168,11 +168,11 @@ opaque evalBool (e : Expr) : MetaM Bool
 opaque evalString (e : Expr) : MetaM String
 
 /-- Which property a goal asks for. -/
-inductive Prop' where
+inductive Goal where
   | correct | deadlock | livelock | live | persistent
 
 /-- Recognise a goal about a concrete Petri net. -/
-def matchPNet (tgt : Expr) : Option (Expr × Prop') :=
+def matchPNet (tgt : Expr) : Option (Expr × Goal) :=
   match tgt.getAppFnArgs with
   | (``PNet.Correct, #[N]) => some (N, .correct)
   | (``LTS.DeadlockFree, #[_, _, A, _]) => (netOf A).map (·, .deadlock)
@@ -190,7 +190,7 @@ where
     | _ => none
 
 /-- Recognise a goal about a concrete circuit. -/
-def matchCircuit (tgt : Expr) : Option (Expr × Prop') :=
+def matchCircuit (tgt : Expr) : Option (Expr × Goal) :=
   match tgt.getAppFnArgs with
   | (``Circuit.Correct, #[C]) => some (C, .correct)
   | (``Circuit.SpeedIndependent, #[C]) => some (C, .persistent)
@@ -206,18 +206,23 @@ where
     | _ => none
 
 /-- Project the requested component out of a proof of `Correct`. -/
-def project (pf : Expr) : Prop' → MetaM Expr
+def project (pf : Expr) : Goal → MetaM Expr
   | .correct | .persistent => pure pf
   | .deadlock => mkAppM ``And.left #[pf]
   | .livelock => do mkAppM ``And.left #[← mkAppM ``And.right #[pf]]
   | .live => do mkAppM ``And.right #[← mkAppM ``And.right #[pf]]
 
 /-- Close `goal` with `thm M lit h`, where `h : check M lit = true` is proved by the kernel. -/
-def closeWith (goal : MVarId) (thm check : Name) (M lit : Expr) (p : Prop') :
+def closeWith (goal : MVarId) (thm check : Name) (M lit : Expr) (p : Goal) :
     TacticM Unit := do
   let hTy ← mkEq (mkApp2 (mkConst check) M lit) (mkConst ``Bool.true)
   let h ← mkFreshExprSyntheticOpaqueMVar hTy
   let pf ← project (mkApp3 (mkConst thm) M lit h) p
+  let pfTy ← inferType pf
+  unless ← isDefEq pfTy (← goal.getType) do
+    let msg := "async_decide: the goal must be stated for the design's own initial state " ++
+      "and internal predicate; can prove"
+    throwError "{msg}{indentExpr pfTy}\nbut the goal is{indentExpr (← goal.getType)}"
   goal.assign pf
   replaceMainGoal [h.mvarId!]
   evalTactic (← `(tactic| decide +kernel))
