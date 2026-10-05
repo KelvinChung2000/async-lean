@@ -217,6 +217,8 @@ def boolLexCmp : List Bool → List Bool → Ordering
     | true, false => .gt
     | _, _ => boolLexCmp as bs
 
+instance : StateOrd (List Bool) := ⟨boolLexCmp⟩
+
 variable (C)
 
 /-- Run the verified checker for deadlock freedom, livelock freedom and liveness. -/

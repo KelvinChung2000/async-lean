@@ -461,6 +461,30 @@ theorem of_checkCert {internal : L → Bool} {labels : List L} (hl : ∀ l, l �
       simp only [hf, hf', Option.map_some, Option.getD_some]
       exact hlt
 
+/-- Deadlock and livelock freedom from a certificate, without liveness (no label enumeration
+is needed: pass `[]` as the label list). -/
+theorem dfLf_of_checkCert {internal : L → Bool} {labels : List L} {s₀ : S} {c : Cert S}
+    (h : E.checkCert cmp internal labels s₀ c = true) :
+    E.toLTS.DeadlockFree s₀ ∧ E.toLTS.LivelockFree (fun l => internal l = true) s₀ := by
+  simp only [checkCert, Bool.and_eq_true] at h
+  obtain ⟨h₀, hc⟩ := h
+  have hmem₀ := Cert.mem_of_isSome h₀
+  have hnode : ∀ s, c.Mem s → E.checkNode cmp internal labels c s = true :=
+    fun s ⟨b, hs⟩ => (BTree.all_eq_true.1 hc) _ hs
+  have hstep : ∀ s l s', c.Mem s → E.toLTS.step s l s' → c.Mem s' := fun s l s' hs hst =>
+    mem_of_reachable_cert hs hc (LTS.Reachable.of_step hst)
+  refine ⟨?_, ?_⟩
+  · refine LTS.DeadlockFree.of_invariant c.Mem hmem₀ hstep fun s hs => ?_
+    obtain ⟨_, _, _, hne, _⟩ := checkNode_spec (hnode s hs)
+    obtain ⟨⟨l, s'⟩, hmem⟩ := List.exists_mem_of_ne_nil _ hne
+    exact ⟨l, s', hmem⟩
+  · refine LTS.LivelockFree.of_ranking c.Mem hmem₀ hstep
+      (fun s => ((c.findData cmp s).map Prod.fst).getD 0) fun s l s' hs hl hst => ?_
+    obtain ⟨r, dv, ⟨ss, hf⟩, -, hsucc, -⟩ := checkNode_spec (hnode s hs)
+    obtain ⟨r', dv', ss', hf', hlt⟩ := hsucc l s' hst
+    simp only [hf, hf', Option.map_some, Option.getD_some]
+    exact hlt hl
+
 theorem persistent_of_checkCert {s₀ : S} {c : Cert S}
     (h : E.checkCertPersistent cmp s₀ c = true) : E.toLTS.Persistent s₀ := by
   simp only [checkCertPersistent, Bool.and_eq_true] at h

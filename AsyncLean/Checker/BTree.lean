@@ -191,4 +191,26 @@ def lexCmp : List ℕ → List ℕ → Ordering
       | true => lexCmp as bs
       | false => .gt
 
+/-- Comparison of explicit states used to organise search trees.  Any function is sound (see
+`BTree.mem_toList_of_find`); a total order makes the search efficient. -/
+class StateOrd (S : Type*) where
+  /-- The comparison function. -/
+  cmp : S → S → Ordering
+
+/-- Comparison of naturals with the kernel-native `Nat.blt` / `Nat.beq`. -/
+def natCmp (a b : ℕ) : Ordering :=
+  match Nat.blt a b with
+  | true => .lt
+  | false => match Nat.beq a b with
+    | true => .eq
+    | false => .gt
+
+instance : StateOrd ℕ := ⟨natCmp⟩
+instance : StateOrd (List ℕ) := ⟨lexCmp⟩
+
+instance {S S' : Type*} [StateOrd S] [StateOrd S'] : StateOrd (S × S') :=
+  ⟨fun a b => match StateOrd.cmp a.1 b.1 with
+    | .eq => StateOrd.cmp a.2 b.2
+    | o => o⟩
+
 end AsyncLean

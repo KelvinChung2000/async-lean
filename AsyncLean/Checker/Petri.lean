@@ -98,6 +98,11 @@ def succ (m : List ℕ) : List (Fin N.trans.length × List ℕ) :=
 /-- The executable LTS. -/
 def explicit : ExplicitLTS (List ℕ) (Fin N.trans.length) := ⟨N.succ⟩
 
+/-- The executable semantics with transitions labelled by their *names*: the form used to
+compose nets, which synchronise on shared names (`ExplicitLTS.par`). -/
+def named : ExplicitLTS (List ℕ) String :=
+  ⟨fun m => (N.succ m).map fun e => ((N.tr e.1).name, e.2)⟩
+
 /-- Encoding of abstract markings as lists. -/
 def enc (M : Marking (Fin N.places)) : List ℕ := List.ofFn M
 

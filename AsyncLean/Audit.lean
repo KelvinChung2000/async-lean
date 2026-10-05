@@ -8,6 +8,7 @@ import AsyncLean.MarkedGraph.Basic
 import AsyncLean.Checker.Petri
 import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
+import AsyncLean.Checker.Quotient
 import AsyncLean.AxiomAudit
 
 /-!
@@ -31,6 +32,13 @@ open LTS
   FunBisim.deadlockFree_iff FunBisim.livelockFree_iff FunBisim.live_iff FunBisim.persistent_iff
   StepEqOn.reachable_iff StepEqOn.deadlockFree_iff StepEqOn.livelockFree_iff StepEqOn.live_iff
   StepEqOn.persistent_iff
+
+-- Compositional verification
+#assert_standard_axioms
+  DivBisim.dfLf_iff DivBisim.liveLabel_iff DivBisim.par DivBisim.hide DivBisim.trans
+  DivBisim.symm DivBisim.refl DivBisim.par_comm dfLf_par_iff
+  ExplicitLTS.divBisim_of_checkQuot ExplicitLTS.par_toLTS ExplicitLTS.dfLf_par_left_iff
+  ExplicitLTS.dfLf_par_right_iff ExplicitLTS.dfLf_of_checkCert
 
 -- Signal transition graphs and their implementations
 #assert_standard_axioms

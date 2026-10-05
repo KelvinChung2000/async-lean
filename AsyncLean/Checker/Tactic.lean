@@ -5,6 +5,7 @@ import AsyncLean.Checker.Petri
 import AsyncLean.Checker.Diagnose
 import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
+import AsyncLean.Checker.Minimize
 
 /-!
 # The `async_decide` tactic
@@ -272,6 +273,16 @@ unsafe def evalAsImpl (α : Type) [Inhabited α] [ToExpr α] (e : Expr) : MetaM 
 @[implemented_by evalAsImpl]
 opaque evalAs (α : Type) [Inhabited α] [ToExpr α] (e : Expr) : MetaM α
 
+unsafe def evalExprValImpl (e : Expr) : MetaM Expr := evalExpr Expr (mkConst ``Lean.Expr) e
+
+/-- Evaluate a closed term of type `Expr`. -/
+@[implemented_by evalExprValImpl]
+opaque evalExprVal (e : Expr) : MetaM Expr
+
+/-- Evaluate a closed term `e` (of any type with a `ToExpr` instance) to a literal. -/
+def evalToLiteral (e : Expr) : MetaM Expr := do
+  evalExprVal (← mkAppM ``Lean.ToExpr.toExpr #[e])
+
 /-- Evaluate a Boolean. -/
 def evalBool (e : Expr) : MetaM Bool := evalAs Bool e
 
@@ -385,6 +396,114 @@ def ensure (checkE diag : Expr) : MetaM Unit := do
   unless ← evalBool checkE do
     throwError "async_decide: {← evalString diag}"
 
+/-- Recognise `fun l => b l = true` and return `fun l => b l`. -/
+def boolPred? (i : Expr) : Option Expr :=
+  match i with
+  | .lam n ty body bi =>
+    match body.getAppFnArgs with
+    | (``Eq, #[_, b, t]) => if t.isConstOf ``Bool.true then some (.lam n ty b bi) else none
+    | _ => none
+  | _ => none
+
+/-- The explicit LTS underlying `E.toLTS`. -/
+def explicitOf? (A : Expr) : Option Expr :=
+  match A.getAppFnArgs with
+  | (``ExplicitLTS.toLTS, #[_, _, E]) => some E
+  | _ => none
+
+/-- Recognise deadlock / livelock goals about an explicit LTS: returns the explicit LTS, the
+initial state, the Boolean internal predicate (if any) and which component is asked for. -/
+def matchExplicit (tgt : Expr) : Option (Expr × Expr × Option Expr × Goal) :=
+  match tgt.getAppFnArgs with
+  | (``And, #[a, b]) =>
+    match a.getAppFnArgs, b.getAppFnArgs with
+    | (``LTS.DeadlockFree, #[_, _, A, s₀]), (``LTS.LivelockFree, #[_, _, _, i, _]) => do
+      let E ← explicitOf? A
+      let j ← boolPred? i
+      pure (E, s₀, some j, .correct)
+    | _, _ => none
+  | (``LTS.DeadlockFree, #[_, _, A, s₀]) => (explicitOf? A).map fun E => (E, s₀, none, .deadlock)
+  | (``LTS.LivelockFree, #[_, _, A, i, s₀]) => do
+    let E ← explicitOf? A
+    let j ← boolPred? i
+    pure (E, s₀, some j, .livelock)
+  | _ => none
+
+/-- Deadlock and livelock freedom of an explicit LTS. -/
+def decideExplicit (goal : MVarId) (E s₀ : Expr) (j : Option Expr) (p : Goal) (fuel : ℕ) :
+    TacticM Unit := do
+  let ty ← inferType s₀
+  let cmp ← mkAppOptM ``StateOrd.cmp #[ty, none]
+  let lty ← match (← whnfR (← inferType E)).getAppFnArgs with
+    | (``ExplicitLTS, #[_, l]) => pure l
+    | _ => throwError "async_decide: expected an explicit LTS"
+  let j ← match j with
+    | some j => pure j
+    | none => pure (.lam `l lty (mkConst ``Bool.false) .default)
+  let nil ← mkAppOptM ``List.nil #[lty]
+  let cert ← mkAppM ``ExplicitLTS.mkCert #[E, cmp, j, nil, mkNatLit fuel, s₀]
+  let lit ← evalToLiteral cert
+  let chk ← mkAppM ``ExplicitLTS.checkCert #[E, cmp, j, nil, s₀, lit]
+  unless ← evalBool chk do
+    throwError "async_decide: the explicit system has a reachable deadlock or an infinite run \
+      of internal steps (or its state space exceeds the fuel {fuel})"
+  let hTy ← mkEq chk (mkConst ``Bool.true)
+  let h ← mkFreshExprSyntheticOpaqueMVar hTy
+  let pf ← mkAppM ``ExplicitLTS.dfLf_of_checkCert #[h]
+  let pf ← match p with
+    | .deadlock => mkAppM ``And.left #[pf]
+    | .livelock => mkAppM ``And.right #[pf]
+    | _ => pure pf
+  unless ← isDefEq (← inferType pf) (← goal.getType) do
+    throwError "async_decide: could not match the goal with{indentExpr (← inferType pf)}"
+  goal.assign pf
+  replaceMainGoal [h.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+
+/-- Replace one component of a composition by its certified quotient (see
+`ExplicitLTS.dfLf_par_left_iff`). -/
+def minimize (right : Bool) (fuel : ℕ) : TacticM Unit := do
+  let goal ← getMainGoal
+  let tgt ← instantiateMVars (← goal.getType)
+  let err {α : Type} : TacticM α := throwError "async_minimize: expected a goal of the form\
+    {indentD "(E.par F sync).toLTS.DeadlockFree (s₀, u₀) ∧\n  (E.par F sync).toLTS.LivelockFree (fun l => j l = true) (s₀, u₀)"}"
+  let some (P, p₀, some j, .correct) := matchExplicit tgt | err
+  let (``ExplicitLTS.par, args) := P.getAppFnArgs | err
+  let some E := args[args.size - 3]? | err
+  let some F := args[args.size - 2]? | err
+  let some sync := args[args.size - 1]? | err
+  let (``Prod.mk, #[_, _, s₀, u₀]) := p₀.getAppFnArgs | err
+  let (comp, init, other) := if right then (F, u₀, s₀) else (E, s₀, u₀)
+  let ty ← inferType init
+  let lty ← match (← whnfR (← inferType comp)).getAppFnArgs with
+    | (``ExplicitLTS, #[_, l]) => pure l
+    | _ => err
+  let cmp ← mkAppOptM ``StateOrd.cmp #[ty, none]
+  let internalB := Expr.lam `l lty (mkApp2 (mkConst ``and) (mkApp j (.bvar 0))
+    (mkApp (mkConst ``not) (mkApp sync (.bvar 0)))) .default
+  let r ← mkAppM ``ExplicitLTS.mkQuot #[comp, cmp, internalB, mkNatLit fuel, init]
+  let qLit ← evalToLiteral (← mkAppM ``ExplicitLTS.QuotResult.q #[r])
+  let cLit ← evalToLiteral (← mkAppM ``ExplicitLTS.QuotResult.cert #[r])
+  let k ← evalAs ℕ (← mkAppM ``ExplicitLTS.QuotResult.init #[r])
+  let chk ← mkAppM ``ExplicitLTS.checkQuot #[comp, cmp, internalB, qLit, init, cLit]
+  unless ← evalBool chk do
+    throwError "async_minimize: the minimised component could not be certified (it may have a \
+      cycle of internal steps — a livelock — or exceed the fuel {fuel})"
+  let hq ← mkFreshExprSyntheticOpaqueMVar (← mkEq chk (mkConst ``Bool.true))
+  let clsE ← mkAppM ``ExplicitLTS.InvCert.cls #[cmp, cLit, init]
+  let hk ← mkFreshExprSyntheticOpaqueMVar (← mkEq clsE (← mkAppM ``Option.some #[mkNatLit k]))
+  let thm := if right then ``ExplicitLTS.dfLf_par_right_iff else ``ExplicitLTS.dfLf_par_left_iff
+  let otherComp := if right then E else F
+  let iff ← mkAppOptM thm #[ty, lty, ← inferType other, none, none, cmp, comp, otherComp, sync, j,
+    qLit, init, cLit, mkNatLit k, hq, hk, other]
+  let some (lhs, rhs) := (← inferType iff).iff? | err
+  unless ← isDefEq lhs tgt do err
+  let g' ← mkFreshExprSyntheticOpaqueMVar rhs
+  goal.assign (← mkAppM ``Iff.mpr #[iff, g'])
+  replaceMainGoal [hq.mvarId!, hk.mvarId!, g'.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+  evalTactic (← `(tactic| decide +kernel))
+
 /-- The `async_decide` tactic (see the module documentation). -/
 def asyncDecide (fuel : ℕ) : TacticM Unit := do
   let goal ← getMainGoal
@@ -453,9 +572,12 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       let chk := app ``Stg.checkImpl #[N, gates, lit, lit']
       closeWithCheck goal chk
         (fun h => app ``Stg.implementation_correct_of_check #[N, gates, lit, lit', h]) p
+  else if let some (E, s₀, j, p) := matchExplicit tgt then
+    decideExplicit goal E s₀ j p fuel
   else
     throwError "async_decide: unsupported goal{indentExpr tgt}\nExpected a property of a \
-      concrete `PNet`, `Circuit` or `Stg` (or of an STG implementation)."
+      concrete `PNet`, `Circuit` or `Stg` (or of an STG implementation), or deadlock / \
+      livelock freedom of an explicit LTS."
 
 end Tactic
 
@@ -471,5 +593,18 @@ elab_rules : tactic
         maxRecDepth := max ctx.maxRecDepth 1000000
         options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
       (Tactic.asyncDecide (n.map (·.getNat) |>.getD 100000))
+
+/-- `async_minimize` (or `async_minimize right`) replaces the left (right) component of a
+parallel composition of explicit LTSs by its minimal quotient modulo branching bisimulation,
+certified by the kernel; the goal must state deadlock and livelock freedom of the composition. -/
+syntax (name := asyncMinimizeStx) "async_minimize" (&" right")? (" (" &"fuel" " := " num ")")? :
+  tactic
+
+elab_rules : tactic
+  | `(tactic| async_minimize $[right%$r]? $[ (fuel := $n)]?) =>
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
+      (Tactic.minimize r.isSome (n.map (·.getNat) |>.getD 100000))
 
 end AsyncLean

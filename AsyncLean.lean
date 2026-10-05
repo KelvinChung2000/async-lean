@@ -1,5 +1,6 @@
 import AsyncLean.LTS.Basic
 import AsyncLean.LTS.Properties
+import AsyncLean.LTS.Compose
 import AsyncLean.Petri.Basic
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
@@ -11,6 +12,8 @@ import AsyncLean.Checker.Diagnose
 import AsyncLean.Checker.Tactic
 import AsyncLean.Circuit.Basic
 import AsyncLean.Checker.Invariant
+import AsyncLean.Checker.Quotient
+import AsyncLean.Checker.Minimize
 import AsyncLean.Stg.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.AxiomAudit
@@ -21,3 +24,4 @@ import AsyncLean.Examples.Counterexamples
 import AsyncLean.Examples.Circuits
 import AsyncLean.Examples.Philosophers
 import AsyncLean.Examples.StgImpl
+import AsyncLean.Examples.Compositional
