@@ -10,6 +10,26 @@ import AsyncLean.Circuit.Basic
 Importers parse a design at elaboration time and define an ordinary Lean constant holding it
 as a literal term (`defineDesign`).  The parsers are not verified and need not be: every
 theorem is stated about the defined constant, whose value can be inspected with `#print`.
+
+## Rebuilding when a design file changes
+
+Lake only tracks Lean sources, so declare the design files as an input of the library that
+contains the importing modules.  Every module of that library is rebuilt when a design file
+changes, so keep the importing modules in a small library of their own (`lakefile.toml`):
+
+```toml
+[[input_dir]]
+name = "designs"
+path = "designs"     # directory of .g / .pnml / .v files
+text = true
+
+[[lean_lib]]
+name = "MyDesigns"
+roots = ["MyProject.Designs"]   # the modules using stg_from_g, pnet_from_pnml, …
+needs = ["@/designs"]
+```
+
+This repository does the same for `AsyncLean.Examples.Imported`.
 -/
 
 namespace AsyncLean

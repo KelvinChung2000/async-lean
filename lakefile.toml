@@ -13,3 +13,16 @@ rev = "v4.34.1"
 
 [[lean_lib]]
 name = "AsyncLean"
+
+# The design files read by the importers (`stg_from_g`, `pnet_from_pnml`, `*_from_verilog`).
+[[input_dir]]
+name = "designs"
+path = "AsyncLean/Examples/designs"
+text = true
+
+# Modules that import design files live in a library that depends on them, so that editing a
+# design file rebuilds exactly these modules.
+[[lean_lib]]
+name = "AsyncLeanDesigns"
+roots = ["AsyncLean.Examples.Imported"]
+needs = ["@/designs"]
