@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Checker.Explicit
+import AsyncLean.Checker.Diagnose
 import Mathlib.Data.List.FinRange
 
 /-!
@@ -240,6 +241,16 @@ def checkCert (c : ExplicitLTS.Cert (List Bool)) : Bool :=
   C.wf && C.explicit.checkCert boolLexCmp (fun g => (C.gate g).internal)
     (List.finRange C.gates.length) C.init c
 
+/-- Compute a home-state certificate (untrusted). -/
+def mkCertHome (fuel : ℕ := 100000) : ExplicitLTS.HomeCert (List Bool) :=
+  C.explicit.mkCertHome boolLexCmp (fun g => (C.gate g).internal) (List.finRange C.gates.length)
+    fuel C.init
+
+/-- Check a home-state certificate for `Correct` (trusted). -/
+def checkCertHome (c : ExplicitLTS.HomeCert (List Bool)) : Bool :=
+  C.wf && C.explicit.checkCertHome boolLexCmp (fun g => (C.gate g).internal)
+    (List.finRange C.gates.length) C.init c
+
 /-- Check a certificate for speed independence (trusted). -/
 def checkCertSpeedIndependent (c : ExplicitLTS.Cert (List Bool)) : Bool :=
   C.wf && C.explicit.checkCertPersistent boolLexCmp C.init c
@@ -276,6 +287,14 @@ theorem correct_of_checkCert {c : ExplicitLTS.Cert (List Bool)} (h : C.checkCert
     C.Correct := by
   simp only [checkCert, Bool.and_eq_true] at h
   obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCert (List.mem_finRange) h.2
+  rw [← enc_s₀ h.1] at hd hl hv
+  exact ⟨(bisim h.1).deadlockFree_iff.1 hd, (bisim h.1).livelockFree_iff.1 hl,
+    (bisim h.1).live_iff.1 hv⟩
+
+theorem correct_of_checkCertHome {c : ExplicitLTS.HomeCert (List Bool)}
+    (h : C.checkCertHome c = true) : C.Correct := by
+  simp only [checkCertHome, Bool.and_eq_true] at h
+  obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCertHome (List.mem_finRange) h.2
   rw [← enc_s₀ h.1] at hd hl hv
   exact ⟨(bisim h.1).deadlockFree_iff.1 hd, (bisim h.1).livelockFree_iff.1 hl,
     (bisim h.1).live_iff.1 hv⟩

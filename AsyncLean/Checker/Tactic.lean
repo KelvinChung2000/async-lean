@@ -6,6 +6,7 @@ import AsyncLean.Checker.Diagnose
 import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
+import AsyncLean.Checker.Packed
 
 /-!
 # The `async_decide` tactic
@@ -311,6 +312,13 @@ where
       | _ => none
     | _ => none
 
+/-- Recognise a boundedness goal `N.Bounded k` or `N.Safe`. -/
+def matchBounded (tgt : Expr) : Option (Expr × Expr) :=
+  match tgt.getAppFnArgs with
+  | (``PNet.Bounded, #[N, k]) => some (N, k)
+  | (``PNet.Safe, #[N]) => some (N, mkNatLit 1)
+  | _ => none
+
 /-- Recognise a goal about a concrete circuit. -/
 def matchCircuit (tgt : Expr) : Option (Expr × Goal) :=
   match tgt.getAppFnArgs with
@@ -387,6 +395,18 @@ def closeWithCheck (goal : MVarId) (checkE : Expr) (mkPf : Expr → Expr) (p : G
     let msg := "async_decide: the goal must be stated for the design's own initial state " ++
       "and internal predicate; can prove"
     throwError "{msg}{indentExpr pfTy}\nbut the goal is{indentExpr (← goal.getType)}"
+  goal.assign pf
+  replaceMainGoal [h.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+
+/-- Variant of `closeWithCheck` whose proof builder runs in `MetaM`. -/
+def closeWithCheckM (goal : MVarId) (checkE : Expr) (mkPf : Expr → MetaM Expr) (p : Goal) :
+    TacticM Unit := do
+  let hTy ← mkEq checkE (mkConst ``Bool.true)
+  let h ← mkFreshExprSyntheticOpaqueMVar hTy
+  let pf ← project (← mkPf h) p
+  unless ← isDefEq (← inferType pf) (← goal.getType) do
+    throwError "async_decide: the goal does not match{indentExpr (← inferType pf)}"
   goal.assign pf
   replaceMainGoal [h.mvarId!]
   evalTactic (← `(tactic| decide +kernel))
@@ -510,7 +530,14 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
   let tgt ← instantiateMVars (← goal.getType)
   let fuelE := mkNatLit fuel
   let app (n : Name) (args : Array Expr) : Expr := mkAppN (mkConst n) args
-  if let some (N, p) := matchPNet tgt then
+  if let some (N, k) := matchBounded tgt then
+    let lit := toExpr (← evalAs (ExplicitLTS.InvCert (List ℕ) Unit) (app ``PNet.mkBoundCert #[N, fuelE]))
+    let chk := app ``PNet.checkBounded #[N, k, lit]
+    unless ← evalBool chk do
+      throwError "async_decide: the net is not {← evalAs ℕ k}-bounded (some reachable marking \
+        exceeds it), or its state space exceeds the fuel"
+    closeWithCheck goal chk (fun h => app ``PNet.bounded_of_check #[N, k, lit, h]) .correct
+  else if let some (N, p) := matchPNet tgt then
     let lit := toExpr (← evalAs (ExplicitLTS.Cert (List ℕ)) (app ``PNet.mkCert #[N, fuelE]))
     match p with
     | .persistent =>
@@ -518,6 +545,25 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       ensure chk (app ``PNet.diagnosePersistent #[N, fuelE])
       closeWithCheck goal chk (fun h => app ``PNet.persistent_of_checkCert #[N, lit, h]) p
     | _ =>
+      -- fastest path: safe nets that can always return to their initial marking
+      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``PNet.mkPackedHomeCert #[N, fuelE]))
+      let chkH := app ``PNet.checkPackedHome #[N, litH]
+      if ← evalBool chkH then
+        closeWithCheckM goal chkH (fun h => mkAppM ``And.left
+          #[app ``PNet.correct_of_checkPackedHome #[N, litH, h]]) p
+      else
+      -- fast path: safe nets, with markings packed into bit masks
+      let litP := toExpr (← evalAs (ExplicitLTS.Cert ℕ) (app ``PNet.mkPackedCert #[N, fuelE]))
+      let chkP := app ``PNet.checkPacked #[N, litP]
+      if ← evalBool chkP then
+        closeWithCheckM goal chkP (fun h => mkAppM ``And.left
+          #[app ``PNet.correct_of_checkPacked #[N, litP, h]]) p
+      else
+      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert (List ℕ)) (app ``PNet.mkCertHome #[N, fuelE]))
+      let chkH := app ``PNet.checkCertHome #[N, litH]
+      if ← evalBool chkH then
+        closeWithCheck goal chkH (fun h => app ``PNet.correct_of_checkCertHome #[N, litH, h]) p
+      else
       let chk := app ``PNet.checkCert #[N, lit]
       ensure chk (app ``PNet.diagnose #[N, fuelE])
       closeWithCheck goal chk (fun h => app ``PNet.correct_of_checkCert #[N, lit, h]) p
@@ -529,6 +575,11 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       ensure chk (app ``Circuit.diagnoseSpeedIndependent #[C, fuelE])
       closeWithCheck goal chk (fun h => app ``Circuit.speedIndependent_of_checkCert #[C, lit, h]) p
     | _ =>
+      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert (List Bool)) (app ``Circuit.mkCertHome #[C, fuelE]))
+      let chkH := app ``Circuit.checkCertHome #[C, litH]
+      if ← evalBool chkH then
+        closeWithCheck goal chkH (fun h => app ``Circuit.correct_of_checkCertHome #[C, litH, h]) p
+      else
       let chk := app ``Circuit.checkCert #[C, lit]
       ensure chk (app ``Circuit.diagnose #[C, fuelE])
       closeWithCheck goal chk (fun h => app ``Circuit.correct_of_checkCert #[C, lit, h]) p
@@ -539,6 +590,11 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       return toExpr (← evalAs Stg.InvCert (app ``Stg.mkInvCert #[N, fuelE]))
     match g with
     | .spec p =>
+      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert StgState) (app ``Stg.mkCertHome #[N, fuelE]))
+      let chkH := app ``Stg.checkCertHome #[N, litH]
+      if ← evalBool chkH then
+        closeWithCheck goal chkH (fun h => app ``Stg.correct_of_checkCertHome #[N, litH, h]) p
+      else
       let lit ← cert
       let chk := app ``Stg.checkCert #[N, lit]
       ensure chk (app ``Stg.diagnose #[N, fuelE])

@@ -516,6 +516,159 @@ theorem persistent_of_checkCert {s₀ : S} {c : Cert S}
 
 end CertSection
 
+/-! ### Home-state certificates
+
+For systems that can always return to their initial state (a *home state*), liveness has a
+much smaller certificate: one distance per state, towards the initial state, and for each
+label one trace from the initial state to a state enabling it. -/
+
+/-- A home-state certificate: each state with its rank, its distance to the initial state and
+its successors (literal); and, for each label, a trace of states from the initial state. -/
+abbrev HomeCert (S : Type*) := BTree (S × (ℕ × ℕ × List S)) × List (List S)
+
+section HomeSection
+
+variable [DecidableEq S] [DecidableEq L] (cmp : S → S → Ordering)
+
+/-- Follow a trace of states, each a successor of the previous one. -/
+def followStates : S → List S → Option S
+  | s, [] => some s
+  | s, s' :: rest => if (E.succ s).any (fun e => decide (e.2 = s')) then followStates s' rest
+    else none
+
+/-- The checks at one state of a home-state certificate. -/
+def checkNodeHome (internal : L → Bool) (c : BTree (S × (ℕ × ℕ × List S))) (s₀ s : S) : Bool :=
+  match c.findData cmp s with
+  | none => false
+  | some (r, d, ss) =>
+    let es := E.succ s
+    let ds := ((es.map Prod.fst).zip ss).map fun e => (e.1, c.findData cmp e.2)
+    decide (es.map Prod.snd = ss) && !ss.isEmpty &&
+    (ds.all fun p => match p.2 with
+      | none => false
+      | some (r', _, _) => !internal p.1 || decide (r' < r)) &&
+    (decide (s = s₀) || ds.any fun p => match p.2 with
+      | some (_, d', _) => decide (d' < d)
+      | none => false)
+
+/-- Check a home-state certificate (trusted). -/
+def checkCertHome (internal : L → Bool) (labels : List L) (s₀ : S) (c : HomeCert S) : Bool :=
+  (c.1.findData cmp s₀).isSome && c.1.all (fun x => E.checkNodeHome cmp internal c.1 s₀ x.1) &&
+    (labels.length == c.2.length) &&
+    (labels.zip c.2).all fun lt => match E.followStates s₀ lt.2 with
+      | some s => E.enabledB s lt.1
+      | none => false
+
+variable {E} {cmp}
+
+omit [DecidableEq L] in
+theorem reachable_of_followStates {s s' : S} {tr : List S} (h : E.followStates s tr = some s') :
+    E.toLTS.Reachable s s' := by
+  induction tr generalizing s with
+  | nil => cases h; exact LTS.Reachable.refl _
+  | cons x rest ih =>
+    simp only [followStates] at h
+    split_ifs at h with hany
+    simp only [List.any_eq_true, decide_eq_true_eq] at hany
+    obtain ⟨⟨l, y⟩, hmem, rfl⟩ := hany
+    exact LTS.Reachable.head ⟨l, hmem⟩ (ih h)
+
+omit [DecidableEq L] in
+theorem checkNodeHome_spec {internal : L → Bool} {c : BTree (S × (ℕ × ℕ × List S))} {s₀ s : S}
+    (h : E.checkNodeHome cmp internal c s₀ s = true) :
+    ∃ r d, (∃ ss, c.findData cmp s = some (r, d, ss)) ∧ E.succ s ≠ [] ∧
+      (∀ l s', (l, s') ∈ E.succ s → ∃ r' d' ss', c.findData cmp s' = some (r', d', ss') ∧
+        (internal l = true → r' < r)) ∧
+      (s = s₀ ∨ ∃ l s' r' d' ss', (l, s') ∈ E.succ s ∧ c.findData cmp s' = some (r', d', ss') ∧
+        d' < d) := by
+  unfold checkNodeHome at h
+  split at h
+  · cases h
+  · rename_i r d ss hfind
+    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_eq_eq_not, Bool.not_true,
+      List.isEmpty_eq_false_iff, List.all_eq_true, List.any_eq_true, List.mem_map,
+      Bool.or_eq_true] at h
+    obtain ⟨⟨⟨hss, hne⟩, hr⟩, hd⟩ := h
+    subst hss
+    refine ⟨r, d, ⟨_, hfind⟩, fun h => hne (by simp [h]), ?_, ?_⟩
+    · intro l s' hmem
+      have := hr _ ⟨(l, s'), by rw [zip_map_fst_snd]; exact hmem, rfl⟩
+      split at this
+      · cases this
+      · rename_i r' d' ss' hf
+        refine ⟨r', d', ss', hf, fun hl => ?_⟩
+        simp only [hl, Bool.not_true, Bool.false_or, decide_eq_true_eq] at this
+        exact this
+    · rcases hd with h | ⟨p, ⟨e, he, rfl⟩, hlt⟩
+      · exact Or.inl h
+      · right
+        split at hlt
+        · rename_i r' d' ss' hf
+          rw [zip_map_fst_snd] at he
+          exact ⟨e.1, e.2, r', d', ss', he, hf, of_decide_eq_true hlt⟩
+        · cases hlt
+
+/-- **Soundness of home-state certificates.** -/
+theorem of_checkCertHome {internal : L → Bool} {labels : List L} (hl : ∀ l, l ∈ labels)
+    {s₀ : S} {c : HomeCert S} (h : E.checkCertHome cmp internal labels s₀ c = true) :
+    E.toLTS.DeadlockFree s₀ ∧ E.toLTS.LivelockFree (fun l => internal l = true) s₀ ∧
+      E.toLTS.Live s₀ := by
+  simp only [checkCertHome, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+    BTree.all_eq_true] at h
+  obtain ⟨⟨⟨h₀, hc⟩, hlen⟩, htr⟩ := h
+  let Mem : S → Prop := fun s => ∃ b, (s, b) ∈ c.1.toList
+  have hnode : ∀ s, Mem s → E.checkNodeHome cmp internal c.1 s₀ s = true :=
+    fun s ⟨b, hs⟩ => hc _ hs
+  have hmem₀ : Mem s₀ := by
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 h₀
+    exact ⟨b, BTree.mem_toList_of_findData hb⟩
+  have hstep : ∀ s l s', Mem s → E.toLTS.step s l s' → Mem s' := by
+    intro s l s' hs hst
+    obtain ⟨_, _, _, _, hsucc, _⟩ := checkNodeHome_spec (hnode s hs)
+    obtain ⟨r', d', ss', hf, -⟩ := hsucc l s' hst
+    exact ⟨_, BTree.mem_toList_of_findData hf⟩
+  -- every certificate state can return to `s₀`
+  have home : ∀ n s, Mem s → ∀ r ss, c.1.findData cmp s = some (r, n, ss) →
+      E.toLTS.Reachable s s₀ := by
+    intro n
+    induction n using Nat.strong_induction_on with
+    | _ n ih =>
+      intro s hs r ss hf
+      obtain ⟨r₀, d₀, ⟨ss₀, hf₀⟩, -, -, hback⟩ := checkNodeHome_spec (hnode s hs)
+      rw [hf] at hf₀
+      simp only [Option.some.injEq, Prod.mk.injEq] at hf₀
+      obtain ⟨-, rfl, -⟩ := hf₀
+      rcases hback with rfl | ⟨l, s', r', d', ss', hmem, hf', hlt⟩
+      · exact LTS.Reachable.refl _
+      · exact LTS.Reachable.head ⟨l, hmem⟩
+          (ih d' hlt s' (hstep s l s' hs hmem) r' ss' hf')
+  refine ⟨?_, ?_, fun l s hs => ?_⟩
+  · refine LTS.DeadlockFree.of_invariant Mem hmem₀ hstep fun s hs => ?_
+    obtain ⟨_, _, _, hne, _⟩ := checkNodeHome_spec (hnode s hs)
+    obtain ⟨⟨l, s'⟩, hmem⟩ := List.exists_mem_of_ne_nil _ hne
+    exact ⟨l, s', hmem⟩
+  · refine LTS.LivelockFree.of_ranking Mem hmem₀ hstep
+      (fun s => ((c.1.findData cmp s).map Prod.fst).getD 0) fun s l s' hs hl hst => ?_
+    obtain ⟨r, d, ⟨ss, hf⟩, -, hsucc, -⟩ := checkNodeHome_spec (hnode s hs)
+    obtain ⟨r', d', ss', hf', hlt⟩ := hsucc l s' hst
+    simp only [hf, hf', Option.map_some, Option.getD_some]
+    exact hlt hl
+  · -- go home, then follow the trace for `l`
+    have hsM : Mem s := hs.invariant hmem₀ hstep
+    obtain ⟨r, d, ⟨ss, hf⟩, -⟩ := checkNodeHome_spec (hnode s hsM)
+    have hback := home d s hsM r ss hf
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem (hl l)
+    have hi' : i < (labels.zip c.2).length := by simp [List.length_zip, hi, ← hlen]
+    have hmem := List.getElem_mem hi'
+    have := htr _ hmem
+    rw [List.getElem_zip] at this
+    split at this
+    · rename_i s' hs'
+      exact ⟨s', hback.trans (reachable_of_followStates hs'), enabledB_iff.1 this⟩
+    · cases this
+
+end HomeSection
+
 /-! ### Verified refutation: counterexample traces -/
 
 section Refute

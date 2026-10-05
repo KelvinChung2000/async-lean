@@ -14,6 +14,7 @@ import AsyncLean.Circuit.Basic
 import AsyncLean.Checker.Invariant
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Minimize
+import AsyncLean.Checker.Packed
 import AsyncLean.Stg.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Import.Basic

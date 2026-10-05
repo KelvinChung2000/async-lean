@@ -9,6 +9,7 @@ import AsyncLean.Checker.Petri
 import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
+import AsyncLean.Checker.Packed
 import AsyncLean.AxiomAudit
 
 /-!
@@ -70,7 +71,11 @@ open LTS
 #assert_standard_axioms
   ExplicitLTS.deadlockFree_of_check ExplicitLTS.livelockFree_of_check
   ExplicitLTS.liveLabel_of_check ExplicitLTS.persistent_of_check ExplicitLTS.of_checkAll
-  ExplicitLTS.of_checkCert ExplicitLTS.persistent_of_checkCert
+  ExplicitLTS.of_checkCert ExplicitLTS.persistent_of_checkCert ExplicitLTS.of_checkCertHome
+  PNet.correct_of_checkPacked PNet.correct_of_checkPackedHome PNet.correct_of_packed
+  PNet.correct_of_checkCertHome PNet.bounded_of_check Circuit.correct_of_checkCertHome
+  Stg.correct_of_checkCertHome FunBisimOn.deadlockFree_iff FunBisimOn.livelockFree_iff
+  FunBisimOn.live_iff
   ExplicitLTS.not_deadlockFree_of_refuteB ExplicitLTS.not_livelockFree_of_refuteB
   ExplicitLTS.not_liveLabel_of_refuteB ExplicitLTS.not_persistent_of_refuteB
   PNet.bisim PNet.correct_of_checkAll PNet.persistent_of_check

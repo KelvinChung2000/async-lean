@@ -5,6 +5,7 @@ import AsyncLean.Stg.Basic
 import AsyncLean.Checker.Petri
 import AsyncLean.Checker.Invariant
 import AsyncLean.Circuit.Basic
+import AsyncLean.Checker.Diagnose
 
 /-!
 # Concrete signal transition graphs and their verified analysis
@@ -243,6 +244,15 @@ variable (N)
 def checkCert (c : ExplicitLTS.Cert StgState) : Bool :=
   N.wf && N.explicit.checkCert stateCmp N.isInternal (List.finRange N.net.trans.length) N.init c
 
+/-- Check a home-state certificate for `Correct`. -/
+def checkCertHome (c : ExplicitLTS.HomeCert StgState) : Bool :=
+  N.wf && N.explicit.checkCertHome stateCmp N.isInternal (List.finRange N.net.trans.length)
+    N.init c
+
+/-- Compute a home-state certificate (untrusted). -/
+def mkCertHome (fuel : ℕ := 100000) : ExplicitLTS.HomeCert StgState :=
+  N.explicit.mkCertHome stateCmp N.isInternal (List.finRange N.net.trans.length) fuel N.init
+
 /-- Consistency at one state. -/
 def consNode (s : StgState) (es : List (Fin N.net.trans.length × StgState)) : Bool :=
   es.all fun e => match N.edge e.1 with
@@ -334,6 +344,15 @@ theorem correct_of_checkCert {c : ExplicitLTS.Cert StgState} (h : N.checkCert c 
     N.model.Correct := by
   simp only [checkCert, Bool.and_eq_true] at h
   obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCert (List.mem_finRange) h.2
+  rw [← enc_s₀ h.1] at hd hl hv
+  refine ⟨(bisim h.1).deadlockFree_iff.1 hd, ?_, (bisim h.1).live_iff.1 hv⟩
+  rw [internal_eq]
+  exact (bisim h.1).livelockFree_iff.1 hl
+
+theorem correct_of_checkCertHome {c : ExplicitLTS.HomeCert StgState}
+    (h : N.checkCertHome c = true) : N.model.Correct := by
+  simp only [checkCertHome, Bool.and_eq_true] at h
+  obtain ⟨hd, hl, hv⟩ := ExplicitLTS.of_checkCertHome (List.mem_finRange) h.2
   rw [← enc_s₀ h.1] at hd hl hv
   refine ⟨(bisim h.1).deadlockFree_iff.1 hd, ?_, (bisim h.1).live_iff.1 hv⟩
   rw [internal_eq]
