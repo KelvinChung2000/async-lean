@@ -7,6 +7,7 @@ import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
 import AsyncLean.Checker.Petri
 import AsyncLean.Circuit.Basic
+import AsyncLean.Stg.Concrete
 import AsyncLean.AxiomAudit
 
 /-!
@@ -28,6 +29,20 @@ open LTS
   InevitablyExternal.exists_external not_deadlockFree_of_path not_livelockFree_of_cycle
   not_liveLabel_of_dead not_persistent_of
   FunBisim.deadlockFree_iff FunBisim.livelockFree_iff FunBisim.live_iff FunBisim.persistent_iff
+  StepEqOn.reachable_iff StepEqOn.deadlockFree_iff StepEqOn.livelockFree_iff StepEqOn.live_iff
+  StepEqOn.persistent_iff
+
+-- Signal transition graphs and their implementations
+#assert_standard_axioms
+  StgModel.impl_stepEqOn StgModel.impl_correct_iff StgModel.impl_persistent_iff
+  StgModel.gate_switch_allowed StgModel.gate_persistent StgModel.csc_of_conformant
+  StgModel.nextState_conformant StgModel.csc_iff_exists_conformant
+  ExplicitLTS.of_checkInv Stg.bisim Stg.correct_of_checkCert Stg.consistent_of_check
+  Stg.csc_of_check Stg.outputPersistent_of_check Stg.conformant_of_check
+  Stg.implementation_correct Stg.implementation_correct_of_check
+  Stg.not_consistent_of_refute Stg.not_csc_of_refute Stg.not_outputPersistent_of_refute
+  Stg.not_conformant_of_refute Stg.not_deadlockFree_of_refute Stg.not_livelockFree_of_refute
+  Stg.not_liveLabel_of_refute
 
 -- Petri nets
 #assert_standard_axioms

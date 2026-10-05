@@ -10,6 +10,9 @@ import AsyncLean.Checker.Petri
 import AsyncLean.Checker.Diagnose
 import AsyncLean.Checker.Tactic
 import AsyncLean.Circuit.Basic
+import AsyncLean.Checker.Invariant
+import AsyncLean.Stg.Basic
+import AsyncLean.Stg.Concrete
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
@@ -17,3 +20,4 @@ import AsyncLean.Examples.Arbiter
 import AsyncLean.Examples.Counterexamples
 import AsyncLean.Examples.Circuits
 import AsyncLean.Examples.Philosophers
+import AsyncLean.Examples.StgImpl

@@ -34,6 +34,9 @@ structure PTrans where
   post : List ℕ
   /-- Internal (silent / dummy) transition, relevant for livelock. -/
   internal : Bool := false
+  /-- Signal edge labelling the transition when the net is used as a signal transition graph
+  (`some (z, true)` is `z+`, `some (z, false)` is `z-`, `none` a dummy); ignored by `PNet`. -/
+  edge : Option (ℕ × Bool) := none
 
 /-- A concrete Petri net with places `0 … places - 1`. -/
 structure PNet where
