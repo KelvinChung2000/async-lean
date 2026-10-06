@@ -5,9 +5,11 @@ import AsyncLean.Checker.Petri
 import AsyncLean.Checker.Diagnose
 import AsyncLean.Circuit.Basic
 import AsyncLean.Circuit.Wires
+import AsyncLean.Circuit.Packed
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
+import AsyncLean.Import.Basic
 
 /-!
 # The `async_decide` tactic
@@ -402,6 +404,25 @@ def closeWithCheck (goal : MVarId) (checkE : Expr) (mkPf : Expr → Expr) (p : G
   replaceMainGoal [h.mvarId!]
   evalTactic (← `(tactic| decide +kernel))
 
+/-- Variant of `closeWithCheck` for a design `orig` that was replaced by its evaluated literal
+`lit`: the goal is matched against the proof's type with `lit` read back as `orig`, and the
+kernel checks that `orig` and `lit` agree (by evaluation, once). -/
+def closeWithCheckLit (goal : MVarId) (checkE : Expr) (mkPf : Expr → Expr) (p : Goal)
+    (orig lit : Expr) : TacticM Unit := do
+  let hTy ← mkEq checkE (mkConst ``Bool.true)
+  let h ← mkFreshExprSyntheticOpaqueMVar hTy
+  let pf ← project (mkPf h) p
+  let pfTy ← inferType pf
+  let pfTy' := pfTy.replace fun e => if e == lit then some orig else none
+  let gTy ← goal.getType
+  unless ← isDefEq pfTy' gTy do
+    let msg := "async_decide: the goal must be stated for the design's own initial state " ++
+      "and internal predicate; can prove"
+    throwError "{msg}{indentExpr pfTy'}\nbut the goal is{indentExpr gTy}"
+  goal.assign (← mkExpectedTypeHint pf gTy)
+  replaceMainGoal [h.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+
 /-- Variant of `closeWithCheck` whose proof builder runs in `MetaM`. -/
 def closeWithCheckM (goal : MVarId) (checkE : Expr) (mkPf : Expr → MetaM Expr) (p : Goal) :
     TacticM Unit := do
@@ -570,22 +591,28 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       let chk := app ``PNet.checkCert #[N, lit]
       ensure chk (app ``PNet.diagnose #[N, fuelE])
       closeWithCheck goal chk (fun h => app ``PNet.correct_of_checkCert #[N, lit, h]) p
-  else if let some (C, p) := matchCircuit tgt then
-    let lit := toExpr (← evalAs (ExplicitLTS.Cert (List Bool)) (app ``Circuit.mkCert #[C, fuelE]))
+  else if let some (C₀, p) := matchCircuit tgt then
+    -- evaluate the circuit to a literal once (e.g. `withWires`), then check bit-packed states
+    -- (`Circuit.bisimP`) natively in the kernel
+    let C := toExpr (← evalAs Circuit C₀)
     match p with
     | .persistent =>
-      let chk := app ``Circuit.checkCertSpeedIndependent #[C, lit]
-      ensure chk (app ``Circuit.diagnoseSpeedIndependent #[C, fuelE])
-      closeWithCheck goal chk (fun h => app ``Circuit.speedIndependent_of_checkCert #[C, lit, h]) p
+      let lit := toExpr (← evalAs (ExplicitLTS.PCert ℕ) (app ``Circuit.mkPCertP #[C, fuelE]))
+      let chk := app ``Circuit.checkPCertP #[C, lit]
+      ensure chk (app ``Circuit.diagnoseSpeedIndependent #[C₀, fuelE])
+      closeWithCheckLit goal chk
+        (fun h => app ``Circuit.speedIndependent_of_checkPCertP #[C, lit, h]) p C₀ C
     | _ =>
-      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert (List Bool)) (app ``Circuit.mkCertHome #[C, fuelE]))
-      let chkH := app ``Circuit.checkCertHome #[C, litH]
+      let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``Circuit.mkCertHomeP #[C, fuelE]))
+      let chkH := app ``Circuit.checkCertHomeP #[C, litH]
       if ← evalBool chkH then
-        closeWithCheck goal chkH (fun h => app ``Circuit.correct_of_checkCertHome #[C, litH, h]) p
+        closeWithCheckLit goal chkH
+          (fun h => app ``Circuit.correct_of_checkCertHomeP #[C, litH, h]) p C₀ C
       else
-      let chk := app ``Circuit.checkCert #[C, lit]
-      ensure chk (app ``Circuit.diagnose #[C, fuelE])
-      closeWithCheck goal chk (fun h => app ``Circuit.correct_of_checkCert #[C, lit, h]) p
+      let lit := toExpr (← evalAs (ExplicitLTS.Cert ℕ) (app ``Circuit.mkCertP #[C, fuelE]))
+      let chk := app ``Circuit.checkCertP #[C, lit]
+      ensure chk (app ``Circuit.diagnose #[C₀, fuelE])
+      closeWithCheckLit goal chk (fun h => app ``Circuit.correct_of_checkCertP #[C, lit, h]) p C₀ C
   else if let some (N, g) := matchStg tgt then
     let cert : MetaM Expr := do
       return toExpr (← evalAs (ExplicitLTS.Cert StgState) (app ``Stg.mkCert #[N, fuelE]))

@@ -86,6 +86,11 @@ def mkCertHome [DecidableEq L] (internal : L → Bool) (labels : List L) (fuel :
     | none => []
   (tree, traces)
 
+/-- Compute a persistence certificate with labelled successors (untrusted). -/
+def mkPCert (key : L → ℕ) (fuel : ℕ) (s₀ : S) : PCert S :=
+  let states := (E.explore cmp fuel s₀).toListAcc []
+  BTree.ofList (states.map fun s => (s, E.keyedSucc key s))
+
 end ExplicitLTS
 
 end AsyncLean

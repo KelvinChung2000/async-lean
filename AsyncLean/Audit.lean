@@ -6,6 +6,7 @@ import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
 import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Circuit.QDI
+import AsyncLean.Circuit.Packed
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -43,6 +44,12 @@ open LTS
 #assert_standard_axioms
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
+
+-- Bit-packed circuit checking
+#assert_standard_axioms
+  Circuit.bisimP Circuit.correct_of_checkCertP Circuit.correct_of_checkCertHomeP
+  Circuit.speedIndependent_of_checkCertP Circuit.speedIndependent_of_checkPCertP
+  ExplicitLTS.persistent_of_checkPCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms

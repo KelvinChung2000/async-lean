@@ -27,6 +27,7 @@ import AsyncLean.Petri.FreeChoice
 import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Circuit.Wires
 import AsyncLean.Circuit.QDI
+import AsyncLean.Circuit.Packed
 import AsyncLean.Auto.Structural
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
