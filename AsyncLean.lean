@@ -17,6 +17,8 @@ import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
 import AsyncLean.Checker.Abstract
+import AsyncLean.Checker.Fast
+import AsyncLean.Checker.FastPetri
 import AsyncLean.Stg.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Import.Basic

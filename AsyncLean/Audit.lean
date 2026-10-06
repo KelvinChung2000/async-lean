@@ -19,6 +19,7 @@ import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
 import AsyncLean.Checker.Abstract
+import AsyncLean.Checker.FastPetri
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
@@ -92,6 +93,11 @@ open LTS
 #assert_standard_axioms
   ExplicitLTS.of_checkACert PNet.abstracts PNet.of_checkAbs PNet.correct_of_checkAbs
   PNet.deadlockFree_of_checkAbs PNet.livelockFree_of_checkAbs PNet.live_of_checkAbs
+
+-- Fast kernel checking: numeric states, recursor-based inner loops
+#assert_standard_axioms
+  Fast.of_check PNet.encodes PNet.of_checkFast PNet.correct_of_checkFast
+  PNet.deadlockFree_of_checkFast PNet.livelockFree_of_checkFast PNet.live_of_checkFast
 
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms

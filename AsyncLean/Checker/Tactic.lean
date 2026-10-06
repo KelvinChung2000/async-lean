@@ -11,6 +11,7 @@ import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Checker.Abstract
+import AsyncLean.Checker.FastPetri
 import AsyncLean.Import.Basic
 
 /-!
@@ -277,6 +278,59 @@ def diagnoseConformant (gates : List Gate) (fuel : ℕ := 100000) : String :=
   | none => s!"no counterexample found within {fuel} states; increase the fuel"
 
 end Stg
+
+/-! ### Raw literals for the fast checker
+
+Numbers are embedded as raw literals (`Expr.lit`), which the kernel reads directly; the
+`OfNat` form produced by `ToExpr` costs a few unfoldings at every use. -/
+
+namespace FastExpr
+
+def natT : Expr := mkConst ``Nat
+def prodT (α β : Expr) : Expr := mkApp2 (mkConst ``Prod [Level.zero, Level.zero]) α β
+def pairE (α β a b : Expr) : Expr := mkApp4 (mkConst ``Prod.mk [Level.zero, Level.zero]) α β a b
+def listT (α : Expr) : Expr := mkApp (mkConst ``List [Level.zero]) α
+def listE (α : Expr) (xs : List Expr) : Expr :=
+  xs.foldr (fun x acc => mkApp3 (mkConst ``List.cons [Level.zero]) α x acc)
+    (mkApp (mkConst ``List.nil [Level.zero]) α)
+def treeE {β : Type} (α : Expr) (f : β → Expr) : BTree β → Expr
+  | .leaf => mkApp (mkConst ``BTree.leaf [Level.zero]) α
+  | .node l x r => mkApp4 (mkConst ``BTree.node [Level.zero]) α (treeE α f l) (f x) (treeE α f r)
+def boolE (b : Bool) : Expr := if b then mkConst ``Bool.true else mkConst ``Bool.false
+
+/-- A fast certificate as a literal. -/
+def certE (c : Fast.Cert) : Expr :=
+  let n2 := prodT natT natT
+  let n3 := prodT natT n2
+  let t := treeE n3 (fun (a, b, d) => pairE natT n2 (mkRawNatLit a)
+    (pairE natT natT (mkRawNatLit b) (mkRawNatLit d))) c.1
+  let lln := listT (listT natT)
+  let hubT := prodT natT lln
+  let hubs := listE hubT (c.2.map fun (h, trs) => pairE natT lln (mkRawNatLit h)
+    (listE (listT natT) (trs.map fun tr => listE natT (tr.map mkRawNatLit))))
+  pairE (mkApp (mkConst ``BTree [Level.zero]) n3) (listT hubT) t hubs
+
+/-- A fast-table entry as a literal. -/
+def fentryE (e : PNet.FEntry) : Expr :=
+  let p2 := prodT natT natT
+  let p3 := prodT natT p2
+  let pres := listE p2 (e.1.map fun (a, b) => pairE natT natT (mkRawNatLit a) (mkRawNatLit b))
+  let posts := listE p3 (e.2.2.2.map fun (a, b, c) =>
+    pairE natT p2 (mkRawNatLit a) (pairE natT natT (mkRawNatLit b) (mkRawNatLit c)))
+  pairE (listT p2) (prodT natT (prodT natT (listT p3))) pres
+    (pairE natT (prodT natT (listT p3)) (mkRawNatLit e.2.1)
+      (pairE natT (listT p3) (mkRawNatLit e.2.2.1) posts))
+
+/-- The fast check `PNet.checkFast` for the net `N` (with value `Nv`), width `w` and
+certificate `c`. -/
+def checkFastE (N : Expr) (Nv : PNet) (w : ℕ) (c : Fast.Cert) (dl ll lv : Bool) : Expr :=
+  let B := 2 ^ w
+  let tb := listE (mkConst ``PNet.FEntry) ((Nv.ftable w).map fentryE)
+  mkAppN (mkConst ``PNet.checkFast) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), tb,
+    mkRawNatLit (cond ll Nv.imask 0), boolE dl, boolE ll, boolE lv,
+    mkRawNatLit (PNet.encW w Nv.init), certE c]
+
+end FastExpr
 
 /-! ### Evaluation at elaboration time -/
 
@@ -706,7 +760,18 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           let d ← evalString (app ``PNet.diagnose #[N, mkNatLit (min fuel 500)])
           unless d.startsWith "no counterexample" do throwError "async_decide: {d}"
           abstractionTooCoarse (mkNatLit (k + 3))
-      -- fastest path: safe nets that can always return to their initial marking
+      -- fastest path: markings packed into bit fields, checked by `PNet.checkFast`
+      let (dl, ll, lv, thm) := match p with
+        | .deadlock => (true, false, false, ``PNet.deadlockFree_of_checkFast)
+        | .livelock => (false, true, false, ``PNet.livelockFree_of_checkFast)
+        | .live => (false, false, true, ``PNet.live_of_checkFast)
+        | _ => (true, true, true, ``PNet.correct_of_checkFast)
+      let Nv ← evalAs PNet N
+      if let .ok (w, c) := Nv.mkFastCert dl ll lv fuel then
+        closeWithCheckM goal (FastExpr.checkFastE N Nv w c dl ll lv)
+          (fun h => mkAppM thm #[h]) .correct
+        return
+      -- safe nets that can always return to their initial marking
       let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``PNet.mkPackedHomeCert #[N, fuelE]))
       let chkH := app ``PNet.checkPackedHome #[N, litH]
       if ← evalBool chkH then
