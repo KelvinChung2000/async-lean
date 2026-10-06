@@ -8,6 +8,8 @@ import AsyncLean.Circuit.QDI
 import AsyncLean.LTS.Fairness
 import AsyncLean.Checker.Abstract
 import AsyncLean.Circuit.Step
+import AsyncLean.Examples.Philosophers
+import AsyncLean.Examples.Compositional
 import AsyncLean.AxiomAudit
 import Mathlib.Data.Fin.VecNotation
 
@@ -25,6 +27,7 @@ every step is checked.  Read it top to bottom; each section is independent of th
 6. From "can" to "will": fairness.
 7. Networks with dynamic routing: routing deadlock and livelock.
 7. Unbounded nets and concurrent firing.
+8. Large state spaces: partial-order reduction and the state equation.
 
 Every theorem below is audited at the end with `#assert_standard_axioms`: the build fails if
 any of them depends on `sorry`, `native_decide` or an axiom other than `propext`,
@@ -289,6 +292,30 @@ the step semantics reaches exactly the same states (`Circuit.correct_iff_stepCor
 theorem forkCircuit_stepCorrect : forkCircuit.StepCorrect :=
   (Circuit.correct_iff_stepCorrect forkCircuit_si.2).1 forkCircuit_si.1
 
+/-! ## 8. Large state spaces
+
+For deadlock freedom, `async_decide` does not explore every interleaving: at each marking it
+fires only the enabled transitions of a *stubborn set*, and the kernel checks that the sets
+are stubborn.  Every reachable deadlock stays reachable (`Net.reachable_red_of_dead`), so a
+reduced state space without deadlocks proves the whole net deadlock free.  For a pipeline,
+whose stages move independently, one interleaving per state is enough. -/
+
+/-- A 30-stage FIFO (`Examples.fifo`) has `2^30` reachable markings; the reduced state
+space has a few hundred. -/
+theorem fifo30_deadlockFree :
+    (Examples.fifo 30 "in" "out").toNet.lts.DeadlockFree (Examples.fifo 30 "in" "out").M₀ := by
+  async_decide
+
+/-! `async_structural` proves the same kind of result with no exploration at all: every
+reachable marking solves the state equation `M = M₀ + C · x`, and a Farkas certificate shows
+that no solution is dead (`Net.deadlockFree_of_stateEq`). -/
+
+/-- Twelve philosophers sharing forks, with resource ordering: deadlock free, by the state
+equation. -/
+theorem twelvePhilosophers_deadlockFree :
+    (Examples.philosophers 12 true).toNet.lts.DeadlockFree (Examples.philosophers 12 true).M₀ := by
+  async_structural
+
 /-! ## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
@@ -304,5 +331,6 @@ theorem forkCircuit_stepCorrect : forkCircuit.StepCorrect :=
   ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
   forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
+  fifo30_deadlockFree twelvePhilosophers_deadlockFree
 
 end AsyncLean.Tutorial

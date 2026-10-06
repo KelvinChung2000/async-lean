@@ -41,6 +41,17 @@
 
 Latest additions:
 
+* **Partial-order reduction.** Stubborn sets preserve deadlocks (`Net.reachable_red_of_dead`);
+  `async_decide` checks deadlock freedom on a reduced state space whose stubborn sets the
+  kernel verifies marking by marking (`PNet.deadlockFree_of_checkPOR`).
+* **The state equation.** Deadlock freedom from a Farkas certificate refuting every dead
+  solution of `M = M₀ + C · x` (`Net.deadlockFree_of_stateEq`), found by linear programming,
+  with no exploration; used by `async_structural`, and by `async_decide` when the reduced
+  state space is too large.
+* **Fast kernel checking.** A checker on natural-number states with recursor-based inner
+  loops (`Fast.of_check`), and its instance for nets packed into bit fields
+  (`PNet.checkFast`): about 7× faster than before. Bounds from place invariants are checked
+  all at once, packed into one number per place (`PNet.bounded_of_checkPInv`).
 * **Concurrent firing.** Step semantics for Petri nets (any multiset of enabled transitions
   fires at once) and circuits (any set of excited gates switches at once), with proofs that
   they agree with the interleaving semantics: always for nets, and for speed-independent
