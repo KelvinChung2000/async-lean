@@ -21,6 +21,7 @@ import AsyncLean.Checker.Packed
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
+import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
@@ -103,6 +104,12 @@ open LTS
 -- Partial-order reduction: stubborn sets preserve deadlocks
 #assert_standard_axioms
   Net.reachable_red_of_dead Net.deadlockFree_of_stubborn PNet.deadlockFree_of_checkPOR
+
+-- The state equation: deadlock freedom and bounds without exploration
+#assert_standard_axioms
+  Net.stateEq_of_reachable Net.deadlockFree_of_stateEq PNet.deadlockFree_of_checkSE
+  PNet.le_of_checkBounds PNet.bounded_of_checkBounds PNet.deadlockFree_of_checks
+  PNet.le_of_checkPInv PNet.bounded_of_checkPInv PNet.deadlockFree_of_pinv
 
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms

@@ -7,6 +7,7 @@ import AsyncLean.Petri.Invariant
 import AsyncLean.MarkedGraph.Basic
 import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Checker.Tactic
+import AsyncLean.Auto.StateEq
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -86,23 +87,6 @@ end MarkedGraph
 
 namespace Auto
 
-/-- The incidence matrix `C[t][p] = post - pre`. -/
-def incidence (N : PNet) : List (List ℤ) :=
-  N.trans.map fun t => (List.range N.places).map fun p =>
-    (t.post.count p : ℤ) - (t.pre.count p : ℤ)
-
-/-- A non-negative place invariant `y` with `y p = 1` minimising `y · M₀`, scaled to integers. -/
-def pinvFor (N : PNet) (p : ℕ) : Option (List ℤ) := do
-  let C := incidence N
-  let m := N.places
-  let eqs : Array (Array Rat) := (C.map fun row => (row.map fun c => (c : Rat)).toArray).toArray
-  let unit : Array Rat := (Array.range m).map fun q => if q == p then 1 else 0
-  let A := eqs.push unit
-  let b : Array Rat := ((List.replicate C.length (0 : Rat)) ++ [1]).toArray
-  let c : Array Rat := (Array.range m).map fun q => ((N.init.getD q 0 : ℕ) : Rat)
-  let y ← Simplex.solve A b c
-  return Simplex.toInt y
-
 /-- A linear ranking function for the internal transitions. -/
 def rankingFor (N : PNet) : Option (List ℕ) := do
   let internal := N.trans.filter (·.internal)
@@ -180,6 +164,8 @@ def structural : TacticM Unit := do
     let k ← match tgt.getAppFnArgs with
       | (``PNet.Bounded, #[_, k]) => pure k
       | _ => pure (mkNatLit 1)
+    -- sparse invariants, checked arc by arc
+    if ← Tactic.decideBounded goal N k then return
     let net : PNet ← evalStruct (mkConst ``PNet) N
     let kv : ℕ ← evalStruct (mkConst ``Nat) k
     let tbl ← (List.range net.places).mapM fun p => do
@@ -221,6 +207,10 @@ def structural : TacticM Unit := do
         match tgt.getAppFnArgs with
         | (``LTS.Live, #[_, _, A, M₀]) | (``LTS.DeadlockFree, #[_, _, A, M₀]) =>
           let (``Net.lts, #[P, T, net]) := A.getAppFnArgs | fail "unsupported goal"
+          -- deadlock freedom of a `PNet`: the state equation first (no exploration)
+          if tgt.isAppOf ``LTS.DeadlockFree then
+            if let (``PNet.toNet, #[N]) := net.getAppFnArgs then
+              if ← Tactic.decideSE goal N then return
           let some m := (← whnf P).getAppFnArgs |> fun | (``Fin, #[m]) => some m | _ => none
             | fail "the places must be `Fin m`"
           let some n := (← whnf T).getAppFnArgs |> fun | (``Fin, #[n]) => some n | _ => none

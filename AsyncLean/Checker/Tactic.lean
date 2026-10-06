@@ -13,6 +13,7 @@ import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
+import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
 
 /-!
@@ -360,6 +361,17 @@ def checkPORE (N : Expr) (Nv : PNet) (w : ℕ) (t : BTree (ℕ × List ℕ)) : E
   mkAppN (mkConst ``PNet.checkPOR) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), ttE,
     mkRawNatLit (PNet.encW w Nv.init), tE]
 
+/-- A list of numbers as a literal. -/
+def natsE (xs : List ℕ) : Expr := listE natT (xs.map mkRawNatLit)
+
+/-- The packed bounds check `PNet.checkPInv`. -/
+def checkPInvE (N : Expr) (f g J : ℕ) (cols : BTree (ℕ × ℕ × ℕ)) (bs : List ℕ) : Expr :=
+  let n2 := prodT natT natT
+  let colsE := treeE (prodT natT n2) (fun (p, c, j) => pairE natT n2 (mkRawNatLit p)
+    (pairE natT natT (mkRawNatLit c) (mkRawNatLit j))) cols
+  mkAppN (mkConst ``PNet.checkPInv)
+    #[N, mkRawNatLit f, mkRawNatLit g, mkRawNatLit J, colsE, natsE bs]
+
 end FastExpr
 
 /-! ### Evaluation at elaboration time -/
@@ -547,6 +559,52 @@ def closeWithCheckM (goal : MVarId) (checkE : Expr) (mkPf : Expr → MetaM Expr)
   goal.assign pf
   replaceMainGoal [h.mvarId!]
   evalTactic (← `(tactic| decide +kernel))
+
+/-- Close `goal` with `mkPf hs`, where each `h ∈ hs : check = true` (for the checks built on
+the net as a literal `lit`) is proved by the kernel; the goal is matched with `lit` read back
+as the original net `N`. -/
+def closeWithChecksLit (goal : MVarId) (N : Expr) (net : PNet) (checks : Expr → List Expr)
+    (mkPf : List Expr → MetaM Expr) : TacticM Bool := do
+  let lit := FastExpr.pnetE net
+  let hs ← (checks lit).mapM fun c => do
+    mkFreshExprSyntheticOpaqueMVar (← mkEq c (mkConst ``Bool.true))
+  let pf ← mkPf hs
+  let pfTy := (← inferType pf).replace fun e => if e == lit then some N else none
+  let gTy ← goal.getType
+  unless ← isDefEq pfTy gTy do return false
+  goal.assign (← mkExpectedTypeHint pf gTy)
+  replaceMainGoal (hs.map (·.mvarId!))
+  evalTactic (← `(tactic| all_goals decide +kernel))
+  return true
+
+/-- Prove deadlock freedom of the `PNet` `N` from the state equation, without exploring its
+state space (`PNet.deadlockFree_of_checks`), with bounds from place invariants.  Returns
+`false` (leaving the goal untouched) when no certificate is found. -/
+def decideSE (goal : MVarId) (N : Expr) : TacticM Bool := do
+  let net ← evalAs PNet N
+  let some (invs, ks) := net.findBounds (Auto.pinvFor net) | return false
+  let bs := ks.map Prod.snd
+  let some (yp, yn, z) := net.findSE bs | return false
+  let (f, g, J, cols) := net.packInvs invs ks
+  closeWithChecksLit goal N net
+    (fun lit => [FastExpr.checkPInvE lit f g J cols bs,
+      mkAppN (mkConst ``PNet.checkSE)
+        #[lit, FastExpr.natsE bs, FastExpr.natsE yp, FastExpr.natsE yn, FastExpr.natsE z]])
+    (fun hs => mkAppM ``PNet.deadlockFree_of_pinv hs.toArray)
+
+/-- Prove `N.Bounded k` from packed place invariants (`PNet.bounded_of_checkPInv`). -/
+def decideBounded (goal : MVarId) (N k : Expr) : TacticM Bool := do
+  let net ← evalAs PNet N
+  let kv ← evalAs ℕ k
+  let some (invs, ks) := net.findBounds (Auto.pinvFor net) | return false
+  let bs := ks.map Prod.snd
+  unless bs.all (· ≤ kv) do return false
+  let (f, g, J, cols) := net.packInvs invs ks
+  closeWithChecksLit goal N net
+    (fun lit => [FastExpr.checkPInvE lit f g J cols bs,
+      mkApp2 (mkConst ``PNet.allLe) (FastExpr.natsE bs) k])
+    (fun hs => mkAppOptM ``PNet.bounded_of_checkPInv
+      #[none, none, none, none, none, none, k, hs[0]!, hs[1]!])
 
 /-- Fail with the diagnosis `diag` unless `checkE` evaluates to `true`. -/
 def ensure (checkE diag : Expr) : MetaM Unit := do
@@ -795,11 +853,17 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
       -- deadlock freedom: partial-order reduction (stubborn sets) first
       if p matches .deadlock then
         let Nv ← evalAs PNet N
-        if let .ok (w, t) := Nv.mkPORCert fuel then
+        match Nv.mkPORCert fuel with
+        | .ok (w, t) =>
           let lit := FastExpr.pnetE Nv
           closeWithCheckLitM goal (FastExpr.checkPORE lit Nv w t)
             (fun h => mkAppM ``PNet.deadlockFree_of_checkPOR #[h]) N lit
           return
+        | .error e =>
+          -- no deadlock found, but the reduced state space is too large (or the net may be
+          -- unbounded): the state equation needs no exploration at all
+          unless e.startsWith "deadlock" do
+            if ← decideSE goal N then return
       -- a quick probe: if the state space does not close (e.g. an unbounded net), try the
       -- counter abstraction first
       unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do
