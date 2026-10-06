@@ -329,11 +329,16 @@ theorem fifo30_correct : (Examples.fifo 30 "in" "out").Correct := by
 /-! For safe nets there is also a *symbolic* route: `async_bdd` describes the reachable
 markings by a decision diagram, an inductive invariant that the kernel checks transition by
 transition without enumerating a single marking (`PNet.of_checkBDD`).  It proves safety and
-deadlock freedom, and liveness and livelock freedom when distances and ranks also have small
-diagrams. -/
+deadlock freedom from a second diagram of witness transitions, and liveness and livelock
+freedom from weights on the places that the witnesses and the internal transitions decrease
+(or, when there are none, from diagrams of distances and ranks). -/
 
 /-- Ten philosophers never put two tokens on a place, from a symbolic invariant. -/
 theorem tenPhilosophers_safe : (Examples.philosophers 10 true).Safe := by
+  async_bdd
+
+/-- Seven philosophers are deadlock free, live and safe, symbolically. -/
+theorem sevenPhilosophers_correct : (Examples.philosophers 7 true).Correct := by
   async_bdd
 
 /-! ## Where next
@@ -352,5 +357,6 @@ theorem tenPhilosophers_safe : (Examples.philosophers 10 true).Safe := by
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
   forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
   fifo30_deadlockFree twelvePhilosophers_deadlockFree fifo30_correct tenPhilosophers_safe
+  sevenPhilosophers_correct
 
 end AsyncLean.Tutorial

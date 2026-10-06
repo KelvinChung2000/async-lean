@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Checker.BDD
+import AsyncLean.Auto.Simplex
 import Std.Data.HashMap
 import Std.Data.HashSet
 
@@ -13,16 +14,18 @@ A small decision-diagram package and the computation of a certificate for `PNet.
 * a variable order, placing the places of each transition close together;
 * the reachable markings, by symbolic breadth-first search (images transition by
   transition, valid for safe nets);
-* ranks (layers of markings all of whose internal successors lie in lower layers), hubs (one
-  marking in each terminal strongly connected component, found by alternating forward and
-  backward closures), distances to the hubs with a witness transition per marking, and one
-  trace from each hub to each transition;
-* the diagrams of the invariant, of the ranks and of the witnesses and distances, their known
-  places, and the triples of the joint walks.
+* for livelock freedom, a linear rank found by linear programming, or else ranks (layers of
+  markings all of whose internal successors lie in lower layers);
+* for liveness, hubs (one marking in each terminal strongly connected component, found by
+  alternating forward and backward closures) and one trace from each hub to each transition,
+  from shared forward layers; then a linear potential decreased by the witnesses, found by
+  linear programming, or else distances to the hubs with a witness transition per marking;
+* witnesses over the whole space, by enabledness, when no distances are needed;
+* the diagrams, their known places, the cuts of the invariant, and the triples of the joint
+  walks, which stop where the checker needs no more.
 
 Nothing here is trusted: `PNet.of_checkBDD` checks the result.
 -/
-
 namespace AsyncLean
 
 namespace PNet
@@ -275,36 +278,84 @@ def bwd (C : Ctx) (R s : ℕ) (fuel : ℕ) : ExceptT String M ℕ := do
 def minterm (C : Ctx) (m : ℕ) : M ℕ :=
   cube ((Array.range C.n).map fun l => some (m.testBit C.π[l]!))
 
-/-- One trace from the marking `h` to a marking enabling `t`, by forward layers. -/
-def trace (C : Ctx) (h t : ℕ) (fuel : ℕ) : ExceptT String M (List ℕ) := do
-  let en ← cube C.σen[t]!
+/-- The marking `m` (a mask over places) belongs to the set `s`. -/
+def mem (C : Ctx) (s m : ℕ) : M Bool := do
+  let mut r := s
+  let mut fuel := C.n + 1
+  while r % 2 == 1 && fuel > 0 do
+    let (l, lo, hi) ← nd r
+    r := if m.testBit C.π[l]! then hi else lo
+    fuel := fuel - 1
+  return r != 0
+
+/-- The marking before firing `t` into `x`, if `t` can fire into `x` (safe nets). -/
+def predOf (C : Ctx) (t x : ℕ) : Option ℕ :=
+  let pre := C.pre[t]!.foldl (fun m p => m ||| 2 ^ p) 0
+  let post := C.post[t]!.foldl (fun m p => m ||| 2 ^ p) 0
+  let y := (x ^^^ (x &&& post)) ||| pre
+  if (y &&& pre) == pre && (y ^^^ pre) &&& post == 0 && ((y ^^^ pre) ||| post) == x then some y
+  else none
+
+/-- One trace from the marking `h` to a marking enabling each transition, from shared forward
+layers, walking back marking by marking. -/
+def traces (C : Ctx) (h : ℕ) (fuel : ℕ) : ExceptT String M (List (List ℕ)) := do
+  let nT := C.pre.size
+  let mut ens : Array ℕ := #[]
+  for t in [0:nT] do ens := ens.push (← cube C.σen[t]!)
   let mut layers : Array ℕ := #[← minterm C h]
   let mut seen := layers[0]!
-  let mut hit ← band layers[0]! en
-  while hit == 0 do
+  let mut hit : Array (Option ℕ) := Array.replicate nT none
+  repeat
+    let k := layers.size - 1
+    for t in [0:nT] do
+      if hit[t]!.isNone && (← band layers[k]! ens[t]!) != 0 then hit := hit.set! t (some k)
+    if hit.all (·.isSome) then break
     if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
-    let nx ← bdiff (← imgAll C layers.back!) seen
-    if nx == 0 then throw s!"transition {t} is dead from a hub: the net is not live"
+    let nx ← bdiff (← imgAll C layers[k]!) seen
+    if nx == 0 then throw "a transition is dead from a hub: the net is not live"
     layers := layers.push nx
     seen ← bor seen nx
-    hit ← band nx en
-  -- walk back through the layers
-  let mut x ← pick C.π hit
-  let mut tr : List ℕ := []
-  let mut k := layers.size - 1
-  while k > 0 do
-    let xs ← minterm C x
-    let mut found := false
-    for t' in [0:C.pre.size] do
-      unless found do
-        let p ← band (← preimg C t' xs) layers[k - 1]!
-        if p != 0 then
-          x ← pick C.π p
-          tr := t' :: tr
-          found := true
-    unless found do throw "trace reconstruction failed"
-    k := k - 1
-  return tr
+  let mut out : List (List ℕ) := []
+  for t in [0:nT] do
+    let k0 := hit[t]!.getD 0
+    let mut x ← pick C.π (← band layers[k0]! ens[t]!)
+    let mut tr : List ℕ := []
+    let mut k := k0
+    while k > 0 do
+      let mut found := false
+      for t' in [0:nT] do
+        unless found do
+          if let some y := predOf C t' x then
+            if ← mem C layers[k - 1]! y then
+              x := y
+              tr := t' :: tr
+              found := true
+      unless found do throw "trace reconstruction failed"
+      k := k - 1
+    out := out ++ [tr]
+  return out
+
+/-- Weights on the places, as small as possible, such that firing any of the transitions `ts`
+strictly decreases the weighted sum of the marked places (`none` if there are none). -/
+def linRank (N : PNet) (ts : List ℕ) : Option (List ℕ) := do
+  let m := N.places
+  let k := ts.length
+  -- variables: w (m), slacks (k);  Σ_p (pre - post) w_p - s_t = 1
+  let A : Array (Array Rat) := (List.range k).toArray.map fun i =>
+    let (pre, post) := ((N.trans[ts.getD i 0]?).map fun t => (t.pre, t.post)).getD ([], [])
+    ((Array.range m).map fun p => ((pre.count p : ℤ) - (post.count p : ℤ) : Rat)) ++
+      (Array.range k).map fun j => if j == i then (-1 : Rat) else 0
+  let b : Array Rat := (Array.range k).map fun _ => 1
+  let c : Array Rat := (Array.range m).map (fun _ => (1 : Rat)) ++ (Array.range k).map fun _ => 0
+  let x ← Simplex.solve A b c
+  return Simplex.toNat (x.extract 0 m)
+
+/-- The linear potential `w` decreases strictly when `t` fires. -/
+def decT (N : PNet) (w : List ℕ) (t : ℕ) : Bool :=
+  let f := fun (l : List ℕ) => (l.eraseDups.map fun p => w.getD p 0).sum
+  match N.trans[t]? with
+  | some tp => f tp.post < f tp.pre
+  | none => false
 
 /-- The successors of a triple in the joint walk (mirrors `PNet.tripleOk`); `none` at the
 leaves. -/
@@ -356,9 +407,13 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let mut en := 0
     for t in [0:nT] do en ← bor en (← cube C.σen[t]!)
     if dl && (← bdiff R en) != 0 then throw "deadlock"
-    -- ranks: all internal successors of a layer lie in lower layers
+    -- ranks: a linear rank if one exists, otherwise layers all of whose internal successors
+    -- lie in lower layers
+    let internals := (List.range nT).filter fun t => C.internal[t]!
+    let wR := if ll then linRank N internals else none
+    let linR := wR.isSome
     let mut rankSets : Array ℕ := #[R]
-    if ll then
+    if ll && !linR then
       let mut ienab := 0
       for t in [0:nT] do
         if C.internal[t]! then ienab ← bor ienab (← cube C.σen[t]!)
@@ -382,50 +437,103 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let mut parts : Array (ℕ × ℕ × ℕ × Option ℕ) := #[]
     let mut hubs : Array ℕ := #[]
     let mut traces : Array (List (List ℕ)) := #[]
+    let mut wD : Option (List ℕ) := none
     if lv then
       let mut covered := 0
       let mut s := m₀
       repeat
         -- descend to a terminal strongly connected component
         let mut x := s
+        let mut back := 0
         repeat
           let xs ← minterm C x
-          let out ← bdiff (← fwd C xs fuel) (← bwd C R xs fuel)
+          back ← bwd C R xs fuel
+          -- the markings reachable from the initial one are `R` itself
+          let out ← bdiff (← if x == m₀ then pure R else fwd C xs fuel) back
           if out == 0 then break
           x ← pick C.π out
         hubs := hubs.push x
-        covered ← bor covered (← bwd C R (← minterm C x) fuel)
+        covered ← bor covered back
         let rest ← bdiff R covered
         if rest == 0 then break
         s ← pick C.π rest
-      let mut D := 0
-      for h in hubs do D ← bor D (← minterm C h)
-      let mut k := 0
-      while D != R do
-        chk
-        let mut assigned := D
-        for t in worder do
-          let w ← bdiff (← band (← preimg C t D) R) assigned
-          if w != 0 then
-            parts := parts.push (w, t, k + 1, none)
-            assigned ← bor assigned w
-        if assigned == D then throw "some marking reaches no hub"
-        D := assigned
-        k := k + 1
+      let mut hubParts : Array (ℕ × ℕ × ℕ × Option ℕ) := #[]
       for i in [0:hubs.size] do
         let h := hubs[i]!
         let w := ((List.range nT).find? fun t => C.pre[t]!.all fun p => h.testBit p).getD 0
-        parts := parts.push (← minterm C h, w, 0, some i)
-        let mut trs : List (List ℕ) := []
-        for t in [0:nT] do trs := trs ++ [← trace C h t fuel]
-        traces := traces.push trs
+        hubParts := hubParts.push (← minterm C h, w, 0, some i)
+        traces := traces.push (← BDDGen.traces C h fuel)
+      -- a linear potential decreased by the witnesses replaces the distances when one exists:
+      -- the witnesses are then the transitions it decreases, over the whole space
+      let linParts := fun (w : List ℕ) => do
+        let mut lparts := hubParts
+        let mut assigned := 0
+        for p in hubParts do assigned ← bor assigned p.1
+        for t in worder do
+          if decT N w t then
+            let x ← bdiff (← cube C.σen[t]!) assigned
+            if x != 0 then
+              lparts := lparts.push (x, t, 1, none)
+              assigned ← bor assigned x
+        return if (← bdiff R assigned) == 0 then some lparts else none
+      -- first guess: decrease every transition disabled at all hubs
+      let atHub := fun (t : ℕ) => hubs.any fun h => C.pre[t]!.all fun p => h.testBit p
+      let guess ← match linRank N ((List.range nT).filter fun t => !atHub t) with
+        | some w => pure ((← linParts w).map (w, ·))
+        | none => pure none
+      match guess with
+      | some (w, lparts) =>
+        parts := lparts
+        wD := some w
+      | none =>
+        -- distances to the hubs, by backward layers
+        let mut D := 0
+        for h in hubs do D ← bor D (← minterm C h)
+        let mut k := 0
+        while D != R do
+          chk
+          let mut assigned := D
+          for t in worder do
+            let w ← bdiff (← band (← preimg C t D) R) assigned
+            if w != 0 then
+              parts := parts.push (w, t, k + 1, none)
+              assigned ← bor assigned w
+          if assigned == D then throw "some marking reaches no hub"
+          D := assigned
+          k := k + 1
+        -- second guess: decrease the witnesses of the distances
+        let wits := (parts.toList.map (·.2.1)).eraseDups
+        let lin ← match linRank N wits with
+          | some w => pure ((← linParts w).map (w, ·))
+          | none => pure none
+        match lin with
+        | some (w, lparts) =>
+          parts := lparts
+          wD := some w
+        | none => parts := parts ++ hubParts
     else if dl then
-      let mut assigned := 0
+      -- witnesses by enabledness: over the whole space, or only on the reachable markings,
+      -- whichever diagram is smaller
+      let mut full : Array (ℕ × ℕ × ℕ × Option ℕ) := #[]
+      let mut onR : Array (ℕ × ℕ × ℕ × Option ℕ) := #[]
+      let mut aF := 0
+      let mut aR := 0
       for t in worder do
-        let w ← bdiff (← band R (← cube C.σen[t]!)) assigned
-        if w != 0 then
-          parts := parts.push (w, t, 0, none)
-          assigned ← bor assigned w
+        let ent ← cube C.σen[t]!
+        let x ← bdiff ent aF
+        if x != 0 then
+          full := full.push (x, t, 0, none)
+          aF ← bor aF x
+        let y ← bdiff (← band R ent) aR
+        if y != 0 then
+          onR := onR.push (y, t, 0, none)
+          aR ← bor aR y
+      let build := fun (ps : Array (ℕ × ℕ × ℕ × Option ℕ)) => do
+        let mut r := 0
+        for i in [0:ps.size] do
+          r ← (iteM ps[ps.size - 1 - i]!.1 (2 * (ps.size - i)) r).run' {}
+        size r
+      parts := if (← build full) ≤ (← build onR) then full else onR
     else parts := #[(R, 0, 0, none)]
     -- the diagrams: the invariant (leaf 1), the ranks (leaves `2 + k`) and the data (leaves
     -- `dbase + i`)
@@ -433,7 +541,7 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let dbase := 2 + nR
     let rI := R
     let mut rR := 0
-    if ll then
+    if ll && !linR then
       for i in [0:nR] do
         let j := nR - 1 - i
         rR ← (iteM rankSets[j]! (2 * (2 + j)) rR).run' {}
@@ -493,10 +601,12 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let nodeArr : Array (ℕ × ℕ × ℕ × ℕ) :=
       (nodesL.map fun (_, b) => (b.lvl, b.var, b.lo, b.hi)).toArray
     let info := fun (r : ℕ) => if r % 2 == 0 then (n, 0, r, r) else nodeArr[r / 2]!
-    -- a joint walk
-    let walk := fun (us : Array (ℕ × ℕ × ℕ)) (ra rb : ℕ) => Id.run do
+    let dataRef := fun (r : ℕ) => r % 2 == 0 && r != 0 && r / 2 ≥ dbase && leafRefs.contains r
+    -- a joint walk in mode `md`, from the pairs `starts`; it stops where `PNet.tripleOk` needs
+    -- no successors (below the touched places `us`, at most at level `hi`)
+    let walk := fun (md : ℕ) (us : Array (ℕ × ℕ × ℕ)) (hi : ℕ) (starts : List (ℕ × ℕ)) => Id.run do
       let mut seen : HashSet (ℕ × ℕ × ℕ) := {}
-      let mut st := [(ra, rb, 0)]
+      let mut st := starts.map fun (a, b) => (a, b, 0)
       while true do
         match st with
         | [] => break
@@ -504,7 +614,12 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
           st := rest
           if seen.contains x then continue
           seen := seen.insert x
-          match tsucc n info us x.1 x.2.1 x.2.2 with
+          let (a, b, j) := x
+          let la := (info a).1
+          if j ≥ us.size && (la < n || (info b).1 < n) &&
+              ((md == 0 && a == b && hi < la) || (md == 3 && la < n && dataRef b)) then
+            continue
+          match tsucc n info us a b j with
           | some l => st := l ++ st
           | none => pure ()
       let arr := (seen.toArray.map fun (a, b, j) => (tkey a b j, a, b, j)).qsort
@@ -512,24 +627,36 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
       return (Fast.buildTree arr (arr.size + 1) 0 arr.size, arr.size,
         seen.toList.all fun (_, b, j) => b < 4294967296 && j < 256)
     let (rI', rR', rD') := (rename rI, rename rR, rename rD)
+    -- the cuts of the invariant, level by level
+    let mut cuts : Array (List ℕ) := #[[rI']]
+    for L in [0:n] do
+      let mut nx : Array ℕ := #[]
+      for x in cuts[L]! do
+        let (lx, _, lo, hi) := info x
+        if lx == L then nx := nx.push lo |>.push hi else nx := nx.push x
+      cuts := cuts.push (nx.qsort (· < ·)).toList.eraseDups
     let mut trans : List BTrans := []
     let mut nTriples := 0
     for tp in N.trans do
       let us := ((tp.pre ++ tp.post).eraseDups.map fun p =>
         (p, C.lam[p]!, if tp.pre.contains p then (if tp.post.contains p then 1 else 0) else 2)).toArray.qsort
           fun x y => x.2.1 < y.2.1
-      let (psI, k1, ok1) := walk us rI' rI'
-      let (psR, k2, ok2) := if ll && tp.internal then walk us rR' rR' else (.leaf, 0, true)
-      let (psD, k3, ok3) := if lv then walk us rD' rD' else (.leaf, 0, true)
+      let lo := if h : 0 < us.size then us[0].2.1 else 0
+      let hi := us.foldl (fun m u => max m u.2.1) 0
+      let (psI, k1, ok1) := walk 0 us hi (cuts[lo]!.map fun x => (x, x))
+      let (psR, k2, ok2) :=
+        if ll && !linR && tp.internal then walk 1 us hi [(rR', rR')] else (.leaf, 0, true)
+      let (psD, k3, ok3) := if lv && wD.isNone then walk 2 us hi [(rD', rD')] else (.leaf, 0, true)
       unless ok1 && ok2 && ok3 do throw "the diagram is too large for the triple keys"
       nTriples := nTriples + k1 + k2 + k3
-      trans := trans ++ [⟨mask tp.pre, mask tp.post, us.toList, psI, psR, psD⟩]
-    let (covR, k4, _) := if ll then walk #[] rI' rR' else (.leaf, 0, true)
-    let (covD, k5, _) := if dl || lv then walk #[] rI' rD' else (.leaf, 0, true)
+      trans := trans ++ [⟨mask tp.pre, mask tp.post, us.toList, psI, psR, psD, lo, hi⟩]
+    let (covR, k4, _) := if ll && !linR then walk 0 #[] 0 [(rI', rR')] else (.leaf, 0, true)
+    let (covD, k5, _) := if dl || lv then walk 3 #[] 0 [(rI', rD')] else (.leaf, 0, true)
     let nodeT := nodesL.toArray
     let leafT := leavesL.toArray.qsort fun x y => x.1 < y.1
     return (⟨n, rI', rR', rD', Fast.buildTree nodeT (nodeT.size + 1) 0 nodeT.size,
-      Fast.buildTree leafT (leafT.size + 1) 0 leafT.size, trans, covR, covD⟩,
+      Fast.buildTree leafT (leafT.size + 1) 0 leafT.size, trans, covR, covD,
+      linR, wR.getD [], wD.isSome, wD.getD [], C.π.toList, C.lam.toList, cuts.toList⟩,
       [← size rI, ← size rR, ← size rD, order.size, nTriples + k4 + k5])
   match (act.run.run' { H := n } : Except String (BCert × List ℕ)) with
   | .ok r => return r

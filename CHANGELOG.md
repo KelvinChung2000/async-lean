@@ -55,6 +55,18 @@ Latest additions:
   transition without enumerating any marking (`PNet.of_checkBDD`); computed by a small
   untrusted decision-diagram package (`PNet.BDDGen.mkBDDCert`). New tactic `async_bdd`;
   `async_decide` falls back on it for large safe nets.
+* **Linear potentials in symbolic certificates.** Liveness from weights on the places that
+  every witness decreases, down to hubs, and livelock freedom from weights that every
+  internal transition decreases (`PNet.phiL_lt`); both are found by linear programming and
+  replace the diagrams of distances and ranks when they exist. Witnesses are chosen over the
+  whole space, which makes their diagram up to 15× smaller.
+* **Shorter joint walks.** Each level of the diagrams reads one place (`PNet.vars_inj`), so a
+  walk on the invariant starts at the cut of the first level a transition touches
+  (`PNet.cut_reach`, checked once for all transitions), stops below the last one
+  (`PNet.Reach.congr`), and a coverage walk stops at the first data leaf. Together with
+  hub traces from shared forward layers, seven philosophers are proved `Correct`
+  symbolically in 1.4 s instead of 47 s; a 20-stage FIFO and twelve philosophers, out of
+  reach before, in 1.9 s and 3.8 s.
 * **Faster kernel lookups.** `Fast.kfind` compares with `Nat.ble` instead of `Nat.blt`,
   which halves the cost of a lookup in the kernel and speeds up every fast checker.
 * **The state equation.** Deadlock freedom from a Farkas certificate refuting every dead

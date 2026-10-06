@@ -10,13 +10,13 @@ import AsyncLean.AxiomAudit
 # Example: symbolic certificates
 
 `async_bdd` proves properties of a safe net from decision diagrams, without enumerating the
-reachable markings: a diagram of an inductive invariant, closed under every transition, and
-diagrams of witnesses, distances and ranks.  The kernel checks each diagram by joint walks
-before and after firing (`PNet.of_checkBDD`).  The certificate grows with the structure of
-the reachable markings rather than with their number; liveness and livelock freedom need
-distances and ranks, which are larger, so the method is best suited to safety and deadlock
-freedom.  `async_decide` falls back on it for safe nets whose state space is too large to
-explore.
+reachable markings: a diagram of an inductive invariant, closed under every transition, and a
+diagram of witness transitions.  For liveness and livelock freedom, weights on the places that
+the witnesses (respectively the internal transitions) decrease replace distances and ranks
+when they exist.  The kernel checks each diagram by joint walks before and after firing
+(`PNet.of_checkBDD`).  The certificate grows with the structure of the reachable markings
+rather than with their number.  `async_decide` falls back on it for safe nets whose state
+space is too large to explore.
 -/
 
 namespace AsyncLean.Examples
@@ -30,10 +30,16 @@ theorem fifo20_deadlockFree_bdd :
     (fifo 20 "in" "out").toNet.lts.DeadlockFree (fifo 20 "in" "out").M₀ := by
   async_bdd
 
-/-- Full correctness from symbolic distances and ranks. -/
-theorem fifo6_correct_bdd : (fifo 6 "in" "out").Correct := by
+/-- Full correctness of a 20-stage FIFO (about a million markings): the moves and the output
+decrease a linear potential down to the empty FIFO, and the moves a linear rank. -/
+theorem fifo20_correct_bdd : (fifo 20 "in" "out").Correct := by
   async_bdd
 
-#assert_standard_axioms philosophers10_safe fifo20_deadlockFree_bdd fifo6_correct_bdd
+/-- Twelve dining philosophers with resource ordering are deadlock free, live, and safe. -/
+theorem philosophers12_correct_bdd : (philosophers 12 true).Correct := by
+  async_bdd
+
+#assert_standard_axioms philosophers10_safe fifo20_deadlockFree_bdd fifo20_correct_bdd
+  philosophers12_correct_bdd
 
 end AsyncLean.Examples

@@ -414,12 +414,13 @@ def bcertE (c : PNet.BCert) : Expr :=
     pairE natT n3 (n k) (pairE natT n2 (n a) (pairE natT natT (n b) (n j)))
   let transE := fun (t : PNet.BTrans) => mkAppN (mkConst ``PNet.BTrans.mk) #[n t.pre, n t.post,
     listE n3 (t.us.map fun (v, l, k) => pairE natT n2 (n v) (pairE natT natT (n l) (n k))),
-    treeE n4 tripE t.psI, treeE n4 tripE t.psR, treeE n4 tripE t.psD]
+    treeE n4 tripE t.psI, treeE n4 tripE t.psR, treeE n4 tripE t.psD, n t.lo, n t.hi]
   mkAppN (mkConst ``PNet.BCert.mk) #[n c.H, n c.rI, n c.rR, n c.rD,
     treeE (prodT natT (mkConst ``PNet.BNode)) nodeE c.nodes,
     treeE (prodT natT (mkConst ``PNet.BLeaf)) leafE c.leaves,
     listE (mkConst ``PNet.BTrans) (c.trans.map transE), treeE n4 tripE c.covR,
-    treeE n4 tripE c.covD]
+    treeE n4 tripE c.covD, boolE c.linR, natsE c.wR, boolE c.linD, natsE c.wD,
+    natsE c.vars, natsE c.lvls, listE lnat (c.cuts.map natsE)]
 
 /-- The symbolic check `PNet.checkBDD`. -/
 def checkBDDE (N : Expr) (dl ll lv : Bool) (c : PNet.BCert) : Expr :=
