@@ -24,6 +24,7 @@ import AsyncLean.Import.Pnml
 import AsyncLean.Import.Verilog
 import AsyncLean.Auto.Simplex
 import AsyncLean.Petri.FreeChoice
+import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Circuit.Wires
 import AsyncLean.Circuit.QDI
 import AsyncLean.Auto.Structural

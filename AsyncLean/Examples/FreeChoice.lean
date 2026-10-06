@@ -2,6 +2,8 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Auto.Structural
+import AsyncLean.Examples.Compositional
+import AsyncLean.Examples.Philosophers
 import AsyncLean.AxiomAudit
 import Mathlib.Data.Fin.VecNotation
 
@@ -47,6 +49,21 @@ def ctrlNFC : Net (Fin 6) (Fin 6) where
 
 theorem ctrlNFC_not_freeChoice : ¬ ctrlNFC.FreeChoice := by decide
 
-#assert_standard_axioms ctrl_live ctrl_deadlockFree
+/-! ### Larger nets
+
+The siphon–trap property is checked from a branching certificate on bit masks, not by
+enumerating subsets of places, so nets far beyond explicit state exploration are in reach. -/
+
+/-- A 20-stage FIFO (40 places, about a million reachable markings) is live. -/
+theorem fifo20_live : (fifo 20 "in" "out").toNet.lts.Live (fifo 20 "in" "out").M₀ := by
+  async_structural
+
+/-- Eight dining philosophers with resource ordering (32 places) never deadlock: the
+siphon–trap theorem for ordinary nets, which need not be free choice. -/
+theorem philosophers8_deadlockFree :
+    (philosophers 8 true).toNet.lts.DeadlockFree (philosophers 8 true).M₀ := by
+  async_structural
+
+#assert_standard_axioms ctrl_live ctrl_deadlockFree fifo20_live philosophers8_deadlockFree
 
 end AsyncLean.Examples.FreeChoice

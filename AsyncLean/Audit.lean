@@ -4,6 +4,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
+import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Circuit.QDI
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
@@ -74,6 +75,7 @@ open LTS
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms
   Net.live_of_siphonTrap Net.deadlockFree_of_siphonTrap_fc Net.le_of_deadAt
+  SiphonCheck.siphonTrap_of_check SiphonCheck.freeChoice_of_checkFC
 
 -- Compositional verification
 #assert_standard_axioms
