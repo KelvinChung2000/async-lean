@@ -349,12 +349,15 @@ def sentryE (e : PNet.SEntry) : Expr :=
     (pairE natT (listT p3) (mkRawNatLit e.2.1) scs)
 
 /-- The reduced-state-space check `PNet.checkPOR` for the net `N` (with value `Nv`). -/
-def checkPORE (N : Expr) (Nv : PNet) (w : ℕ) (t : BTree (ℕ × ℕ)) : Expr :=
+def checkPORE (N : Expr) (Nv : PNet) (w : ℕ) (t : BTree (ℕ × List ℕ)) : Expr :=
   let B := 2 ^ w
-  let tb := listE (mkConst ``PNet.SEntry) ((Nv.stable w).map sentryE)
-  let tE := treeE (prodT natT natT) (fun (a, b) => pairE natT natT (mkRawNatLit a)
-    (mkRawNatLit b)) t
-  mkAppN (mkConst ``PNet.checkPOR) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), tb,
+  let tbl := (Nv.stable w).toArray
+  let it := prodT natT (mkConst ``PNet.SEntry)
+  let ttE := treeE it (fun (i, e) => pairE natT (mkConst ``PNet.SEntry) (mkRawNatLit i)
+    (sentryE e)) (Fast.buildTree (tbl.mapIdx fun i e => (i, e)) (tbl.size + 1) 0 tbl.size)
+  let tE := treeE (prodT natT (listT natT)) (fun (a, l) => pairE natT (listT natT)
+    (mkRawNatLit a) (listE natT (l.map mkRawNatLit))) t
+  mkAppN (mkConst ``PNet.checkPOR) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), ttE,
     mkRawNatLit (PNet.encW w Nv.init), tE]
 
 end FastExpr

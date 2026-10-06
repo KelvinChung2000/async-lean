@@ -5,6 +5,8 @@ import AsyncLean.Checker.Fast
 import AsyncLean.Checker.Packed
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Positivity.Basic
+import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
 # Fast verification of bounded Petri nets
@@ -69,12 +71,17 @@ instance : DecidableEq FEntry :=
   @instDecidableEqProd _ _ inferInstance
     (@instDecidableEqProd _ _ inferInstance (@instDecidableEqProd _ _ inferInstance inferInstance))
 
-/-- The fast-table entry of `t` for a net with `places` places and fields of `w` bits. -/
-def fentry (w places : ℕ) (t : PTrans) : FEntry :=
-  (t.pre.dedup.map fun p => (w * p, t.pre.count p),
-   encW w ((List.range places).map t.pre.count),
-   encW w ((List.range places).map t.post.count),
-   t.post.dedup.map fun p => (w * p, t.pre.count p, t.post.count p))
+/-- The sum of `2^(w*p)` over a list of places (with multiplicity): the packed vector of arc
+weights. -/
+def encList (w : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | p :: ps => 2 ^ (w * p) + encList w ps
+
+/-- The fast-table entry of `t` for fields of `w` bits (a place listed twice gives two equal
+conditions, which is harmless). -/
+def fentry (w : ℕ) (t : PTrans) : FEntry :=
+  (t.pre.map fun p => (w * p, t.pre.count p), encList w t.pre, encList w t.post,
+   t.post.map fun p => (w * p, t.pre.count p, t.post.count p))
 
 /-- Boolean equality of table entries, by the recursors. -/
 noncomputable def feq (a b : FEntry) : Bool :=
@@ -107,7 +114,7 @@ theorem eq_of_feq {a b : FEntry} (h : feq a b = true) : a = b := by
 variable (N : PNet)
 
 /-- The fast table of the net. -/
-def ftable (w : ℕ) : List FEntry := N.trans.map (fentry w N.places)
+def ftable (w : ℕ) : List FEntry := N.trans.map (fentry w)
 
 /-- Mask of the internal transitions. -/
 def imask : ℕ := mask (((List.finRange N.trans.length).filter fun t => (N.tr t).internal).map Fin.val)
@@ -176,13 +183,43 @@ theorem mem_fsuccAux {fm B m : ℕ} {tb : List FEntry} {i₀ j m' : ℕ} {b : Bo
 /-- Markings that the encoding represents faithfully. -/
 def GoodW (w places : ℕ) (xs : List ℕ) : Prop := xs.length = places ∧ ∀ x ∈ xs, x < 2 ^ w
 
-theorem fEnabled_spec {w : ℕ} {xs : List ℕ} (hg : ∀ x ∈ xs, x < 2 ^ w) (places : ℕ)
-    (t : PTrans) :
-    fEnabled (2 ^ w - 1) (encW w xs) (fentry w places t).1 = enabledL xs t.pre := by
+theorem fEnabled_spec {w : ℕ} {xs : List ℕ} (hg : ∀ x ∈ xs, x < 2 ^ w) (t : PTrans) :
+    fEnabled (2 ^ w - 1) (encW w xs) (fentry w t).1 = enabledL xs t.pre := by
   simp only [fEnabled, fentry, kall_eq, enabledL, List.all_map, Function.comp_def]
   simp only [field_eq, encW_field hg]
   rw [Bool.eq_iff_iff]
-  simp only [List.all_eq_true, List.mem_dedup, Nat.ble_eq, decide_eq_true_eq]
+  simp only [List.all_eq_true, Nat.ble_eq, decide_eq_true_eq]
+
+theorem encW_eq_sum (w : ℕ) (l : List ℕ) :
+    encW w l = ∑ k ∈ Finset.range l.length, l.getD k 0 * 2 ^ (w * k) := by
+  induction l with
+  | nil => simp [encW]
+  | cons x xs ih =>
+    rw [List.length_cons, Finset.sum_range_succ', encW, ih, Finset.mul_sum]
+    simp only [List.getD_cons_succ, List.getD_cons_zero, Nat.mul_zero, Nat.pow_zero, Nat.mul_one]
+    rw [Nat.add_comm]
+    congr 1
+    refine Finset.sum_congr rfl fun k _ => ?_
+    rw [Nat.mul_succ, Nat.pow_add]; ring
+
+theorem encList_eq_sum (w n : ℕ) (ps : List ℕ) (h : ∀ p ∈ ps, p < n) :
+    encList w ps = ∑ k ∈ Finset.range n, ps.count k * 2 ^ (w * k) := by
+  induction ps with
+  | nil => simp [encList]
+  | cons q qs ih =>
+    rw [encList, ih fun p hp => h p (List.mem_cons_of_mem _ hp)]
+    simp only [List.count_cons, Nat.add_mul, Finset.sum_add_distrib, beq_iff_eq]
+    rw [Nat.add_comm]
+    congr 1
+    simp [Finset.sum_ite_eq, h q List.mem_cons_self]
+
+/-- The packed vector of arc weights is the packed count vector. -/
+theorem encW_range_count (w n : ℕ) (ps : List ℕ) (h : ∀ p ∈ ps, p < n) :
+    encW w ((List.range n).map ps.count) = encList w ps := by
+  rw [encW_eq_sum, encList_eq_sum w n ps h, List.length_map, List.length_range]
+  refine Finset.sum_congr rfl fun k hk => ?_
+  rw [Finset.mem_range] at hk
+  simp [List.getD_eq_getElem?_getD, hk]
 
 theorem encW_fireL {w : ℕ} (pre post : List ℕ) :
     ∀ (xs : List ℕ) (i : ℕ), (∀ k (hk : k < xs.length), pre.count (i + k) ≤ xs[k]) →
@@ -208,8 +245,9 @@ theorem encW_fireL {w : ℕ} (pre post : List ℕ) :
     ring
 
 /-- Firing in the packed encoding: add the output vector, subtract the input vector. -/
-theorem encW_fire (w : ℕ) (tr : PTrans) (xs : List ℕ) (hen : enabledL xs tr.pre = true) :
-    encW w xs + (fentry w xs.length tr).2.2.1 - (fentry w xs.length tr).2.1 =
+theorem encW_fire (w : ℕ) (tr : PTrans) (xs : List ℕ) (hen : enabledL xs tr.pre = true)
+    (hpre : ∀ p ∈ tr.pre, p < xs.length) (hpost : ∀ p ∈ tr.post, p < xs.length) :
+    encW w xs + (fentry w tr).2.2.1 - (fentry w tr).2.1 =
       encW w (fireL tr.pre tr.post 0 xs) := by
   have := encW_fireL (w := w) tr.pre tr.post xs 0 fun k hk => by
     simp only [enabledL, List.all_eq_true, decide_eq_true_eq] at hen
@@ -217,13 +255,14 @@ theorem encW_fire (w : ℕ) (tr : PTrans) (xs : List ℕ) (hen : enabledL xs tr.
     · have := hen k hp
       rwa [Nat.zero_add, List.getD_eq_getElem _ _ hk] at *
     · rw [Nat.zero_add, List.count_eq_zero_of_not_mem hp]; exact Nat.zero_le _
-  simp only [fentry, ← List.range_eq_range'] at this ⊢
+  simp only [fentry, ← List.range_eq_range', encW_range_count w _ _ hpre,
+    encW_range_count w _ _ hpost] at this ⊢
   omega
 
-theorem fOk_spec {w : ℕ} {xs : List ℕ} (hg : ∀ x ∈ xs, x < 2 ^ w) (places : ℕ) (t : PTrans)
-    (h : fOk (2 ^ w - 1) (2 ^ w) (encW w xs) (fentry w places t).2.2.2 = true) :
+theorem fOk_spec {w : ℕ} {xs : List ℕ} (hg : ∀ x ∈ xs, x < 2 ^ w) (t : PTrans)
+    (h : fOk (2 ^ w - 1) (2 ^ w) (encW w xs) (fentry w t).2.2.2 = true) :
     ∀ x ∈ fireL t.pre t.post 0 xs, x < 2 ^ w := by
-  simp only [fOk, fentry, kall_eq, List.all_eq_true, List.mem_map, List.mem_dedup,
+  simp only [fOk, fentry, kall_eq, List.all_eq_true, List.mem_map,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, field_eq, encW_field hg,
     Nat.blt_eq] at h
   intro x hx
@@ -250,19 +289,20 @@ theorem mem_succ_iff {xs : List ℕ} {t : Fin N.trans.length} {m : List ℕ} :
     exact ⟨t, by simp [hen]⟩
 
 /-- **The fast successor function encodes the net** on markings below `2^w`. -/
-theorem encodes (w : ℕ) :
+theorem encodes (hwf : N.wf = true) (w : ℕ) :
     Encodes N.explicit.toLTS (GoodW w N.places) (encW w) Fin.val
       (fsucc (2 ^ w - 1) (2 ^ w) (N.ftable w)) := by
   have hlen : (N.ftable w).length = N.trans.length := by simp [ftable]
   have hget : ∀ k (hk : k < (N.ftable w).length),
-      (N.ftable w)[k] = fentry w N.places (N.tr ⟨k, by rwa [hlen] at hk⟩) := by
+      (N.ftable w)[k] = fentry w (N.tr ⟨k, by rwa [hlen] at hk⟩) := by
     intro k hk; simp [ftable, tr]
   have hfire : ∀ xs (t : Fin N.trans.length), GoodW w N.places xs →
       enabledL xs (N.tr t).pre = true →
-      encW w xs + (fentry w N.places (N.tr t)).2.2.1 - (fentry w N.places (N.tr t)).2.1 =
+      encW w xs + (fentry w (N.tr t)).2.2.1 - (fentry w (N.tr t)).2.1 =
         encW w (fireL (N.tr t).pre (N.tr t).post 0 xs) := by
     intro xs t hg hen
-    rw [← hg.1]; exact encW_fire w _ xs hen
+    exact encW_fire w _ xs hen (fun p hp => hg.1 ▸ ((wf_spec hwf).2 t).1 p hp)
+      (fun p hp => hg.1 ▸ ((wf_spec hwf).2 t).2 p hp)
   refine ⟨fun xs hg i m' hm => ?_, fun xs t xs' hg hst => ?_⟩
   · obtain ⟨k, hk, rfl, hen, rfl, hok⟩ := mem_fsuccAux.1 hm
     have hkn : k < N.trans.length := by rwa [hlen] at hk
@@ -274,12 +314,12 @@ theorem encodes (w : ℕ) :
     · change (t, _) ∈ N.succ xs
       exact mem_succ_iff.2 ⟨hen, rfl⟩
     · rw [hget k hk]; exact (hfire xs t hg hen).symm
-    · exact ⟨by rw [length_fireL, hg.1], fOk_spec hg.2 _ _ hok.symm⟩
+    · exact ⟨by rw [length_fireL, hg.1], fOk_spec hg.2 _ hok.symm⟩
   · change (t, xs') ∈ N.succ xs at hst
     obtain ⟨hen, rfl⟩ := mem_succ_iff.1 hst
     have hk : t.val < (N.ftable w).length := by rw [hlen]; exact t.isLt
-    refine ⟨fOk (2 ^ w - 1) (2 ^ w) (encW w xs) (fentry w N.places (N.tr t)).2.2.2, ?_,
-      fun hok => ⟨by rw [length_fireL, hg.1], fOk_spec hg.2 _ _ hok⟩⟩
+    refine ⟨fOk (2 ^ w - 1) (2 ^ w) (encW w xs) (fentry w (N.tr t)).2.2.2, ?_,
+      fun hok => ⟨by rw [length_fireL, hg.1], fOk_spec hg.2 _ hok⟩⟩
     refine mem_fsuccAux.2 ⟨t.val, hk, by simp, ?_, ?_, ?_⟩
     · rw [hget _ hk, fEnabled_spec hg.2]; exact hen
     · rw [hget _ hk]; exact (hfire xs t hg hen).symm
@@ -315,7 +355,7 @@ theorem of_checkFast {w B fm k s₀ : ℕ} {tb : List FEntry} {dl ll lv : Bool} 
   rw [Nat.eq_of_beq_eq_true hfm, Nat.eq_of_beq_eq_true hs₀] at hc
   have hg₀ : GoodW w N.places N.init :=
     ⟨(wf_spec hwf).1, by simpa using hinit⟩
-  obtain ⟨hd, hl, hv⟩ := Fast.of_check (encodes w) Fin.val_injective hg₀ hc
+  obtain ⟨hd, hl, hv⟩ := Fast.of_check (encodes hwf w) Fin.val_injective hg₀ hc
   rw [← enc_M₀ hwf] at hd hl hv
   refine ⟨fun hdl => (bisim hwf).deadlockFree_iff.1 (hd hdl), fun hll => ?_,
     fun hlv => (bisim hwf).live_iff.1 fun t => hv hlv t t.isLt⟩
