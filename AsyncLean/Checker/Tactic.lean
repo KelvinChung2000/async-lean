@@ -13,6 +13,7 @@ import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
+import AsyncLean.Checker.FastPORLive
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
 
@@ -360,6 +361,30 @@ def checkPORE (N : Expr) (Nv : PNet) (w : ℕ) (t : BTree (ℕ × List ℕ)) : E
     (mkRawNatLit a) (listE natT (l.map mkRawNatLit))) t
   mkAppN (mkConst ``PNet.checkPOR) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), ttE,
     mkRawNatLit (PNet.encW w Nv.init), tE]
+
+/-- The full-correctness reduced-state-space check `PNet.checkPORc`. -/
+def checkPORcE (N : Expr) (Nv : PNet) (ll : Bool) (w : ℕ) (t : BTree (ℕ × PNet.PData))
+    (hubs : List (ℕ × List (List ℕ))) : Expr :=
+  let B := 2 ^ w
+  let tbl := (Nv.stable w).toArray
+  let se := mkConst ``PNet.SEntry
+  let it := prodT natT se
+  let entry := fun (ie : ℕ × PNet.SEntry) => pairE natT se (mkRawNatLit ie.1) (sentryE ie.2)
+  let tlE := listE it ((tbl.mapIdx fun i e => (i, e)).toList.map entry)
+  let ttE := treeE it entry (Fast.buildTree (tbl.mapIdx fun i e => (i, e)) (tbl.size + 1) 0 tbl.size)
+  let ln := listT natT
+  let d3 := prodT natT (prodT natT natT)
+  let pd := prodT ln d3
+  let tE := treeE (prodT natT pd) (fun (m, (sl, r, d, l)) => pairE natT pd (mkRawNatLit m)
+    (pairE ln d3 (listE natT (sl.map mkRawNatLit)) (pairE natT (prodT natT natT) (mkRawNatLit r)
+      (pairE natT natT (mkRawNatLit d) (mkRawNatLit l))))) t
+  let lln := listT ln
+  let hubT := prodT natT lln
+  let hubsE := listE hubT (hubs.map fun (h, trs) => pairE natT lln (mkRawNatLit h)
+    (listE ln (trs.map fun tr => listE natT (tr.map mkRawNatLit))))
+  mkAppN (mkConst ``PNet.checkPORc) #[N, boolE ll, mkRawNatLit w, mkRawNatLit B,
+    mkRawNatLit (B - 1), tlE, ttE, mkRawNatLit (cond ll Nv.imask 0), mkRawNatLit Nv.xmask,
+    mkRawNatLit (PNet.encW w Nv.init), tE, hubsE]
 
 /-- A list of numbers as a literal. -/
 def natsE (xs : List ℕ) : Expr := listE natT (xs.map mkRawNatLit)
@@ -864,6 +889,32 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           -- unbounded): the state equation needs no exploration at all
           unless e.startsWith "deadlock" do
             if ← decideSE goal N then return
+      -- partial-order reduction for livelock freedom and liveness too
+      unless p matches .deadlock do
+        let Nv ← evalAs PNet N
+        let noInt := Nv.noInternal
+        -- without internal transitions, livelock freedom is immediate and the visibility
+        -- conditions (which would force full expansion) are not needed
+        let ll := !noInt && !(p matches .live)
+        if let .ok (w, t, hubs) := Nv.mkPORcCert ll fuel then
+          let l := t.toList
+          -- worth it only if the reduction actually reduces
+          if 2 * (l.filter fun x => x.2.2.2.1 == 0).length < l.length then
+            let needNoInt := noInt && !(p matches .live)
+            let ok ← closeWithChecksLit goal N Nv
+              (fun lit => FastExpr.checkPORcE lit Nv ll w t hubs ::
+                (if needNoInt then [mkApp (mkConst ``PNet.noInternal) lit] else []))
+              (fun hs => match p with
+                | .live => mkAppM ``PNet.live_of_checkPORc #[hs[0]!]
+                | .livelock =>
+                  if needNoInt then mkAppM ``PNet.livelockFree_of_noInternal #[hs[1]!]
+                  else mkAppM ``PNet.livelockFree_of_checkPORc #[hs[0]!]
+                | _ =>
+                  if needNoInt then do
+                    mkAppM ``PNet.correct_of_checkPORc_lf
+                      #[hs[0]!, ← mkAppM ``PNet.livelockFree_of_noInternal #[hs[1]!]]
+                  else mkAppM ``PNet.correct_of_checkPORc #[hs[0]!])
+            if ok then return
       -- a quick probe: if the state space does not close (e.g. an unbounded net), try the
       -- counter abstraction first
       unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do

@@ -44,6 +44,12 @@ Latest additions:
 * **Partial-order reduction.** Stubborn sets preserve deadlocks (`Net.reachable_red_of_dead`);
   `async_decide` checks deadlock freedom on a reduced state space whose stubborn sets the
   kernel verifies marking by marking (`PNet.deadlockFree_of_checkPOR`).
+* **Partial-order reduction for liveness and livelock freedom.** The cycle proviso makes a
+  reduced state space decide liveness (`Net.catchUp`, `Net.live_of_stubborn`); visibility
+  and a rank on internal steps decide livelock freedom (`Net.livelockFree_of_stubborn`).
+  `async_decide` proves `Correct`, livelock freedom and liveness this way
+  (`PNet.correct_of_checkPORc`): a 40-stage FIFO is `Correct` in 4.4 s, a 12-stage one in
+  0.25 s instead of 13 s.
 * **The state equation.** Deadlock freedom from a Farkas certificate refuting every dead
   solution of `M = M₀ + C · x` (`Net.deadlockFree_of_stateEq`), found by linear programming,
   with no exploration; used by `async_structural`, and by `async_decide` when the reduced

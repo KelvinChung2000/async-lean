@@ -316,6 +316,16 @@ theorem twelvePhilosophers_deadlockFree :
     (Examples.philosophers 12 true).toNet.lts.DeadlockFree (Examples.philosophers 12 true).M₀ := by
   async_structural
 
+/-! The same reduction works for livelock freedom and liveness once the stubborn sets also
+satisfy the *cycle proviso* (no transition is ignored forever round a cycle of the reduced
+state space) and, for livelocks, *visibility* conditions on the external transitions
+(`Net.live_of_stubborn`, `Net.livelockFree_of_stubborn`).  `async_decide` checks them
+marking by marking, so whole `Correct` goals scale too. -/
+
+/-- The 30-stage FIFO is deadlock free, livelock free and live. -/
+theorem fifo30_correct : (Examples.fifo 30 "in" "out").Correct := by
+  async_decide
+
 /-! ## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
@@ -331,6 +341,6 @@ theorem twelvePhilosophers_deadlockFree :
   ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
   forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
-  fifo30_deadlockFree twelvePhilosophers_deadlockFree
+  fifo30_deadlockFree twelvePhilosophers_deadlockFree fifo30_correct
 
 end AsyncLean.Tutorial

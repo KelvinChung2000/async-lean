@@ -21,6 +21,7 @@ import AsyncLean.Checker.Packed
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
+import AsyncLean.Checker.FastPORLive
 import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
@@ -104,6 +105,13 @@ open LTS
 -- Partial-order reduction: stubborn sets preserve deadlocks
 #assert_standard_axioms
   Net.reachable_red_of_dead Net.deadlockFree_of_stubborn PNet.deadlockFree_of_checkPOR
+
+-- Partial-order reduction for liveness (cycle proviso) and livelock freedom (visibility)
+#assert_standard_axioms
+  Net.stubborn_front Net.stubborn_commute Net.catchUp Net.live_of_stubborn
+  Net.livelockFree_of_stubborn PNet.of_checkPORc PNet.correct_of_checkPORc
+  PNet.correct_of_checkPORc_lf PNet.live_of_checkPORc PNet.livelockFree_of_checkPORc
+  PNet.livelockFree_of_noInternal
 
 -- The state equation: deadlock freedom and bounds without exploration
 #assert_standard_axioms

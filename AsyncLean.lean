@@ -21,6 +21,8 @@ import AsyncLean.Checker.Fast
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Petri.Stubborn
 import AsyncLean.Checker.FastPOR
+import AsyncLean.Petri.StubbornLive
+import AsyncLean.Checker.FastPORLive
 import AsyncLean.Petri.StateEquation
 import AsyncLean.Auto.StateEq
 import AsyncLean.Stg.Basic

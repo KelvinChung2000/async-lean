@@ -7,7 +7,7 @@ import AsyncLean.Examples.Compositional
 import AsyncLean.AxiomAudit
 
 /-!
-# Example: deadlock freedom at scale, by partial-order reduction
+# Example: correctness at scale, by partial-order reduction
 
 For a deadlock-freedom goal, `async_decide` explores a *reduced* state space: at each
 marking only the enabled transitions of a stubborn set fire (`Net.Stubborn`), and the
@@ -18,6 +18,13 @@ reduced state space without deadlocks proves the whole net deadlock free.
 * A 40-stage FIFO has `2^40` reachable markings; the reduced state space has 821.
 * Twelve dining philosophers (resource ordering) have 33 461 reachable markings; the reduced
   state space has 245.
+
+For full correctness the stubborn sets must satisfy two more conditions.  The *cycle
+proviso* (some member of the set leads closer to a fully expanded marking) makes the
+reduced state space reach every transition that the full one reaches, which gives liveness
+(`Net.live_of_stubborn`); the *visibility* conditions (a set with an enabled external member
+holds every external transition, a marking with an enabled internal transition has one in
+its set) and a rank decreasing along the internal reduced steps give livelock freedom (`Net.livelockFree_of_stubborn`).
 
 `async_structural` proves the same kind of result without exploring any state: every
 reachable marking satisfies the state equation `M = M₀ + C · x`, and a Farkas certificate
@@ -46,7 +53,17 @@ theorem philosophers12_deadlockFree' :
 theorem fifo40_safe : (fifo 40 "in" "out").Safe := by
   async_structural
 
+/-- Full correctness (deadlock freedom, livelock freedom and liveness) of the 40-stage FIFO,
+from a reduced state space whose stubborn sets also satisfy the cycle proviso and the
+visibility conditions (`PNet.correct_of_checkPORc`). -/
+theorem fifo40_correct : (fifo 40 "in" "out").Correct := by
+  async_decide
+
+/-- Full correctness of twelve dining philosophers. -/
+theorem philosophers12_correct : (philosophers 12 true).Correct := by
+  async_decide
+
 #assert_standard_axioms fifo40_deadlockFree philosophers12_deadlockFree
-  philosophers12_deadlockFree' fifo40_safe
+  philosophers12_deadlockFree' fifo40_safe fifo40_correct philosophers12_correct
 
 end AsyncLean.Examples
