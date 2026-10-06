@@ -12,14 +12,19 @@ import Std.Data.HashSet
 A small decision-diagram package and the computation of a certificate for `PNet.checkBDD`:
 
 * a variable order, placing the places of each transition close together;
-* the reachable markings, by symbolic breadth-first search (images transition by
-  transition, valid for safe nets);
-* for livelock freedom, a linear rank found by linear programming, or else ranks (layers of
-  markings all of whose internal successors lie in lower layers);
+* the reachable markings, by *saturation*: each node is closed, bottom-up, under the
+  transitions whose touched places all lie at or below its level, so that a firing is never
+  repeated below its own levels (images transition by transition, valid for safe nets);
+  backward closures likewise, constrained by the reachable markings;
+* for livelock freedom, a linear rank found by linear programming; or else a linear rank that
+  no internal transition increases, decreasing as many as possible, and ranks (layers of
+  markings all of whose successors by the remaining internal transitions lie in lower layers);
 * for liveness, hubs (one marking in each terminal strongly connected component, found by
   alternating forward and backward closures) and one trace from each hub to each transition,
-  from shared forward layers; then a linear potential decreased by the witnesses, found by
-  linear programming, or else distances to the hubs with a witness transition per marking;
+  from chained rounds of images, walking back marking by marking; then a linear potential
+  decreased by the witnesses, found by linear programming; or else distances to the hubs with
+  a witness transition per marking, counting, when that is smaller, only the steps of the
+  witnesses that keep a linear potential unchanged (a lexicographic measure);
 * witnesses over the whole space, by enabledness, when no distances are needed;
 * the diagrams, their known places, the cuts of the invariant, and the triples of the joint
   walks, which stop where the checker needs no more.
@@ -244,34 +249,63 @@ def img (C : Ctx) (t s : ℕ) : M ℕ :=
 def preimg (C : Ctx) (t s : ℕ) : M ℕ :=
   (fireOp C.σpost[t]! C.σpre[t]! (touched C.σpost[t]!) s 0).run' {}
 
-def imgAll (C : Ctx) (s : ℕ) : M ℕ := do
-  let mut r := 0
-  for t in [0:C.pre.size] do r ← bor r (← img C t s)
+/-- The transitions as events of saturation: at each level, the source and target assignments
+and touched levels of the transitions whose first touched level (nearest the root) it is
+(forward), or the reverse (backward). -/
+def Ctx.events (C : Ctx) (back : Bool) :
+    Array (List (Array (Option Bool) × Array (Option Bool) × Array ℕ)) := Id.run do
+  let mut evs := Array.replicate C.n []
+  for t in [0:C.pre.size] do
+    let us := touched C.σpre[t]!
+    if h : 0 < us.size then
+      let e := if back then (C.σpost[t]!, C.σpre[t]!, us) else (C.σpre[t]!, C.σpost[t]!, us)
+      evs := evs.modify us[0] (e :: ·)
+  return evs
+
+/-- Saturation constrained by `c`: the least set containing `a ∩ c` and closed under the events
+whose touched levels are all at least `L`, inside `c` (the diagrams `a` and `c` are read as
+functions of the levels from `L` on).  Every node built is saturated in turn, bottom-up, so
+that a firing never has to be repeated at the levels below its own.  Beyond `fuel` nodes it
+gives up, returning a partial result. -/
+partial def sat (evs : Array (List (Array (Option Bool) × Array (Option Bool) × Array ℕ)))
+    (fuel n L a c : ℕ) : StateT (HashMap (ℕ × ℕ × ℕ) ℕ) M ℕ := do
+  if a == 0 || c == 0 then return 0
+  if L ≥ n || (← getThe Man).nodes.size > fuel then return a
+  if let some r := (← get)[(L, a, c)]? then return r
+  let split := fun (x : ℕ) => do
+    let (lx, x0, x1) ← (nd x : M _)
+    return if lx == L then (x0, x1) else (x, x)
+  let (a0, a1) ← split a
+  let (c0, c1) ← split c
+  let r0 ← sat evs fuel n (L + 1) a0 c0
+  let r1 ← sat evs fuel n (L + 1) a1 c1
+  let mut r ← (mk L r0 r1 : M ℕ)
+  let es := evs[L]!
+  unless es.isEmpty do
+    repeat
+      let old := r
+      for (src, dst, us) in es do
+        let x ← (fireOp src dst us r 0).run' {}
+        if x != 0 then
+          let (x0, x1) ← split x
+          let z0 ← sat evs fuel n (L + 1) x0 c0
+          let z1 ← sat evs fuel n (L + 1) x1 c1
+          r ← (bor r (← mk L z0 z1) : M ℕ)
+      if r == old || (← getThe Man).nodes.size > fuel then break
+  modify (·.insert (L, a, c) r)
   return r
 
-def preAll (C : Ctx) (s : ℕ) : M ℕ := do
-  let mut r := 0
-  for t in [0:C.pre.size] do r ← bor r (← preimg C t s)
-  return r
-
-/-- Forward closure of `s`, by chaining the transitions. -/
+/-- Forward closure of `s`, by saturation. -/
 def fwd (C : Ctx) (s : ℕ) (fuel : ℕ) : ExceptT String M ℕ := do
-  let mut r := s
-  repeat
-    if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
-    let old := r
-    for t in [0:C.pre.size] do r ← bor r (← img C t r)
-    if r == old then break
+  let r ← (sat (C.events false) fuel C.n 0 s 2).run' {}
+  if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
   return r
 
-/-- Backward closure of `s` inside `R`, by chaining. -/
+/-- Backward closure of `s` inside `R` (the markings of `R` from which `s` is reachable), by
+saturation constrained by `R`. -/
 def bwd (C : Ctx) (R s : ℕ) (fuel : ℕ) : ExceptT String M ℕ := do
-  let mut r := s
-  repeat
-    if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
-    let old := r
-    for t in [0:C.pre.size] do r ← bor r (← band (← preimg C t r) R)
-    if r == old then break
+  let r ← (sat (C.events true) fuel C.n 0 s R).run' {}
+  if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
   return r
 
 /-- The marking `m` (a mask over places) as a diagram. -/
@@ -296,42 +330,46 @@ def predOf (C : Ctx) (t x : ℕ) : Option ℕ :=
   if (y &&& pre) == pre && (y ^^^ pre) &&& post == 0 && ((y ^^^ pre) ||| post) == x then some y
   else none
 
-/-- One trace from the marking `h` to a marking enabling each transition, from shared forward
-layers, walking back marking by marking. -/
+/-- One trace from the marking `h` to a marking enabling each transition.  The transitions are
+chained, in rounds, and every set reached is kept: a marking first reached by firing `t` has
+its predecessor under `t` in the set before, so walking back marking by marking ends at `h`. -/
 def traces (C : Ctx) (h : ℕ) (fuel : ℕ) : ExceptT String M (List (List ℕ)) := do
   let nT := C.pre.size
   let mut ens : Array ℕ := #[]
   for t in [0:nT] do ens := ens.push (← cube C.σen[t]!)
-  let mut layers : Array ℕ := #[← minterm C h]
-  let mut seen := layers[0]!
+  -- the sets reached, each with the transition that extended the one before
+  let mut snaps : Array (ℕ × ℕ) := #[(← minterm C h, nT)]
+  let mut S := snaps[0]!.1
   let mut hit : Array (Option ℕ) := Array.replicate nT none
   repeat
-    let k := layers.size - 1
     for t in [0:nT] do
-      if hit[t]!.isNone && (← band layers[k]! ens[t]!) != 0 then hit := hit.set! t (some k)
+      if hit[t]!.isNone && (← band S ens[t]!) != 0 then hit := hit.set! t (some (snaps.size - 1))
     if hit.all (·.isSome) then break
     if (← get).nodes.size > fuel then throw "the decision diagrams exceed the fuel"
-    let nx ← bdiff (← imgAll C layers[k]!) seen
-    if nx == 0 then throw "a transition is dead from a hub: the net is not live"
-    layers := layers.push nx
-    seen ← bor seen nx
+    let old := S
+    for t in [0:nT] do
+      let S' ← bor S (← img C t S)
+      if S' != S then
+        S := S'
+        snaps := snaps.push (S, t)
+    if S == old then throw "a transition is dead from a hub: the net is not live"
   let mut out : List (List ℕ) := []
   for t in [0:nT] do
-    let k0 := hit[t]!.getD 0
-    let mut x ← pick C.π (← band layers[k0]! ens[t]!)
+    let i0 := hit[t]!.getD 0
+    let mut x ← pick C.π (← band snaps[i0]!.1 ens[t]!)
     let mut tr : List ℕ := []
-    let mut k := k0
-    while k > 0 do
-      let mut found := false
-      for t' in [0:nT] do
-        unless found do
-          if let some y := predOf C t' x then
-            if ← mem C layers[k - 1]! y then
-              x := y
-              tr := t' :: tr
-              found := true
-      unless found do throw "trace reconstruction failed"
-      k := k - 1
+    let mut i := i0
+    -- invariant: `x` is in `snaps[i]`
+    while i > 0 do
+      while i > 0 && (← mem C snaps[i - 1]!.1 x) do i := i - 1
+      if i == 0 then break
+      let t' := snaps[i]!.2
+      match predOf C t' x with
+      | some y =>
+        x := y
+        tr := t' :: tr
+        i := i - 1
+      | none => throw "trace reconstruction failed"
     out := out ++ [tr]
   return out
 
@@ -350,11 +388,39 @@ def linRank (N : PNet) (ts : List ℕ) : Option (List ℕ) := do
   let x ← Simplex.solve A b c
   return Simplex.toNat (x.extract 0 m)
 
+/-- Weights on the places that no transition of `ts` increases, and that decrease as many of
+them as a linear relaxation finds (all zero if it fails): the first component of a
+lexicographic measure. -/
+def linLex (N : PNet) (ts : List ℕ) : List ℕ :=
+  let m := N.places
+  let k := ts.length
+  let z := fun (n : ℕ) => (Array.range n).map fun _ => (0 : Rat)
+  let unit := fun (n i : ℕ) (v : Rat) => (Array.range n).map fun j => if j == i then v else 0
+  -- variables: w (m), δ (k), s (k), e (k);  (pre - post) · w - δ_t - s_t = 0,  δ_t + e_t = 1
+  let A1 : Array (Array Rat) := (List.range k).toArray.map fun i =>
+    let (pre, post) := ((N.trans[ts.getD i 0]?).map fun t => (t.pre, t.post)).getD ([], [])
+    ((Array.range m).map fun p => ((pre.count p : ℤ) - (post.count p : ℤ) : Rat)) ++
+      unit k i (-1) ++ unit k i (-1) ++ z k
+  let A2 : Array (Array Rat) := (List.range k).toArray.map fun i =>
+    z m ++ unit k i 1 ++ z k ++ unit k i 1
+  let b : Array Rat := z k ++ (Array.range k).map fun _ => 1
+  let c : Array Rat := z m ++ (Array.range k).map (fun _ => (-1 : Rat)) ++ z k ++ z k
+  match Simplex.solve (A1 ++ A2) b c with
+  | some x => Simplex.toNat (x.extract 0 m)
+  | none => List.replicate m 0
+
 /-- The linear potential `w` decreases strictly when `t` fires. -/
 def decT (N : PNet) (w : List ℕ) (t : ℕ) : Bool :=
   let f := fun (l : List ℕ) => (l.eraseDups.map fun p => w.getD p 0).sum
   match N.trans[t]? with
   | some tp => f tp.post < f tp.pre
+  | none => false
+
+/-- The linear potential `w` does not increase when `t` fires. -/
+def nincT (N : PNet) (w : List ℕ) (t : ℕ) : Bool :=
+  let f := fun (l : List ℕ) => (l.eraseDups.map fun p => w.getD p 0).sum
+  match N.trans[t]? with
+  | some tp => f tp.post ≤ f tp.pre
   | none => false
 
 /-- The successors of a triple in the joint walk (mirrors `PNet.tripleOk`); `none` at the
@@ -407,16 +473,19 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let mut en := 0
     for t in [0:nT] do en ← bor en (← cube C.σen[t]!)
     if dl && (← bdiff R en) != 0 then throw "deadlock"
-    -- ranks: a linear rank if one exists, otherwise layers all of whose internal successors
-    -- lie in lower layers
+    -- ranks: a linear rank if one exists; otherwise a linear rank that the internal transitions
+    -- never increase, then layers all of whose successors by the others (which keep it) lie in
+    -- lower layers
     let internals := (List.range nT).filter fun t => C.internal[t]!
     let wR := if ll then linRank N internals else none
     let linR := wR.isSome
+    let wRx : List ℕ := wR.getD (if ll then linLex N internals else [])
+    let flat := fun (t : ℕ) => C.internal[t]! && !decT N wRx t
     let mut rankSets : Array ℕ := #[R]
     if ll && !linR then
       let mut ienab := 0
       for t in [0:nT] do
-        if C.internal[t]! then ienab ← bor ienab (← cube C.σen[t]!)
+        if flat t then ienab ← bor ienab (← cube C.σen[t]!)
       let mut Z ← bdiff R ienab
       rankSets := #[Z]
       while Z != R do
@@ -424,7 +493,7 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
         let rest ← bdiff R Z
         let mut bad := 0
         for t in [0:nT] do
-          if C.internal[t]! then bad ← bor bad (← preimg C t rest)
+          if flat t then bad ← bor bad (← preimg C t rest)
         let Z' ← bor Z (← bdiff R bad)
         if Z' == Z then throw "livelock"
         rankSets := rankSets.push (← bdiff Z' Z)
@@ -438,6 +507,13 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let mut hubs : Array ℕ := #[]
     let mut traces : Array (List (List ℕ)) := #[]
     let mut wD : Option (List ℕ) := none
+    -- the potential of a lexicographic measure, with the distances
+    let mut wX : List ℕ := []
+    let dsize := fun (ps : Array (ℕ × ℕ × ℕ × Option ℕ)) => do
+      let mut r := 0
+      for i in [0:ps.size] do
+        r ← (iteM ps[ps.size - 1 - i]!.1 (2 * (ps.size - i)) r).run' {}
+      size r
     if lv then
       let mut covered := 0
       let mut s := m₀
@@ -510,7 +586,38 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
         | some (w, lparts) =>
           parts := lparts
           wD := some w
-        | none => parts := parts ++ hubParts
+        | none =>
+          -- lexicographically: a potential that no witness increases; the witnesses that
+          -- decrease it have distance `1`, and the distances count the steps of the others
+          let w := linLex N wits
+          let mut mparts := hubParts
+          let mut assigned := 0
+          for p in hubParts do assigned ← bor assigned p.1
+          for t in worder do
+            if decT N w t then
+              let x ← bdiff (← band R (← cube C.σen[t]!)) assigned
+              if x != 0 then
+                mparts := mparts.push (x, t, 1, none)
+                assigned ← bor assigned x
+          let mut E := assigned
+          let mut kx := 1
+          let mut ok := true
+          while ok && E != R do
+            chk
+            let mut a := E
+            for t in worder do
+              if !decT N w t && nincT N w t then
+                let x ← bdiff (← band (← preimg C t E) R) a
+                if x != 0 then
+                  mparts := mparts.push (x, t, kx + 1, none)
+                  a ← bor a x
+            if a == E then ok := false
+            E := a
+            kx := kx + 1
+          parts := parts ++ hubParts
+          if ok && (← dsize mparts) < (← dsize parts) then
+            parts := mparts
+            wX := w
     else if dl then
       -- witnesses by enabledness: over the whole space, or only on the reachable markings,
       -- whichever diagram is smaller
@@ -528,12 +635,7 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
         if y != 0 then
           onR := onR.push (y, t, 0, none)
           aR ← bor aR y
-      let build := fun (ps : Array (ℕ × ℕ × ℕ × Option ℕ)) => do
-        let mut r := 0
-        for i in [0:ps.size] do
-          r ← (iteM ps[ps.size - 1 - i]!.1 (2 * (ps.size - i)) r).run' {}
-        size r
-      parts := if (← build full) ≤ (← build onR) then full else onR
+      parts := if (← dsize full) ≤ (← dsize onR) then full else onR
     else parts := #[(R, 0, 0, none)]
     -- the diagrams: the invariant (leaf 1), the ranks (leaves `2 + k`) and the data (leaves
     -- `dbase + i`)
@@ -637,7 +739,11 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
       cuts := cuts.push (nx.qsort (· < ·)).toList.eraseDups
     let mut trans : List BTrans := []
     let mut nTriples := 0
-    for tp in N.trans do
+    -- the transitions that are witnesses away from the hubs
+    let wits := parts.foldl (fun (a : Array Bool) p =>
+      if p.2.2.2.isNone then a.set! p.2.1 true else a) (Array.replicate nT false)
+    for (tp, t) in N.trans.zip (List.range nT) do
+      let wit := !lv || wits[t]!
       let us := ((tp.pre ++ tp.post).eraseDups.map fun p =>
         (p, C.lam[p]!, if tp.pre.contains p then (if tp.post.contains p then 1 else 0) else 2)).toArray.qsort
           fun x y => x.2.1 < y.2.1
@@ -645,18 +751,20 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
       let hi := us.foldl (fun m u => max m u.2.1) 0
       let (psI, k1, ok1) := walk 0 us hi (cuts[lo]!.map fun x => (x, x))
       let (psR, k2, ok2) :=
-        if ll && !linR && tp.internal then walk 1 us hi [(rR', rR')] else (.leaf, 0, true)
-      let (psD, k3, ok3) := if lv && wD.isNone then walk 2 us hi [(rD', rD')] else (.leaf, 0, true)
+        if ll && !linR && flat t then walk 1 us hi [(rR', rR')] else (.leaf, 0, true)
+      let (psD, k3, ok3) :=
+        if lv && wD.isNone && wit && !decT N wX t then walk 2 us hi [(rD', rD')]
+        else (.leaf, 0, true)
       unless ok1 && ok2 && ok3 do throw "the diagram is too large for the triple keys"
       nTriples := nTriples + k1 + k2 + k3
-      trans := trans ++ [⟨mask tp.pre, mask tp.post, us.toList, psI, psR, psD, lo, hi⟩]
+      trans := trans ++ [⟨mask tp.pre, mask tp.post, us.toList, psI, psR, psD, lo, hi, wit⟩]
     let (covR, k4, _) := if ll && !linR then walk 0 #[] 0 [(rI', rR')] else (.leaf, 0, true)
     let (covD, k5, _) := if dl || lv then walk 3 #[] 0 [(rI', rD')] else (.leaf, 0, true)
     let nodeT := nodesL.toArray
     let leafT := leavesL.toArray.qsort fun x y => x.1 < y.1
     return (⟨n, rI', rR', rD', Fast.buildTree nodeT (nodeT.size + 1) 0 nodeT.size,
       Fast.buildTree leafT (leafT.size + 1) 0 leafT.size, trans, covR, covD,
-      linR, wR.getD [], wD.isSome, wD.getD [], C.π.toList, C.lam.toList, cuts.toList⟩,
+      linR, wRx, wD.isSome, wD.getD wX, C.π.toList, C.lam.toList, cuts.toList⟩,
       [← size rI, ← size rR, ← size rD, order.size, nTriples + k4 + k5])
   match (act.run.run' { H := n } : Except String (BCert × List ℕ)) with
   | .ok r => return r

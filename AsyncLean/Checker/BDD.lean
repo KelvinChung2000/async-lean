@@ -16,10 +16,12 @@ over the places, without enumerating any marking:
   initial marking and is closed under firing, and firing never marks a marked place;
 * the leaves of a *data* diagram, which covers the invariant, carry a *witness* transition
   enabled at every marking reaching the leaf (deadlock freedom); for liveness, either a
-  *linear potential* (weights on the places) that every witness decreases, or a *distance*
-  that the witness decreases, down to *hubs* from which a trace enables each transition;
-* for livelock freedom, either a linear rank that every internal transition decreases, or a
-  *rank* diagram decreasing along internal transitions.
+  *linear potential* (weights on the places) that every witness decreases, or, lexicographically,
+  a linear potential that each witness decreases or keeps while decreasing a *distance*, down to
+  *hubs* from which a trace enables each transition;
+* for livelock freedom, either a linear rank that every internal transition decreases, or,
+  lexicographically, a linear rank that each internal transition decreases or keeps while
+  decreasing a *rank* diagram.
 
 Closure is checked transition by transition, by a joint walk of a diagram before and after
 firing: a set of *triples* `(a, b, j)` — a node `a` read before firing, a node `b` read after,
@@ -87,6 +89,9 @@ structure BTrans where
   level `lo` -/
   lo : ℕ := 0
   hi : ℕ := 0
+  /-- the transition may be the witness of a leaf away from a hub; only then must it decrease
+  the potential, or keep it and decrease the distance -/
+  wit : Bool := true
   deriving Inhabited
 
 /-- A symbolic certificate.  References: `2 i` is leaf `i` (leaf `0`: outside the invariant),
@@ -104,11 +109,12 @@ structure BCert where
   covR : BTree (ℕ × ℕ × ℕ × ℕ)
   covD : BTree (ℕ × ℕ × ℕ × ℕ)
   /-- with `linR`, livelock freedom from the linear rank with weights `wR` (one per place)
-  instead of the rank diagram -/
+  instead of the rank diagram; otherwise from `wR` and the rank diagram, lexicographically -/
   linR : Bool := false
   wR : List ℕ := []
   /-- with `linD`, liveness from the linear potential with weights `wD`, decreased by the
-  witness of every leaf away from a hub, instead of distances -/
+  witness of every leaf away from a hub, instead of distances; otherwise from `wD` and the
+  distances, lexicographically -/
   linD : Bool := false
   wD : List ℕ := []
   /-- the place read at each level, and the level of each place -/
@@ -143,6 +149,10 @@ noncomputable def phiL (ws : List ℕ) (x : ℕ) : ℕ → ℕ :=
 /-- Firing a transition with these masks strictly decreases the linear potential `ws`. -/
 noncomputable def decB (ws : List ℕ) (pre post : ℕ) : Bool :=
   Nat.blt (phiL ws post 0) (phiL ws pre 0)
+
+/-- Firing a transition with these masks never increases the linear potential `ws`. -/
+noncomputable def nincB (ws : List ℕ) (pre post : ℕ) : Bool :=
+  Nat.ble (phiL ws post 0) (phiL ws pre 0)
 
 variable (c : BCert)
 
@@ -216,7 +226,8 @@ noncomputable def leafOk (dl lv : Bool) (nT full : ℕ) (x : ℕ × BLeaf) : Boo
   !l.dat || ((!(dl || (lv && !Nat.beq l.d 0)) ||
     (Nat.blt l.wit nT && match knth c.trans l.wit with
       | some e => sub e.pre l.k1 &&
-          (!(lv && c.linD && !Nat.beq l.d 0) || decB c.wD e.pre e.post)
+          (!(lv && c.linD && !Nat.beq l.d 0) || decB c.wD e.pre e.post) &&
+          (!(lv && !Nat.beq l.d 0) || e.wit)
       | none => false)) &&
   (!(lv && Nat.beq l.d 0) ||
     (sub full (l.k1 ||| l.k0) && Nat.blt l.k1 (full + 1) &&
@@ -314,16 +325,19 @@ noncomputable def walkCut (i : ℕ) (e : BTrans) : Bool :=
 noncomputable def usOk (e : BTrans) (u : ℕ × ℕ × ℕ) : Bool :=
   Nat.ble e.lo u.2.1 && Nat.ble u.2.1 e.hi && varAt c.vars u.2.1 u.1
 
-/-- The checks of transition `i`: on the invariant, on the ranks (with `ll`, if internal) and on
-the distances (with `lv`). -/
+/-- The checks of transition `i`: on the invariant; with `ll`, if internal, it decreases the
+linear rank, or keeps it and decreases the rank diagram; with `lv`, it decreases the linear
+potential, or keeps it and decreases the distance wherever it is the witness (if it may be one,
+`e.wit`). -/
 noncomputable def transOk (ll lv int : Bool) (i : ℕ) (e : BTrans) : Bool :=
   kall e.us (uOk e.pre e.post) &&
   sub ((e.post &&& e.pre) ^^^ e.post) (kmask2 e.us) &&
   kall e.us (usOk c e) && sub (e.pre ||| e.post) (umask e.us) &&
   walkCut c i e &&
-  (!(ll && int) ||
-    bif c.linR then decB c.wR e.pre e.post else walkOk c 1 i e e.psR c.rR c.rR) &&
-  (!lv || c.linD || walkOk c 2 i e e.psD c.rD c.rD)
+  (!(ll && int) || decB c.wR e.pre e.post ||
+    (!c.linR && nincB c.wR e.pre e.post && walkOk c 1 i e e.psR c.rR c.rR)) &&
+  (!lv || c.linD || !e.wit || decB c.wD e.pre e.post ||
+    (nincB c.wD e.pre e.post && walkOk c 2 i e e.psD c.rD c.rD))
 
 /-- The certificates of the transitions, in order. -/
 noncomputable def chkTrans (ll lv : Bool) : List PTrans → List BTrans → ℕ → Bool
@@ -355,7 +369,7 @@ noncomputable def evalB (m : ℕ) : ℕ → ℕ → Option ℕ
 end Checks
 
 /-- The empty transition, for the walks comparing two diagrams. -/
-def emptyT : BTrans := ⟨0, 0, [], .leaf, .leaf, .leaf, 0, 0⟩
+def emptyT : BTrans := ⟨0, 0, [], .leaf, .leaf, .leaf, 0, 0, true⟩
 
 variable (N : PNet)
 
@@ -1147,6 +1161,22 @@ theorem phiL_lt {ws : List ℕ} {m pre post : ℕ} (hen : sub pre m = true)
   have h2 := blt_true hd
   omega
 
+theorem le_sum_of_mem_nat {l : List ℕ} {x : ℕ} (h : x ∈ l) : x ≤ l.sum := by
+  induction l with
+  | nil => cases h
+  | cons y ys ih =>
+    rcases List.mem_cons.1 h with rfl | h
+    · simp
+    · have := ih h
+      simp only [List.sum_cons]
+      omega
+
+theorem phiL_le {ws : List ℕ} {m pre post : ℕ} (hen : sub pre m = true)
+    (hd : nincB ws pre post = true) : phiL ws ((m ^^^ pre) ||| post) 0 ≤ phiL ws m 0 := by
+  have h1 := phiL_fire ws (post := post) hen 0
+  have h2 := Nat.le_of_ble_eq_true hd
+  omega
+
 variable (N : PNet)
 
 theorem packed_step_iff {m m' : ℕ} {t : Fin N.trans.length} :
@@ -1315,24 +1345,29 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
   have hT : ∀ t : Fin N.trans.length, ∃ e, knth c.trans t = some e ∧ e.pre = N.preMask t ∧
       e.post = N.postMask t ∧ sub ((e.post &&& e.pre) ^^^ e.post) (kmask2 e.us) = true ∧
       TClaim c 0 t e e.psI c.rI c.rI 0 ∧
-      (ll = true → (N.tr t).internal = true →
-        (c.linR = true → decB c.wR e.pre e.post = true) ∧
-        (c.linR = false → TClaim c 1 t e e.psR c.rR c.rR 0)) ∧
-      (lv = true → c.linD = false → TClaim c 2 t e e.psD c.rD c.rD 0) := by
+      (ll = true → (N.tr t).internal = true → decB c.wR e.pre e.post = true ∨
+        (c.linR = false ∧ nincB c.wR e.pre e.post = true ∧
+          TClaim c 1 t e e.psR c.rR c.rR 0)) ∧
+      (lv = true → c.linD = false → e.wit = true → decB c.wD e.pre e.post = true ∨
+        (nincB c.wD e.pre e.post = true ∧ TClaim c 2 t e e.psD c.rD c.rD 0)) := by
     intro t
     obtain ⟨e, he, h1, h2, h3⟩ := htr t t.isLt
     simp only [Nat.zero_add, transOk, Bool.and_eq_true] at h3
     obtain ⟨⟨⟨⟨⟨⟨hu, hsub⟩, hus⟩, hcov⟩, hI⟩, hR⟩, hD⟩ := h3
     rw [kall_eq, List.all_eq_true] at hu hus
     refine ⟨e, by rw [knth_eq]; exact he, h1.symm, h2.symm, hsub,
-      walkCut_spec hN hv hcut hu hus hcov hI,
-      fun hll hint => ⟨fun hl => ?_, fun hl => walkOk_spec hN hv hu hus hcov ?_⟩,
-      fun hlv hl => walkOk_spec hN hv hu hus hcov ?_⟩
+      walkCut_spec hN hv hcut hu hus hcov hI, fun hll hint => ?_, fun hlv hl hw' => ?_⟩
     · have : (N.trans[t.val]).internal = true := hint
-      simpa [hll, this, hl] using hR
-    · have : (N.trans[t.val]).internal = true := hint
-      simpa [hll, this, hl] using hR
-    · simpa [hlv, hl] using hD
+      simp only [hll, this, Bool.and_self, Bool.not_true, Bool.false_or, Bool.or_eq_true,
+        Bool.and_eq_true, Bool.not_eq_true'] at hR
+      rcases hR with hR | ⟨⟨hl, hn⟩, hw⟩
+      · exact Or.inl hR
+      · exact Or.inr ⟨hl, hn, walkOk_spec hN hv hu hus hcov hw⟩
+    · simp only [hlv, hl, hw', Bool.not_true, Bool.false_or, Bool.or_eq_true,
+        Bool.and_eq_true] at hD
+      rcases hD with hD | ⟨hn, hw⟩
+      · exact Or.inl hD
+      · exact Or.inr ⟨hn, walkOk_spec hN hv hu hus hcov hw⟩
   have hT' : ∀ (j : ℕ) (e : BTrans), knth c.trans j = some e → ∃ t : Fin N.trans.length,
       t.val = j ∧ e.pre = N.preMask t ∧ e.post = N.postMask t := by
     intro j e he
@@ -1434,7 +1469,8 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       (dl = true ∨ (lv = true ∧ L.d ≠ 0)) →
       ∃ t : Fin N.trans.length, t.val = L.wit ∧ sub (N.preMask t) m = true ∧
         (lv = true → c.linD = true → L.d ≠ 0 →
-          decB c.wD (N.preMask t) (N.postMask t) = true) := by
+          decB c.wD (N.preMask t) (N.postMask t) = true) ∧
+        (lv = true → L.d ≠ 0 → ∀ e, knth c.trans t = some e → e.wit = true) := by
     intro m ℓ L _ hdat hok h1 hc
     simp only [leafOk, hdat, Bool.not_true, Bool.false_or, Bool.and_eq_true, Bool.or_eq_true,
       Bool.not_eq_true', Bool.or_eq_false_iff, Bool.and_eq_false_iff] at hok
@@ -1450,14 +1486,18 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       · rename_i e he
         obtain ⟨t, ht, hpre, hpost⟩ := hT' _ _ he
         simp only [Bool.and_eq_true] at hw
-        obtain ⟨hw, hdec⟩ := hw
-        refine ⟨t, ht, sub_iff.2 fun q hq => h1 q ?_, fun hlv hl hd => ?_⟩
+        obtain ⟨⟨hw, hdec⟩, hwt⟩ := hw
+        refine ⟨t, ht, sub_iff.2 fun q hq => h1 q ?_, fun hlv hl hd => ?_,
+          fun hlv hd e' he' => ?_⟩
         · rw [← hpre] at hq
           exact sub_iff.1 hw q hq
         · rw [← hpre, ← hpost]
           cases hd' : decB c.wD e.pre e.post
           · simp [hlv, hl, nbeq_false hd, hd'] at hdec
           · rfl
+        · rw [ht, he] at he'
+          cases he'
+          simpa [hlv, nbeq_false hd] using hwt
       · cases hw
   have hbisim := N.funBisimOn_packed hwf C hclosed hsafe
   have hJ₀ : SafeM N.M₀ ∧ C (N.pack N.M₀) := ⟨hM₀, hC₀⟩
@@ -1481,9 +1521,10 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       rintro m t m' - hint hst
       obtain ⟨hen, rfl⟩ := (packed_step_iff N).1 hst
       obtain ⟨e, -, hpre, hpost, -, -, hR, -⟩ := hT t
-      have hd := (hR hll hint).1 hlr
-      rw [hpre, hpost] at hd
-      exact phiL_lt hen hd
+      rcases hR hll hint with hd | ⟨h, -⟩
+      · rw [hpre, hpost] at hd
+        exact phiL_lt hen hd
+      · rw [hlr] at h; cases h
     let V : ℕ → ℕ := fun m =>
       if h : ∃ ℓ, Reach c c.rR m ℓ then
         ((kfind (Classical.choose h / 2) c.leaves).map BLeaf.r).getD 0 else 0
@@ -1492,18 +1533,41 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       have hex : ∃ ℓ, Reach c c.rR m ℓ := ⟨ℓ, hr⟩
       simp only [V, dite_eq_left hex]
       rw [(Classical.choose_spec hex).det hr, hk]; rfl
-    refine (hbisim.livelockFree_iff hJ₀).1 (LTS.LivelockFree.of_ranking C hC₀ hclosed V ?_)
+    -- the ranks are bounded by their sum `S`
+    let S := (c.leaves.toList.map fun x => x.2.r).sum
+    have hVS : ∀ m, V m ≤ S := by
+      intro m
+      simp only [V]
+      split
+      · cases hk : kfind (Classical.choose ‹∃ ℓ, Reach c c.rR m ℓ› / 2) c.leaves with
+        | none => simp
+        | some L =>
+          simp only [Option.map_some, Option.getD_some]
+          exact le_sum_of_mem_nat (List.mem_map.2 ⟨_, mem_of_kfind hk, rfl⟩)
+      · exact Nat.zero_le _
+    -- the linear rank first, then the rank diagram
+    refine (hbisim.livelockFree_iff hJ₀).1 (LTS.LivelockFree.of_ranking C hC₀ hclosed
+      (fun m => phiL c.wR m 0 * (S + 1) + V m) ?_)
     rintro m t m' ⟨hm, ℓ₀, hr0, hne0⟩ hint hst
     obtain ⟨hen, rfl⟩ := (packed_step_iff N).1 hst
+    obtain ⟨e, -, hpre, hpost, -, -, hR, -⟩ := hT t
+    rcases hR hll hint with hd | ⟨-, hn, hR⟩
+    · rw [hpre, hpost] at hd
+      have h1 := Nat.mul_le_mul_right (S + 1) (phiL_lt hen hd)
+      have h2 := hVS ((m ^^^ N.preMask t) ||| N.postMask t)
+      rw [Nat.succ_mul] at h1
+      omega
     obtain ⟨ℓ₁, hr, hlc0⟩ := cover_of_walk hN hv (hcovR hll hlr) hr0 hne0
     have hne := (leafCond_spec hlc0 hne0).1
-    obtain ⟨e, -, hpre, hpost, -, -, hR, -⟩ := hT t
     rw [← hpre] at hen
-    obtain ⟨-, ℓ₂, hr2, hlc⟩ := (hR hll hint).2 hlr m hen ℓ₁ hr hne
-    rw [hpre, hpost] at hr2
+    obtain ⟨-, ℓ₂, hr2, hlc⟩ := hR m hen ℓ₁ hr hne
+    rw [hpre, hpost] at hr2 hn
+    rw [hpre] at hen
     obtain ⟨-, la, lb, hla, hlb, hrk, -⟩ := leafCond_spec hlc hne
-    rw [hV _ _ _ hr hla, hV _ _ _ hr2 hlb]
-    exact hrk rfl
+    have h1 := Nat.mul_le_mul_right (S + 1) (phiL_le hen hn)
+    have h2 := hrk rfl
+    rw [← hV _ _ _ hr hla, ← hV _ _ _ hr2 hlb] at h2
+    omega
   · -- liveness
     refine (hbisim.live_iff hJ₀).1 fun t m hreach => ?_
     -- simulating a trace
@@ -1561,32 +1625,49 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       exact ⟨m', hsimR _ _ _ hsim, _, (packed_step_iff N).2 ⟨hen, rfl⟩⟩
     have hm := hreach.invariant hC₀ hclosed
     cases hld : c.linD
-    · -- by distances: the witness leads closer to a hub
-      have key : ∀ d, ∀ m ℓ L, C m → Reach c c.rD m ℓ → ℓ ≠ 0 →
-          kfind (ℓ / 2) c.leaves = some L → L.dat = true → L.d = d →
+    · -- by the linear potential and the distances, lexicographically: the witness decreases
+      -- the potential, or keeps it and leads closer to a hub
+      have key : ∀ p d, ∀ m ℓ L, C m → Reach c c.rD m ℓ → ℓ ≠ 0 →
+          kfind (ℓ / 2) c.leaves = some L → L.dat = true → phiL c.wD m 0 = p → L.d = d →
           ∃ m', N.packed.toLTS.Reachable m m' ∧ N.packed.toLTS.Enabled m' t := by
+        intro p
+        induction p using Nat.strong_induction_on with
+        | _ p IHp =>
         intro d
         induction d using Nat.strong_induction_on with
         | _ d IH =>
-        intro m ℓ L hm hr hne hk hdat hd
+        intro m ℓ L hm hr hne hk hdat hp hd
         by_cases hd0 : L.d = 0
         · exact hhub m ℓ L hm hr hne hk hdat hd0
         obtain ⟨L', hk', hok, h1, -⟩ := hleaf m ℓ hr hne
         rw [hk] at hk'; cases hk'
-        obtain ⟨w, hw, hen, -⟩ := hwit m ℓ L hk hdat hok h1 (Or.inr ⟨hlv, hd0⟩)
+        obtain ⟨w, hw, hen, -, hwt⟩ := hwit m ℓ L hk hdat hok h1 (Or.inr ⟨hlv, hd0⟩)
         have hC' := (hfire m w hm hen).2
-        obtain ⟨e, -, hpre, hpost, -, -, -, hD⟩ := hT w
+        -- from the next marking on
+        have next : phiL c.wD ((m ^^^ N.preMask w) ||| N.postMask w) 0 < p →
+            ∃ m', N.packed.toLTS.Reachable m m' ∧ N.packed.toLTS.Enabled m' t := by
+          intro hlt
+          obtain ⟨ℓ', L', hr', hne', hk'', hdat'⟩ := hdata (Or.inr hlv) _ hC'
+          obtain ⟨m', hr'', hen'⟩ := IHp _ hlt L'.d _ ℓ' L' hC' hr' hne' hk'' hdat' rfl rfl
+          exact ⟨m', LTS.Reachable.head ⟨w, (packed_step_iff N).2 ⟨hen, rfl⟩⟩ hr'', hen'⟩
+        obtain ⟨e, he, hpre, hpost, -, -, -, hD⟩ := hT w
+        rcases hD hlv hld (hwt hlv hd0 e he) with hdec | ⟨hn, hD⟩
+        · rw [hpre, hpost] at hdec
+          exact next (hp ▸ phiL_lt hen hdec)
+        rw [hpre, hpost] at hn
+        rcases Nat.lt_or_eq_of_le (hp ▸ phiL_le hen hn) with hlt | heq
+        · exact next hlt
         rw [← hpre] at hen
-        obtain ⟨-, ℓ₂, hr2, hlc⟩ := hD hlv hld m hen ℓ hr hne
+        obtain ⟨-, ℓ₂, hr2, hlc⟩ := hD m hen ℓ hr hne
         rw [hpre, hpost] at hr2
         rw [hpre] at hen
         obtain ⟨hne2, la, lb, hla, hlb, -, hdat2, hdd⟩ := leafCond_spec hlc hne
         rw [hk] at hla; cases hla
         obtain ⟨m', hr', hen'⟩ := IH lb.d (hd ▸ hdd rfl hw.symm hd0) _ ℓ₂ lb hC' hr2 hne2 hlb
-          (hdat2 (by omega)) rfl
+          (hdat2 (by omega)) heq rfl
         exact ⟨m', LTS.Reachable.head ⟨w, (packed_step_iff N).2 ⟨hen, rfl⟩⟩ hr', hen'⟩
       obtain ⟨ℓ, L, hr, hne, hk, hdat⟩ := hdata (Or.inr hlv) m hm
-      exact key _ m ℓ L hm hr hne hk hdat rfl
+      exact key _ _ m ℓ L hm hr hne hk hdat rfl rfl
     · -- by the linear potential, which the witness decreases
       have key : ∀ n, ∀ m, C m → phiL c.wD m 0 = n →
           ∃ m', N.packed.toLTS.Reachable m m' ∧ N.packed.toLTS.Enabled m' t := by
@@ -1599,7 +1680,7 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
         · exact hhub m ℓ L hm hr hne hk hdat hd0
         obtain ⟨L', hk', hok, h1, -⟩ := hleaf m ℓ hr hne
         rw [hk] at hk'; cases hk'
-        obtain ⟨w, -, hen, hdec⟩ := hwit m ℓ L hk hdat hok h1 (Or.inr ⟨hlv, hd0⟩)
+        obtain ⟨w, -, hen, hdec, -⟩ := hwit m ℓ L hk hdat hok h1 (Or.inr ⟨hlv, hd0⟩)
         have hC' := (hfire m w hm hen).2
         have hlt := phiL_lt hen (hdec hlv hld hd0)
         obtain ⟨m', hr', hen'⟩ := IH _ (hn ▸ hlt) _ hC' rfl

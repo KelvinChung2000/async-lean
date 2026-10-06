@@ -330,8 +330,9 @@ theorem fifo30_correct : (Examples.fifo 30 "in" "out").Correct := by
 markings by a decision diagram, an inductive invariant that the kernel checks transition by
 transition without enumerating a single marking (`PNet.of_checkBDD`).  It proves safety and
 deadlock freedom from a second diagram of witness transitions, and liveness and livelock
-freedom from weights on the places that the witnesses and the internal transitions decrease
-(or, when there are none, from diagrams of distances and ranks). -/
+freedom from weights on the places that the witnesses and the internal transitions decrease,
+completed where needed by diagrams of distances and ranks that count only the steps keeping
+the weights unchanged. -/
 
 /-- Ten philosophers never put two tokens on a place, from a symbolic invariant. -/
 theorem tenPhilosophers_safe : (Examples.philosophers 10 true).Safe := by

@@ -67,6 +67,14 @@ Latest additions:
   hub traces from shared forward layers, seven philosophers are proved `Correct`
   symbolically in 1.4 s instead of 47 s; a 20-stage FIFO and twelve philosophers, out of
   reach before, in 1.9 s and 3.8 s.
+* **Saturation.** The untrusted search computes reachable markings by saturation, and
+  backward closures by saturation constrained by them; traces from hubs come from chained
+  rounds of images. The search for a 40-stage FIFO takes 1.2 s instead of 21 s, and an
+  80-stage FIFO and forty philosophers are proved `Correct` symbolically in 14 and 15 s.
+* **Lexicographic measures.** When no linear potential decreases every witness (or every
+  internal transition), each may decrease it or keep it while decreasing a distance (or rank)
+  diagram (`PNet.phiL_le`). The diagrams then count only the steps keeping the potential, and
+  livelock freedom is decided completely: a cycle of internal steps keeps every potential.
 * **Faster kernel lookups.** `Fast.kfind` compares with `Nat.ble` instead of `Nat.blt`,
   which halves the cost of a lookup in the kernel and speeds up every fast checker.
 * **The state equation.** Deadlock freedom from a Farkas certificate refuting every dead

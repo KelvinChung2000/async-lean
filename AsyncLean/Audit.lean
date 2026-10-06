@@ -118,7 +118,7 @@ open LTS
 -- linear potentials; cuts and diagonal shortcuts of the joint walks
 #assert_standard_axioms
   PNet.funBisimOn_packed PNet.Reach.known PNet.Reach.congr PNet.Reach.leaf_mem PNet.phiL_fire
-  PNet.phiL_lt PNet.vars_inj PNet.fire_agree PNet.cutsOk_spec PNet.cut_reach PNet.walkCut_spec
+  PNet.phiL_lt PNet.phiL_le PNet.vars_inj PNet.fire_agree PNet.cutsOk_spec PNet.cut_reach PNet.walkCut_spec
   PNet.tclaim PNet.of_checkBDD PNet.correct_of_checkBDD
   PNet.correct_of_checkBDD_lf PNet.deadlockFree_of_checkBDD PNet.livelockFree_of_checkBDD
   PNet.live_of_checkBDD PNet.safe_of_checkBDD
