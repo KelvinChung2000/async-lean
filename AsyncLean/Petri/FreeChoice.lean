@@ -14,8 +14,10 @@ environment) are free choice.
 
 **Commoner's theorem** (sufficiency): *in an ordinary free-choice net, if every non-empty
 siphon contains an initially marked trap, the net is live*
-(`FreeChoice.live_of_siphonTrap`).  Together with the decidability of the siphon–trap
-property (`Net.SiphonTrapProperty`), this gives a purely structural liveness proof.
+(`Net.live_of_siphonTrap`).  Together with the decidability of the siphon–trap
+property (`Net.SiphonTrapProperty`), this gives a purely structural liveness proof.  The
+converse, and hence the full theorem `Net.live_iff_siphonTrap`, is in
+`AsyncLean.Petri.FreeChoiceNecessity`.
 
 Proof outline.  If the net were not live, choose a reachable marking `M` whose set of dead
 transitions is maximal; every other transition is then live from `M`.  In a free-choice net

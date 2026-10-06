@@ -5,6 +5,7 @@ import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
 import AsyncLean.Petri.SiphonCheck
+import AsyncLean.Petri.FreeChoiceNecessity
 import AsyncLean.Circuit.QDI
 import AsyncLean.Circuit.Packed
 import AsyncLean.Petri.Invariant
@@ -82,6 +83,7 @@ open LTS
 #assert_standard_axioms
   Net.live_of_siphonTrap Net.deadlockFree_of_siphonTrap_fc Net.le_of_deadAt
   SiphonCheck.siphonTrap_of_check SiphonCheck.freeChoice_of_checkFC
+  Net.siphonTrap_of_live Net.live_iff_siphonTrap
 
 -- Compositional verification
 #assert_standard_axioms

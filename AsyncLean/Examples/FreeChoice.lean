@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Auto.Structural
+import AsyncLean.Petri.FreeChoiceNecessity
 import AsyncLean.Examples.Compositional
 import AsyncLean.Examples.Philosophers
 import AsyncLean.AxiomAudit
@@ -49,6 +50,21 @@ def ctrlNFC : Net (Fin 6) (Fin 6) where
 
 theorem ctrlNFC_not_freeChoice : ¬ ctrlNFC.FreeChoice := by decide
 
+/-! ### Refuting liveness
+
+By the converse of Commoner's theorem (`Net.live_iff_siphonTrap`), a free-choice net in which
+some siphon contains no initially marked trap is *not* live.  Here a request either completes
+(`a`, then `c` returns to the start) or leaks into a sink (`b`): the siphon `{0, 1}` contains
+no trap at all. -/
+
+def leak : Net (Fin 3) (Fin 3) where
+  pre := ![![1, 0, 0], ![1, 0, 0], ![0, 1, 0]]
+  post := ![![0, 1, 0], ![0, 0, 1], ![1, 0, 0]]
+
+theorem leak_not_live : ¬ leak.lts.Live ![1, 0, 0] := by
+  rw [Net.live_iff_siphonTrap (by decide) (by decide) (by decide)]
+  decide
+
 /-! ### Larger nets
 
 The siphon–trap property is checked from a branching certificate on bit masks, not by
@@ -64,6 +80,7 @@ theorem philosophers8_deadlockFree :
     (philosophers 8 true).toNet.lts.DeadlockFree (philosophers 8 true).M₀ := by
   async_structural
 
-#assert_standard_axioms ctrl_live ctrl_deadlockFree fifo20_live philosophers8_deadlockFree
+#assert_standard_axioms ctrl_live ctrl_deadlockFree leak_not_live fifo20_live
+  philosophers8_deadlockFree
 
 end AsyncLean.Examples.FreeChoice
