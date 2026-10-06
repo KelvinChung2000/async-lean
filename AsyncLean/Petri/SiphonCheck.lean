@@ -384,15 +384,23 @@ def maxTrap (ts : List (ℕ × ℕ)) : ℕ → ℕ → ℕ
   | 0, Y => Y
   | k + 1, Y => let Z := shrinkT ts Y; if Z == Y then Y else maxTrap ts k Z
 
-/-- Search for a certificate; `Except.error S` returns a non-empty siphon `S` (as a mask)
-containing no initially marked trap.  Splits follow the siphon condition: a transition putting
-tokens into the included places must take tokens from the siphon. -/
-def search (m : ℕ) (ts : List (ℕ × ℕ)) (m0 : ℕ) : ℕ → ℕ → ℕ → Except ℕ Tree
-  | 0, I, _ => .error I
-  | fuel + 1, I, X =>
-    if emptyRegion m ts I X then .ok .empty
-    else if maxTrap ts m I &&& m0 != 0 then .ok (.trap (maxTrap ts m I))
-    else if trapsRegion m ts m0 I X then .ok .traps
+/-- Why the search failed: a bad siphon, or the certificate grew beyond the budget. -/
+inductive Failure where
+  | badSiphon (S : ℕ)
+  | budget
+
+/-- Search for a certificate with at most `budget` nodes, returning it with the unused
+budget; fails with a non-empty siphon `S` (as a mask) containing no initially marked trap, or
+when the budget runs out.  Splits follow the siphon condition: a transition putting tokens
+into the included places must take tokens from the siphon. -/
+def search (m : ℕ) (ts : List (ℕ × ℕ)) (m0 : ℕ) :
+    ℕ → ℕ → ℕ → ℕ → Except Failure (Tree × ℕ)
+  | 0, _, I, _ => .error (.badSiphon I)
+  | _, 0, _, _ => .error .budget
+  | fuel + 1, budget + 1, I, X =>
+    if emptyRegion m ts I X then .ok (.empty, budget)
+    else if maxTrap ts m I &&& m0 != 0 then .ok (.trap (maxTrap ts m I), budget)
+    else if trapsRegion m ts m0 I X then .ok (.traps, budget)
     else
       let R := maxSiphon ts m X
       -- prefer a candidate that closes a marked trap, then a marked one, then the lowest
@@ -404,18 +412,20 @@ def search (m : ℕ) (ts : List (ℕ × ℕ)) (m0 : ℕ) : ℕ → ℕ → ℕ �
         | some e => pick (e.1 &&& R)
         | none => if I == 0 then pick R else none
       match p? with
-      | none => .error (if I == 0 then R else I)
+      | none => .error (.badSiphon (if I == 0 then R else I))
       | some p => do
-        let l ← search m ts m0 fuel (I ||| 2 ^ p) X
-        let r ← search m ts m0 fuel I (diff X (2 ^ p))
-        return .split p l r
+        let (l, b) ← search m ts m0 fuel budget (I ||| 2 ^ p) X
+        let (r, b) ← search m ts m0 fuel b I (diff X (2 ^ p))
+        return (.split p l r, b)
 
 variable (N) in
-/-- A certificate for `N.SiphonTrapProperty M₀`, or a bad siphon (as a list of places). -/
-def mkCert (M₀ : Marking (Fin m)) : Except (List ℕ) Tree :=
-  match search m (table N) (markMask M₀) (2 * m + 2) 0 (ofPred m fun _ => true) with
-  | .ok t => .ok t
-  | .error R => .error ((List.range m).filter R.testBit)
+/-- A certificate for `N.SiphonTrapProperty M₀` with at most `budget` nodes; fails with a bad
+siphon (as a list of places), or `none` when the budget runs out. -/
+def mkCert (M₀ : Marking (Fin m)) (budget : ℕ := 5000) : Except (Option (List ℕ)) Tree :=
+  match search m (table N) (markMask M₀) (2 * m + 2) budget 0 (ofPred m fun _ => true) with
+  | .ok (t, _) => .ok t
+  | .error (.badSiphon R) => .error (some ((List.range m).filter R.testBit))
+  | .error .budget => .error none
 
 end SiphonCheck
 

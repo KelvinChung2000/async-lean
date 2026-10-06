@@ -80,7 +80,26 @@ theorem philosophers8_deadlockFree :
     (philosophers 8 true).toNet.lts.DeadlockFree (philosophers 8 true).M₀ := by
   async_structural
 
+/-- A ring of `k` stages, each forking into a free choice between `a` and `b` in parallel with
+a second branch, joined before the next stage.  It has `2 ^ k` minimal siphons, so siphon–trap
+certificates grow exponentially (the property is co-NP-complete in general). -/
+def fcRing (k : ℕ) : PNet where
+  places := 4 * k
+  trans := (List.range k).flatMap fun i =>
+    let c := 4 * i; let p := 4 * i + 1; let q := 4 * i + 2; let s := 4 * i + 3
+    let c' := 4 * ((i + 1) % k)
+    [ { name := s!"fork{i}", pre := [c], post := [p, q] },
+      { name := s!"a{i}", pre := [p], post := [s] },
+      { name := s!"b{i}", pre := [p], post := [s] },
+      { name := s!"join{i}", pre := [s, q], post := [c'] } ]
+  init := (List.range (4 * k)).map fun j => if j = 0 then 1 else 0
+
+/-- `async_structural` gives up on the certificate once it exceeds its size budget and
+falls back on the (here small) state space. -/
+theorem fcRing20_live : (fcRing 20).toNet.lts.Live (fcRing 20).M₀ := by
+  async_structural
+
 #assert_standard_axioms ctrl_live ctrl_deadlockFree leak_not_live fifo20_live
-  philosophers8_deadlockFree
+  philosophers8_deadlockFree fcRing20_live
 
 end AsyncLean.Examples.FreeChoice

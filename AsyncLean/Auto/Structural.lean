@@ -6,6 +6,7 @@ import AsyncLean.Import.Basic
 import AsyncLean.Petri.Invariant
 import AsyncLean.MarkedGraph.Basic
 import AsyncLean.Petri.SiphonCheck
+import AsyncLean.Checker.Tactic
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -224,13 +225,31 @@ def structural : TacticM Unit := do
             | fail "the places must be `Fin m`"
           let some n := (← whnf T).getAppFnArgs |> fun | (``Fin, #[n]) => some n | _ => none
             | fail "the transitions must be `Fin n`"
-          let res : Except (List ℕ) SiphonCheck.Tree ← evalStruct (mkApp2 (mkConst ``Except [0, 0])
-              (mkApp (mkConst ``List [0]) (mkConst ``Nat)) (mkConst ``SiphonCheck.Tree))
-            (← mkAppOptM ``SiphonCheck.mkCert #[m, none, net, M₀])
-          let tree ← match res with
-            | .ok t => pure t
-            | .error S => fail s!"the siphon {S} is not empty and contains no initially marked \
-                trap: Commoner's siphon–trap condition fails (a free-choice net is then not live)"
+          let res : Except (Option (List ℕ)) SiphonCheck.Tree ← evalStruct
+            (mkApp2 (mkConst ``Except [0, 0])
+              (mkApp (mkConst ``Option [0]) (mkApp (mkConst ``List [0]) (mkConst ``Nat)))
+              (mkConst ``SiphonCheck.Tree))
+            (← mkAppOptM ``SiphonCheck.mkCert #[m, none, net, M₀, mkNatLit 5000])
+          let tree? ← match res with
+            | .ok t => pure (some t)
+            | .error (some S) => fail s!"the siphon {S} is not empty and contains no initially \
+                marked trap: Commoner's siphon–trap condition fails (a free-choice net is then \
+                not live)"
+            | .error none =>
+              -- the siphon–trap property is co-NP-complete and this net needs a large
+              -- certificate (e.g. exponentially many minimal siphons): use the state space
+              -- (or its counter abstraction) instead
+              let isPNet := match net.getAppFnArgs with
+                | (``PNet.toNet, _) => true
+                | _ => false
+              unless isPNet do
+                fail "the siphon–trap certificate exceeds its size budget; state the goal for \
+                  a `PNet` to fall back on model checking"
+              try Tactic.asyncDecide 100000
+              catch e => fail s!"the siphon–trap certificate exceeds its size budget, and model \
+                checking failed too: {← e.toMessageData.toString}"
+              pure none
+          let some tree := tree? | return
           let ts : List (ℕ × ℕ) ← evalStruct (toTypeExpr (List (ℕ × ℕ)))
             (← mkAppOptM ``SiphonCheck.table #[m, none, net])
           let m0 : ℕ ← evalStruct (mkConst ``Nat) (← mkAppOptM ``SiphonCheck.markMask #[m, M₀])
