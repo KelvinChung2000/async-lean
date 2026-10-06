@@ -56,6 +56,12 @@ open LTS
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
 
+-- Bit-packed circuit checking
+#assert_standard_axioms
+  Circuit.bisimP Circuit.correct_of_checkCertP Circuit.correct_of_checkCertHomeP
+  Circuit.speedIndependent_of_checkCertP Circuit.speedIndependent_of_checkPCertP
+  ExplicitLTS.persistent_of_checkPCert
+
 -- Interconnection networks with dynamic routing
 #assert_standard_axioms
   Network.deadlockFree_of_escape Network.deadlockFree_of_cdg Network.movable_of_escape
@@ -76,11 +82,6 @@ open LTS
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
   Network.wormholeCorrect_of_wcheckCert
--- Bit-packed circuit checking
-#assert_standard_axioms
-  Circuit.bisimP Circuit.correct_of_checkCertP Circuit.correct_of_checkCertHomeP
-  Circuit.speedIndependent_of_checkCertP Circuit.speedIndependent_of_checkPCertP
-  ExplicitLTS.persistent_of_checkPCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms

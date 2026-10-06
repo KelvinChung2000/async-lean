@@ -37,10 +37,6 @@
   adaptive, Duato, bounded-misrouting and deflection meshes, under store-and-forward and
   wormhole switching. A tutorial section on routing.
 
-## 0.2.0
-
-Latest additions:
-
 * **Partial-order reduction.** Stubborn sets preserve deadlocks (`Net.reachable_red_of_dead`);
   `async_decide` checks deadlock freedom on a reduced state space whose stubborn sets the
   kernel verifies marking by marking (`PNet.deadlockFree_of_checkPOR`).
@@ -108,6 +104,8 @@ Latest additions:
   circuits evaluated to literals once, and labelled-successor certificates for persistence
   (about 3× faster on wired circuits).
 * **Design files tracked by Lake** through an `input_dir` target.
+
+## 0.2.0
 
 New models and theory:
 

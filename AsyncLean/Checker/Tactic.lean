@@ -9,7 +9,6 @@ import AsyncLean.Circuit.Packed
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
-import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
@@ -17,6 +16,7 @@ import AsyncLean.Checker.FastPORLive
 import AsyncLean.Checker.BDDGen
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
+import AsyncLean.Routing.WormholeCheck
 
 /-!
 # The `async_decide` tactic
@@ -1153,6 +1153,19 @@ elab_rules : tactic
         options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
       (Tactic.asyncDecide fuel cap)
 
+/-- `async_bdd` proves deadlock freedom, livelock freedom, liveness, correctness or safety of
+a concrete safe `PNet` from a symbolic certificate: a decision diagram of an inductive
+invariant with ranks, distances and witnesses, checked by the kernel without enumerating the
+markings (`PNet.of_checkBDD`).  `(fuel := n)` bounds the number of diagram nodes. -/
+syntax (name := asyncBddStx) "async_bdd" (" (" &"fuel" " := " num ")")? : tactic
+
+elab_rules : tactic
+  | `(tactic| async_bdd $[ (fuel := $n)]?) =>
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
+      (Tactic.asyncBDD (n.map (·.getNat) |>.getD 300000))
+
 /-- `async_routing` proves `N.Correct`, `N.DeadlockFree` or `N.LivelockFree` for a concrete
 interconnection network `N` with dynamic routing, like `async_decide`.
 `async_routing (escape := R₁)` uses the routing subfunction `R₁` as the escape channels of
@@ -1188,18 +1201,6 @@ elab_rules : tactic
         let route ← mkAppM ``Network.route #[N]
         Tactic.decideRouting goal N [route, ← mkAppM ``Network.firstHop #[N]] route p fuel
           "async_routing"
-/-- `async_bdd` proves deadlock freedom, livelock freedom, liveness, correctness or safety of
-a concrete safe `PNet` from a symbolic certificate: a decision diagram of an inductive
-invariant with ranks, distances and witnesses, checked by the kernel without enumerating the
-markings (`PNet.of_checkBDD`).  `(fuel := n)` bounds the number of diagram nodes. -/
-syntax (name := asyncBddStx) "async_bdd" (" (" &"fuel" " := " num ")")? : tactic
-
-elab_rules : tactic
-  | `(tactic| async_bdd $[ (fuel := $n)]?) =>
-    withTheReader Core.Context (fun ctx => { ctx with
-        maxRecDepth := max ctx.maxRecDepth 1000000
-        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
-      (Tactic.asyncBDD (n.map (·.getNat) |>.getD 300000))
 
 /-- `async_minimize` (or `async_minimize right`) replaces the left (right) component of a
 parallel composition of explicit LTSs by its minimal quotient modulo branching bisimulation,

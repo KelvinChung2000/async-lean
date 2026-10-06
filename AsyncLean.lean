@@ -62,9 +62,9 @@ import AsyncLean.Examples.Structural
 import AsyncLean.Examples.Fairness
 import AsyncLean.Examples.FreeChoice
 import AsyncLean.Examples.QDI
-import AsyncLean.Examples.Routing
 import AsyncLean.Examples.Step
 import AsyncLean.Examples.Unbounded
 import AsyncLean.Examples.Scale
 import AsyncLean.Examples.Symbolic
+import AsyncLean.Examples.Routing
 import AsyncLean.Tutorial
