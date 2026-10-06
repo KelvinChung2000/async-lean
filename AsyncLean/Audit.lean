@@ -8,6 +8,8 @@ import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Petri.FreeChoiceNecessity
 import AsyncLean.Circuit.QDI
 import AsyncLean.Circuit.Packed
+import AsyncLean.Petri.Step
+import AsyncLean.Circuit.Step
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -78,6 +80,12 @@ open LTS
 #assert_standard_axioms
   Circuit.speedIndependent_of_qdi Circuit.correct_of_qdi Circuit.deadlockFree_of_withWires
   Circuit.livelockFree_of_withWires Circuit.reachable_settle Circuit.reachable_proj
+
+-- Concurrent firing: step semantics
+#assert_standard_axioms
+  Net.stepLts_reachable_iff Net.stepLts_deadlockFree_iff Net.stepLts_livelockFree_iff
+  Net.stepLive_iff Circuit.stepLts_reachable_iff Circuit.stepLts_deadlockFree_iff
+  Circuit.stepLts_livelockFree_iff Circuit.stepLive_iff Circuit.correct_iff_stepCorrect
 
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms

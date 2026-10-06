@@ -29,6 +29,8 @@ import AsyncLean.Petri.FreeChoiceNecessity
 import AsyncLean.Circuit.Wires
 import AsyncLean.Circuit.QDI
 import AsyncLean.Circuit.Packed
+import AsyncLean.Petri.Step
+import AsyncLean.Circuit.Step
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.Basic
 import AsyncLean.Routing.Fairness
@@ -50,4 +52,5 @@ import AsyncLean.Examples.Fairness
 import AsyncLean.Examples.FreeChoice
 import AsyncLean.Examples.QDI
 import AsyncLean.Examples.Routing
+import AsyncLean.Examples.Step
 import AsyncLean.Tutorial
