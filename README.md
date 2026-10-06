@@ -416,21 +416,23 @@ theorem twoFifos_ok : <deadlock freedom ∧ livelock freedom of the composition>
   and the kernel's inner loops are written with recursors over natural numbers
   (`Checker/Fast.lean`, `PNet.checkFast`); a check costs a few milliseconds per state.
 
-Measured end to end (search and kernel check), on one core:
+Measured end to end (search and kernel check), each goal in its own file, on one core
+(timings vary by about 10–20% from run to run):
 
 | Goal | Method | Time |
 |---|---|---|
 | 7 philosophers `Correct` (408 states) | partial-order reduction | 0.5 s |
-| 20-stage FIFO `Correct` (~10⁶ states) | partial-order reduction | 0.9 s |
-| 40-stage FIFO `Correct` (2⁴⁰ states) | partial-order reduction | 4.8 s |
-| 20 philosophers `Correct` | partial-order reduction | 3.3 s |
-| 12 philosophers deadlock free | state equation (no exploration) | 1.7 s |
-| 60-stage FIFO safe | packed place invariants | 4 s |
-| 12 philosophers `Correct` | symbolic certificate | 1.7 s |
-| 40-stage FIFO `Correct` | symbolic certificate | 2.8 s |
-| 20 philosophers `Correct` | symbolic certificate | 4.4 s |
-| 80-stage FIFO `Correct` (2⁸⁰ markings) | symbolic certificate | 14 s |
-| 40 philosophers `Correct` | symbolic certificate | 15 s |
+| 20-stage FIFO `Correct` (~10⁶ states) | partial-order reduction | 1.1 s |
+| 40-stage FIFO `Correct` (2⁴⁰ states) | partial-order reduction | 4.7 s |
+| 20 philosophers `Correct` | partial-order reduction | 4.4 s |
+| 12 philosophers deadlock free | state equation (no exploration) | 1.9 s |
+| 60-stage FIFO safe | packed place invariants | 4.7 s |
+| 60-stage FIFO safe | symbolic certificate | 3.3 s |
+| 12 philosophers `Correct` | symbolic certificate | 2.1 s |
+| 40-stage FIFO `Correct` | symbolic certificate | 2.5 s |
+| 20 philosophers `Correct` | symbolic certificate | 4.2 s |
+| 80-stage FIFO `Correct` (2⁸⁰ markings) | symbolic certificate | 11 s |
+| 40 philosophers `Correct` | symbolic certificate | 13 s |
 | 4 handshakes `Correct` (lexicographic measures) | symbolic certificate | 2.1 s |
 
 ## 9. Using a result in a larger proof

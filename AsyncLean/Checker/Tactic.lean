@@ -405,8 +405,6 @@ def bcertE (c : PNet.BCert) : Expr :=
   let n3 := prodT natT n2
   let n4 := prodT natT n3
   let lnat := listT natT
-  let nodeE := fun (k, (b : PNet.BNode)) => pairE natT (mkConst ``PNet.BNode) (n k)
-    (mkAppN (mkConst ``PNet.BNode.mk) #[n b.lvl, n b.var, n b.lo, n b.hi, n b.k1, n b.k0])
   let leafE := fun (k, (l : PNet.BLeaf)) => pairE natT (mkConst ``PNet.BLeaf) (n k)
     (mkAppN (mkConst ``PNet.BLeaf.mk) #[n l.wit, n l.d, n l.r, n l.k1, n l.k0,
       listE lnat (l.traces.map fun tr => listE natT (tr.map n)), boolE l.dat])
@@ -416,7 +414,7 @@ def bcertE (c : PNet.BCert) : Expr :=
     listE n3 (t.us.map fun (v, l, k) => pairE natT n2 (n v) (pairE natT natT (n l) (n k))),
     treeE n4 tripE t.psI, treeE n4 tripE t.psR, treeE n4 tripE t.psD, n t.lo, n t.hi, boolE t.wit]
   mkAppN (mkConst ``PNet.BCert.mk) #[n c.H, n c.rI, n c.rR, n c.rD,
-    treeE (prodT natT (mkConst ``PNet.BNode)) nodeE c.nodes,
+    n c.ncnt, n c.nw, n c.kw, n c.nlvl, n c.nvar, n c.nlo, n c.nhi, n c.nk1, n c.nk0,
     treeE (prodT natT (mkConst ``PNet.BLeaf)) leafE c.leaves,
     listE (mkConst ``PNet.BTrans) (c.trans.map transE), treeE n4 tripE c.covR,
     treeE n4 tripE c.covD, boolE c.linR, natsE c.wR, boolE c.linD, natsE c.wD,

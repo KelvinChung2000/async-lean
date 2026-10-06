@@ -66,7 +66,12 @@
 * **Saturation.** The untrusted search computes reachable markings by saturation, and
   backward closures by saturation constrained by them; traces from hubs come from chained
   rounds of images. The search for a 40-stage FIFO takes 1.2 s instead of 21 s, and an
-  80-stage FIFO and forty philosophers are proved `Correct` symbolically in 14 and 15 s.
+  80-stage FIFO and forty philosophers are proved `Correct` symbolically in 11 and 13 s.
+* **Cheaper symbolic checks.** Diagram nodes are packed into one number per field, so the
+  kernel reads a node with a few shifts instead of a search (`PNet.nget`); the decrease of
+  the potential is checked once per witness transition instead of once per leaf; the search
+  finds the rank and the potential with one linear program when it can, and walks traces
+  back by galloping search. Symbolic proofs are 5–25% faster.
 * **Lexicographic measures.** When no linear potential decreases every witness (or every
   internal transition), each may decrease it or keep it while decreasing a distance (or rank)
   diagram (`PNet.phiL_le`). The diagrams then count only the steps keeping the potential, and

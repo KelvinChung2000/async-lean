@@ -361,8 +361,20 @@ def traces (C : Ctx) (h : ℕ) (fuel : ℕ) : ExceptT String M (List (List ℕ))
     let mut i := i0
     -- invariant: `x` is in `snaps[i]`
     while i > 0 do
-      while i > 0 && (← mem C snaps[i - 1]!.1 x) do i := i - 1
+      -- the sets grow: the first one holding `x`, by galloping back, then bisection
+      let mut step := 1
+      let mut lo := i
+      while lo > 0 && (← mem C snaps[lo - 1]!.1 x) do
+        i := lo - 1
+        lo := if step < lo then lo - step else 0
+        step := 2 * step
       if i == 0 then break
+      -- now `x` is in `snaps[i]`, and not in `snaps[lo - 1]` unless `lo = 0`
+      lo := if lo == 0 then 0 else lo - 1
+      if lo == 0 && (← mem C snaps[0]!.1 x) then break
+      while lo + 1 < i do
+        let mid := (lo + i) / 2
+        if ← mem C snaps[mid]!.1 x then i := mid else lo := mid
       let t' := snaps[i]!.2
       match predOf C t' x with
       | some y =>
@@ -473,31 +485,9 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
     let mut en := 0
     for t in [0:nT] do en ← bor en (← cube C.σen[t]!)
     if dl && (← bdiff R en) != 0 then throw "deadlock"
-    -- ranks: a linear rank if one exists; otherwise a linear rank that the internal transitions
-    -- never increase, then layers all of whose successors by the others (which keep it) lie in
-    -- lower layers
     let internals := (List.range nT).filter fun t => C.internal[t]!
-    let wR := if ll then linRank N internals else none
-    let linR := wR.isSome
-    let wRx : List ℕ := wR.getD (if ll then linLex N internals else [])
-    let flat := fun (t : ℕ) => C.internal[t]! && !decT N wRx t
-    let mut rankSets : Array ℕ := #[R]
-    if ll && !linR then
-      let mut ienab := 0
-      for t in [0:nT] do
-        if flat t then ienab ← bor ienab (← cube C.σen[t]!)
-      let mut Z ← bdiff R ienab
-      rankSets := #[Z]
-      while Z != R do
-        chk
-        let rest ← bdiff R Z
-        let mut bad := 0
-        for t in [0:nT] do
-          if flat t then bad ← bor bad (← preimg C t rest)
-        let Z' ← bor Z (← bdiff R bad)
-        if Z' == Z then throw "livelock"
-        rankSets := rankSets.push (← bdiff Z' Z)
-        Z := Z'
+    -- a linear rank found together with the potential of the witnesses
+    let mut wRU : Option (List ℕ) := none
     -- witnesses are preferred in the order in which the diagram decides them
     let worder := (Array.range nT).qsort fun a b =>
       let k := fun t => C.pre[t]!.foldl (fun m p => max m C.lam[p]!) 0
@@ -554,9 +544,14 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
         return if (← bdiff R assigned) == 0 then some lparts else none
       -- first guess: decrease every transition disabled at all hubs
       let atHub := fun (t : ℕ) => hubs.any fun h => C.pre[t]!.all fun p => h.testBit p
-      let guess ← match linRank N ((List.range nT).filter fun t => !atHub t) with
-        | some w => pure ((← linParts w).map (w, ·))
-        | none => pure none
+      let gs := (List.range nT).filter fun t => !atHub t
+      -- with livelock freedom too, one linear program for both potentials if possible
+      let wU := if ll then linRank N (gs ++ internals.filter (· ∉ gs)) else none
+      if wU.isSome then wRU := wU
+      let mut guess := none
+      if let some w := wU then guess := (← linParts w).map (w, ·)
+      if guess.isNone then
+        if let some w := linRank N gs then guess := (← linParts w).map (w, ·)
       match guess with
       | some (w, lparts) =>
         parts := lparts
@@ -637,6 +632,30 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
           aR ← bor aR y
       parts := if (← dsize full) ≤ (← dsize onR) then full else onR
     else parts := #[(R, 0, 0, none)]
+    -- ranks: a linear rank if one exists; otherwise a linear rank that the internal transitions
+    -- never increase, then layers all of whose successors by the others (which keep it) lie in
+    -- lower layers
+    let wR := if ll then wRU <|> linRank N internals else none
+    let linR := wR.isSome
+    let wRx : List ℕ := wR.getD (if ll then linLex N internals else [])
+    let flat := fun (t : ℕ) => C.internal[t]! && !decT N wRx t
+    let mut rankSets : Array ℕ := #[R]
+    if ll && !linR then
+      let mut ienab := 0
+      for t in [0:nT] do
+        if flat t then ienab ← bor ienab (← cube C.σen[t]!)
+      let mut Z ← bdiff R ienab
+      rankSets := #[Z]
+      while Z != R do
+        chk
+        let rest ← bdiff R Z
+        let mut bad := 0
+        for t in [0:nT] do
+          if flat t then bad ← bor bad (← preimg C t rest)
+        let Z' ← bor Z (← bdiff R bad)
+        if Z' == Z then throw "livelock"
+        rankSets := rankSets.push (← bdiff Z' Z)
+        Z := Z'
     -- the diagrams: the invariant (leaf 1), the ranks (leaves `2 + k`) and the data (leaves
     -- `dbase + i`)
     let nR := rankSets.size
@@ -760,9 +779,15 @@ def mkBDDCert (N : PNet) (dl ll lv : Bool) (fuel : ℕ := 300000) :
       trans := trans ++ [⟨mask tp.pre, mask tp.post, us.toList, psI, psR, psD, lo, hi, wit⟩]
     let (covR, k4, _) := if ll && !linR then walk 0 #[] 0 [(rI', rR')] else (.leaf, 0, true)
     let (covD, k5, _) := if dl || lv then walk 3 #[] 0 [(rI', rD')] else (.leaf, 0, true)
-    let nodeT := nodesL.toArray
+    -- the packed node table: record `k` holds level, place, children and known places
+    let maxv := nodesL.foldl (fun m (_, b) => max m (max b.lvl (max b.var (max b.lo b.hi)))) n
+    let nw := Nat.log2 maxv + 1
+    let kw := N.places
+    let pack := fun (w : ℕ) (f : BNode → ℕ) =>
+      nodesL.toArray.foldr (fun (_, b) acc => (acc <<< w) ||| f b) 0
     let leafT := leavesL.toArray.qsort fun x y => x.1 < y.1
-    return (⟨n, rI', rR', rD', Fast.buildTree nodeT (nodeT.size + 1) 0 nodeT.size,
+    return (⟨n, rI', rR', rD', nodesL.length, nw, kw, pack nw (·.lvl), pack nw (·.var),
+      pack nw (·.lo), pack nw (·.hi), pack kw (·.k1), pack kw (·.k0),
       Fast.buildTree leafT (leafT.size + 1) 0 leafT.size, trans, covR, covD,
       linR, wRx, wD.isSome, wD.getD wX, C.π.toList, C.lam.toList, cuts.toList⟩,
       [← size rI, ← size rR, ← size rD, order.size, nTriples + k4 + k5])

@@ -95,14 +95,25 @@ structure BTrans where
   deriving Inhabited
 
 /-- A symbolic certificate.  References: `2 i` is leaf `i` (leaf `0`: outside the invariant),
-`2 k + 1` is node `k`; nodes have levels below `H`. -/
+`2 k + 1` is node `k`; nodes have levels below `H`.  The nodes are packed, one number per
+field (`PNet.nget`): the level, place and children of node `k` are its `k`-th field of `nw`
+bits in `nlvl`, `nvar`, `nlo` and `nhi`, and its known places its `k`-th field of `kw` bits
+in `nk1` and `nk0`, so that the kernel reads a node with a few shifts instead of a search. -/
 structure BCert where
   H : ℕ
   /-- roots of the invariant, rank and data diagrams -/
   rI : ℕ
   rR : ℕ
   rD : ℕ
-  nodes : BTree (ℕ × BNode)
+  ncnt : ℕ
+  nw : ℕ
+  kw : ℕ
+  nlvl : ℕ
+  nvar : ℕ
+  nlo : ℕ
+  nhi : ℕ
+  nk1 : ℕ
+  nk0 : ℕ
   leaves : BTree (ℕ × BLeaf)
   trans : List BTrans
   /-- the walks showing that the rank and data diagrams cover the invariant -/
@@ -154,7 +165,19 @@ noncomputable def decB (ws : List ℕ) (pre post : ℕ) : Bool :=
 noncomputable def nincB (ws : List ℕ) (pre post : ℕ) : Bool :=
   Nat.ble (phiL ws post 0) (phiL ws pre 0)
 
+/-- Bits `o` to `o + w - 1` of `x`. -/
+noncomputable def bits (x o w : ℕ) : ℕ :=
+  Nat.land (Nat.shiftRight x o) (Nat.sub (Nat.pow 2 w) 1)
+
 variable (c : BCert)
+
+/-- Node `k`, from the packed tables. -/
+noncomputable def nget (k : ℕ) : Option BNode :=
+  bif Nat.blt k c.ncnt then
+    some ⟨bits c.nlvl (Nat.mul k c.nw) c.nw, bits c.nvar (Nat.mul k c.nw) c.nw,
+      bits c.nlo (Nat.mul k c.nw) c.nw, bits c.nhi (Nat.mul k c.nw) c.nw,
+      bits c.nk1 (Nat.mul k c.kw) c.kw, bits c.nk0 (Nat.mul k c.kw) c.kw⟩
+  else none
 
 /-- The mask of the places listed. -/
 noncomputable def umask (us : List (ℕ × ℕ × ℕ)) : ℕ :=
@@ -178,21 +201,21 @@ noncomputable def varAt (vars : List ℕ) (L p : ℕ) : Bool :=
 
 /-- The node at a reference; a leaf is a pseudo-node at level `H` whose children are itself. -/
 noncomputable def rinfo (r : ℕ) : Option BNode :=
-  bif Nat.beq (Nat.land r 1) 0 then some ⟨c.H, 0, r, r, 0, 0⟩ else kfind (Nat.shiftRight r 1) c.nodes
+  bif Nat.beq (Nat.land r 1) 0 then some ⟨c.H, 0, r, r, 0, 0⟩ else nget c (Nat.shiftRight r 1)
 
 /-- The known places of a reference (leaf `0` knows nothing). -/
 noncomputable def kOf (r : ℕ) : Option (ℕ × ℕ) :=
   bif Nat.beq (Nat.land r 1) 0 then
     (bif Nat.beq r 0 then some (0, 0)
      else (kfind (Nat.shiftRight r 1) c.leaves).map fun l => (l.k1, l.k0))
-  else (kfind (Nat.shiftRight r 1) c.nodes).map fun n => (n.k1, n.k0)
+  else (nget c (Nat.shiftRight r 1)).map fun n => (n.k1, n.k0)
 
 /-- Level and known places of a reference, with a single lookup. -/
 noncomputable def cinfo (r : ℕ) : Option (ℕ × ℕ × ℕ) :=
   bif Nat.beq (Nat.land r 1) 0 then
     (bif Nat.beq r 0 then some (c.H, 0, 0)
      else (kfind (Nat.shiftRight r 1) c.leaves).map fun l => (c.H, l.k1, l.k0))
-  else (kfind (Nat.shiftRight r 1) c.nodes).map fun n => (n.lvl, n.k1, n.k0)
+  else (nget c (Nat.shiftRight r 1)).map fun n => (n.lvl, n.k1, n.k0)
 
 /-- The local checks of a node: levels increase towards the leaves, and the known places of
 its children are justified by its own and by the place it reads. -/
@@ -225,9 +248,7 @@ noncomputable def leafOk (dl lv : Bool) (nT full : ℕ) (x : ℕ × BLeaf) : Boo
   let l := x.2
   !l.dat || ((!(dl || (lv && !Nat.beq l.d 0)) ||
     (Nat.blt l.wit nT && match knth c.trans l.wit with
-      | some e => sub e.pre l.k1 &&
-          (!(lv && c.linD && !Nat.beq l.d 0) || decB c.wD e.pre e.post) &&
-          (!(lv && !Nat.beq l.d 0) || e.wit)
+      | some e => sub e.pre l.k1 && (!(lv && !Nat.beq l.d 0) || e.wit)
       | none => false)) &&
   (!(lv && Nat.beq l.d 0) ||
     (sub full (l.k1 ||| l.k0) && Nat.blt l.k1 (full + 1) &&
@@ -336,6 +357,7 @@ noncomputable def transOk (ll lv int : Bool) (i : ℕ) (e : BTrans) : Bool :=
   walkCut c i e &&
   (!(ll && int) || decB c.wR e.pre e.post ||
     (!c.linR && nincB c.wR e.pre e.post && walkOk c 1 i e e.psR c.rR c.rR)) &&
+  (!(lv && c.linD && e.wit) || decB c.wD e.pre e.post) &&
   (!lv || c.linD || !e.wit || decB c.wD e.pre e.post ||
     (nincB c.wD e.pre e.post && walkOk c 2 i e e.psD c.rD c.rD))
 
@@ -358,11 +380,22 @@ noncomputable def cutsOk : ℕ → List ℕ → List (List ℕ) → Bool
   | _, _, [] => true
   | L, cur, nx :: rest => kall cur (cutStep c L nx) && cutsOk (L + 1) nx rest
 
+/-- The checks of node `k`. -/
+noncomputable def nodeAt (k : ℕ) : Bool :=
+  match nget c k with
+  | some n => nodeOk c n
+  | none => false
+
+/-- The checks of every node of the table. -/
+noncomputable def nodesOk : Bool :=
+  Nat.rec (motive := fun _ => Bool) true
+    (fun k r => Bool.rec (motive := fun _ => Bool) false r (nodeAt c k)) c.ncnt
+
 /-- Evaluate the diagram on a packed marking. -/
 noncomputable def evalB (m : ℕ) : ℕ → ℕ → Option ℕ
   | 0, _ => none
   | f + 1, r => bif Nat.beq (r % 2) 0 then some r else
-    match kfind (r / 2) c.nodes with
+    match nget c (r / 2) with
     | none => none
     | some n => evalB m f (cond (m.testBit n.var) n.hi n.lo)
 
@@ -382,7 +415,7 @@ noncomputable def checkBDD (dl ll lv : Bool) (c : BCert) : Bool :=
   (match kOf c c.rD with
    | some k => Nat.beq k.1 0 && Nat.beq k.2 0
    | none => false) &&
-  ktall c.nodes (fun x => nodeOk c x.2) &&
+  nodesOk c &&
   ktall c.leaves (leafOk c dl lv N.trans.length (2 ^ N.places - 1)) &&
   chkTrans c ll lv N.trans c.trans 0 &&
   (!ll || c.linR || walkOk c 0 0 emptyT c.covR c.rI c.rR) &&
@@ -532,10 +565,39 @@ theorem knth_prev {β : Type*} {l : List β} {k : ℕ} {y : β} (h : knth l (k +
   obtain ⟨hk, -⟩ := List.getElem?_eq_some_iff.1 h
   exact ⟨l[k], List.getElem?_eq_getElem (by omega)⟩
 
+theorem nodesOk_spec {c : BCert} (h : nodesOk c = true) {k : ℕ} {n : BNode}
+    (hk : nget c k = some n) : nodeOk c n = true := by
+  have hlt : k < c.ncnt := by
+    simp only [nget] at hk
+    cases hb : Nat.blt k c.ncnt
+    · rw [hb] at hk; cases hk
+    · simpa [Nat.blt_eq] using hb
+  have key : ∀ N, Nat.rec (motive := fun _ => Bool) true
+      (fun k r => Bool.rec (motive := fun _ => Bool) false r (nodeAt c k)) N = true →
+      ∀ k < N, nodeAt c k = true := by
+    intro N
+    induction N with
+    | zero => intro _ k hk; omega
+    | succ N ih =>
+      intro h k hk
+      change Bool.rec (motive := fun _ => Bool) false (Nat.rec (motive := fun _ => Bool) true
+        (fun k r => Bool.rec (motive := fun _ => Bool) false r (nodeAt c k)) N)
+        (nodeAt c N) = true at h
+      cases hb : nodeAt c N
+      · rw [hb] at h; cases h
+      · rw [hb] at h
+        rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hl | rfl
+        · exact ih h k hl
+        · exact hb
+  have hat := key c.ncnt h k hlt
+  unfold nodeAt at hat
+  rw [hk] at hat
+  exact hat
+
 /-- `Reach c r m ℓ`: from reference `r`, the packed marking `m` leads to the leaf `ℓ`. -/
 inductive Reach (c : BCert) : ℕ → ℕ → ℕ → Prop
   | leaf {r m : ℕ} : r % 2 = 0 → Reach c r m r
-  | node {r m ℓ : ℕ} {n : BNode} : r % 2 = 1 → kfind (r / 2) c.nodes = some n →
+  | node {r m ℓ : ℕ} {n : BNode} : r % 2 = 1 → nget c (r / 2) = some n →
       Reach c (cond (m.testBit n.var) n.hi n.lo) m ℓ → Reach c r m ℓ
 
 theorem Reach.even {r m ℓ : ℕ} (h : Reach c r m ℓ) : ℓ % 2 = 0 := by
@@ -582,11 +644,11 @@ theorem evalB_spec {m : ℕ} : ∀ {f r ℓ : ℕ}, evalB c m f r = some ℓ →
 theorem rinfo_even {r : ℕ} (hr : r % 2 = 0) : rinfo c r = some ⟨c.H, 0, r, r, 0, 0⟩ := by
   simp [rinfo, shr_one, hr]
 
-theorem rinfo_odd {r : ℕ} (hr : r % 2 = 1) : rinfo c r = kfind (r / 2) c.nodes := by
+theorem rinfo_odd {r : ℕ} (hr : r % 2 = 1) : rinfo c r = nget c (r / 2) := by
   simp [rinfo, shr_one, hr]
 
 theorem kOf_odd {r : ℕ} (hr : r % 2 = 1) :
-    kOf c r = (kfind (r / 2) c.nodes).map fun n => (n.k1, n.k0) := by
+    kOf c r = (nget c (r / 2)).map fun n => (n.k1, n.k0) := by
   simp only [kOf, land_one, shiftRight_one', hr]; rfl
 
 theorem kOf_leaf {r : ℕ} (hr : r % 2 = 0) (h0 : r ≠ 0) :
@@ -615,8 +677,8 @@ theorem cinfo_spec {r : ℕ} {x : ℕ × ℕ × ℕ} (h : cinfo c r = some x) :
         | some l => rw [hk] at h'; cases h'; rfl
   · have h' := h
     simp only [cinfo, land_one, shiftRight_one', hr] at h'
-    change (kfind (r / 2) c.nodes).map (fun n => (n.lvl, n.k1, n.k0)) = some x at h'
-    cases hk : kfind (r / 2) c.nodes with
+    change (nget c (r / 2)).map (fun n => (n.lvl, n.k1, n.k0)) = some x at h'
+    cases hk : nget c (r / 2) with
     | none => rw [hk] at h'; cases h'
     | some n =>
       rw [hk] at h'; cases h'
@@ -650,13 +712,13 @@ theorem Reach.step_right {b m ℓ : ℕ} {nb : BNode} (hb : rinfo c b = some nb)
 
 section Nodes
 
-variable (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+variable (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
 include hN
 
 theorem nodeOk_of_rinfo {r : ℕ} {n : BNode} (hr : r % 2 = 1) (h : rinfo c r = some n) :
     nodeOk c n = true := by
   rw [rinfo_odd hr] at h
-  exact hN _ (mem_of_kfind h)
+  exact hN _ _ h
 
 theorem lvl_lt_of_odd {r : ℕ} {n : BNode} (hr : r % 2 = 1) (h : rinfo c r = some n) :
     n.lvl < c.H := by
@@ -705,7 +767,7 @@ theorem Reach.known {r m ℓ : ℕ} (h : Reach c r m ℓ) {K : ℕ × ℕ} (hK :
       simp only [Option.map_some, Option.some.injEq] at hK
       exact hK.symm
     subst hKn
-    have hok := hN _ (mem_of_kfind hk)
+    have hok := hN _ _ hk
     simp only [nodeOk, Bool.and_eq_true] at hok
     obtain ⟨-, hk2⟩ := hok
     split at hk2
@@ -785,7 +847,7 @@ theorem Reach.leaf_mem {r m ℓ : ℕ} (h : Reach c r m ℓ) :
     intro _ hne
     rcases Nat.mod_two_eq_zero_or_one (cond (m.testBit n.var) n.hi n.lo) with he | ho
     · have hℓ := h'.of_even he
-      have hok := hN _ (mem_of_kfind hk)
+      have hok := hN _ _ hk
       simp only [nodeOk, Bool.and_eq_true] at hok
       obtain ⟨-, h2⟩ := hok
       split at h2
@@ -867,7 +929,7 @@ theorem testBit_fire {m pre post v : ℕ} :
   simp [Nat.testBit_xor]
 
 /-- **Every triple keeps its promise.** -/
-theorem tclaim (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+theorem tclaim (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
     (hv : varsOk c.lvls c.vars 0 = true) {md i : ℕ}
     {e : BTrans} {ps : BTree (ℕ × ℕ × ℕ × ℕ)} (hUok : ∀ u ∈ e.us, uOk e.pre e.post u = true)
     (hus : ∀ u ∈ e.us, usOk c e u = true) (hcov : sub (e.pre ||| e.post) (umask e.us) = true)
@@ -1203,7 +1265,7 @@ theorem lt_two_pow_mask {ps : List ℕ} {n : ℕ} (h : ∀ q ∈ ps, q < n) : ma
   exact fun hm => absurd (h q hm) (by omega)
 
 /-- A walk from the roots `ra`, `rb` keeps the promise of its first triple. -/
-theorem walkOk_spec {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+theorem walkOk_spec {c : BCert} (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
     (hv : varsOk c.lvls c.vars 0 = true)
     {md i : ℕ} {e : BTrans} {ps : BTree (ℕ × ℕ × ℕ × ℕ)} {ra rb : ℕ}
     (hu : ∀ u ∈ e.us, uOk e.pre e.post u = true) (hus : ∀ u ∈ e.us, usOk c e u = true)
@@ -1234,7 +1296,7 @@ theorem cutsOk_spec {c : BCert} : ∀ {rest : List (List ℕ)} {L : ℕ} {cur : 
 
 /-- Every marking of the invariant passes the cut of each level, at a reference from which
 the rest of its path does not depend on the levels above. -/
-theorem cut_reach {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+theorem cut_reach {c : BCert} (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
     {cuts : List (List ℕ)}
     (hcs : ∀ k cl nx, knth cuts k = some cl → knth cuts (k + 1) = some nx →
       ∀ x ∈ cl, cutStep c k nx x = true)
@@ -1276,7 +1338,7 @@ theorem cut_reach {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = tru
     · cases hst
 
 /-- The walk on the invariant, from the cut of the lowest level touched. -/
-theorem walkCut_spec {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+theorem walkCut_spec {c : BCert} (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
     (hv : varsOk c.lvls c.vars 0 = true)
     (hcut : ∀ L cl, knth c.cuts L = some cl → ∀ m ℓ, Reach c c.rI m ℓ → ∃ x ∈ cl,
       Reach c x m ℓ ∧ ∀ m', (∀ L' p, L' < L → knth c.vars L' = some p →
@@ -1299,7 +1361,7 @@ theorem walkCut_spec {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = 
   · cases h1
 
 /-- A walk with the empty transition: the second diagram covers the first. -/
-theorem cover_of_walk {c : BCert} (hN : ∀ x ∈ c.nodes.toList, nodeOk c x.2 = true)
+theorem cover_of_walk {c : BCert} (hN : ∀ k n, nget c k = some n → nodeOk c n = true)
     (hv : varsOk c.lvls c.vars 0 = true) {md : ℕ} {ps : BTree (ℕ × ℕ × ℕ × ℕ)} {ra rb : ℕ} (h : walkOk c md 0 emptyT ps ra rb = true)
     {m ℓ : ℕ} (hr : Reach c ra m ℓ) (hne : ℓ ≠ 0) :
     ∃ ℓ₂, Reach c rb m ℓ₂ ∧ leafCond c md 0 ℓ ℓ₂ = true := by
@@ -1316,7 +1378,8 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       (lv = true → N.toNet.lts.Live N.M₀) ∧ N.Safe := by
   simp only [checkBDD, Bool.and_eq_true] at h
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hwf, hv⟩, hcuts⟩, hroot⟩, hN⟩, hL⟩, htr⟩, hcR⟩, hcD⟩, h₀⟩ := h
-  rw [ktall_iff] at hN hL
+  rw [ktall_iff] at hL
+  replace hN : ∀ k n, nget c k = some n → nodeOk c n = true := fun _ _ hk => nodesOk_spec hN hk
   have hcut : ∀ L cl, knth c.cuts L = some cl → ∀ m ℓ, Reach c c.rI m ℓ → ∃ x ∈ cl,
       Reach c x m ℓ ∧ ∀ m', (∀ L' p, L' < L → knth c.vars L' = some p →
         m'.testBit p = m.testBit p) → ∀ ℓ', Reach c x m' ℓ' → Reach c c.rI m' ℓ' := by
@@ -1349,14 +1412,16 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
         (c.linR = false ∧ nincB c.wR e.pre e.post = true ∧
           TClaim c 1 t e e.psR c.rR c.rR 0)) ∧
       (lv = true → c.linD = false → e.wit = true → decB c.wD e.pre e.post = true ∨
-        (nincB c.wD e.pre e.post = true ∧ TClaim c 2 t e e.psD c.rD c.rD 0)) := by
+        (nincB c.wD e.pre e.post = true ∧ TClaim c 2 t e e.psD c.rD c.rD 0)) ∧
+      (lv = true → c.linD = true → e.wit = true → decB c.wD e.pre e.post = true) := by
     intro t
     obtain ⟨e, he, h1, h2, h3⟩ := htr t t.isLt
     simp only [Nat.zero_add, transOk, Bool.and_eq_true] at h3
-    obtain ⟨⟨⟨⟨⟨⟨hu, hsub⟩, hus⟩, hcov⟩, hI⟩, hR⟩, hD⟩ := h3
+    obtain ⟨⟨⟨⟨⟨⟨⟨hu, hsub⟩, hus⟩, hcov⟩, hI⟩, hR⟩, hDL⟩, hD⟩ := h3
     rw [kall_eq, List.all_eq_true] at hu hus
     refine ⟨e, by rw [knth_eq]; exact he, h1.symm, h2.symm, hsub,
-      walkCut_spec hN hv hcut hu hus hcov hI, fun hll hint => ?_, fun hlv hl hw' => ?_⟩
+      walkCut_spec hN hv hcut hu hus hcov hI, fun hll hint => ?_, fun hlv hl hw' => ?_,
+      fun hlv hl hw' => by simpa [hlv, hl, hw'] using hDL⟩
     · have : (N.trans[t.val]).internal = true := hint
       simp only [hll, this, Bool.and_self, Bool.not_true, Bool.false_or, Bool.or_eq_true,
         Bool.and_eq_true, Bool.not_eq_true'] at hR
@@ -1486,18 +1551,21 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
       · rename_i e he
         obtain ⟨t, ht, hpre, hpost⟩ := hT' _ _ he
         simp only [Bool.and_eq_true] at hw
-        obtain ⟨⟨hw, hdec⟩, hwt⟩ := hw
+        obtain ⟨hw, hwt⟩ := hw
+        have hwit' : lv = true → L.d ≠ 0 → e.wit = true := fun hlv hd => by
+          simpa [hlv, nbeq_false hd] using hwt
         refine ⟨t, ht, sub_iff.2 fun q hq => h1 q ?_, fun hlv hl hd => ?_,
           fun hlv hd e' he' => ?_⟩
         · rw [← hpre] at hq
           exact sub_iff.1 hw q hq
-        · rw [← hpre, ← hpost]
-          cases hd' : decB c.wD e.pre e.post
-          · simp [hlv, hl, nbeq_false hd, hd'] at hdec
-          · rfl
+        · obtain ⟨e', he', -, -, -, -, -, -, hDL⟩ := hT t
+          rw [ht, he] at he'
+          cases he'
+          rw [← hpre, ← hpost]
+          exact hDL hlv hl (hwit' hlv hd)
         · rw [ht, he] at he'
           cases he'
-          simpa [hlv, nbeq_false hd] using hwt
+          exact hwit' hlv hd
       · cases hw
   have hbisim := N.funBisimOn_packed hwf C hclosed hsafe
   have hJ₀ : SafeM N.M₀ ∧ C (N.pack N.M₀) := ⟨hM₀, hC₀⟩
@@ -1650,7 +1718,7 @@ theorem of_checkBDD {dl ll lv : Bool} {c : BCert} (h : N.checkBDD dl ll lv c = t
           obtain ⟨ℓ', L', hr', hne', hk'', hdat'⟩ := hdata (Or.inr hlv) _ hC'
           obtain ⟨m', hr'', hen'⟩ := IHp _ hlt L'.d _ ℓ' L' hC' hr' hne' hk'' hdat' rfl rfl
           exact ⟨m', LTS.Reachable.head ⟨w, (packed_step_iff N).2 ⟨hen, rfl⟩⟩ hr'', hen'⟩
-        obtain ⟨e, he, hpre, hpost, -, -, -, hD⟩ := hT w
+        obtain ⟨e, he, hpre, hpost, -, -, -, hD, -⟩ := hT w
         rcases hD hlv hld (hwt hlv hd0 e he) with hdec | ⟨hn, hD⟩
         · rw [hpre, hpost] at hdec
           exact next (hp ▸ phiL_lt hen hdec)
