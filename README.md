@@ -135,16 +135,21 @@ theorem cRing_qdi : cRing.QDI := by async_decide
 
 The environment is modelled by gates too, so the circuit is closed. A deadlock is a stable
 state; a livelock is endless switching of internal gates only. `SpeedIndependent` assumes
-arbitrary gate delays; `QDI iso` also puts an independent delay on every wire branch except
-the forks of the signals in `iso` (isochronic forks). `Circuit.speedIndependent_of_qdi`
-proves that QDI implies speed independence.
+arbitrary gate delays; `QDI iso` also puts an independent delay on every wire branch, except
+the isochronic forks declared in `iso : Forks`: whole signals (`C.QDI [0, 2]`), or groups of
+branches of a signal that share one wire (`C.QDI { groups := [[(1, 0), (2, 0)]] }`, gate `1`
+and gate `2` reading signal `0`). `Circuit.speedIndependent_of_qdi` proves that QDI implies
+speed independence. Circuit states are checked bit-packed (`Circuit.bisimP`).
 
 ### Large designs: structure and composition
 
 * `async_structural` proves safeness and boundedness (place invariants), livelock freedom
-  for **every** initial marking (linear ranking functions), and liveness of marked graphs and
-  small free-choice nets (Commoner's theorems). A 20-stage FIFO with over a million states is
-  proved safe and livelock free instantly.
+  for **every** initial marking (linear ranking functions), liveness of marked graphs and
+  free-choice nets, and deadlock freedom of ordinary nets (Commoner's theorems). The
+  siphon–trap property is checked from a branching certificate on bit masks
+  (`SiphonCheck.siphonTrap_of_check`), not by enumerating sets of places. A 20-stage FIFO
+  with over a million states is proved safe, livelock free and live in seconds, and eight
+  dining philosophers deadlock free.
 * `async_minimize` replaces a component of a parallel composition by its minimal quotient
   modulo divergence-preserving weak bisimulation, certified by the kernel. Then
   `async_decide` checks the much smaller composition (`Examples/Compositional.lean`).
@@ -156,9 +161,10 @@ proves that QDI implies speed independence.
   on circuits; safeness from circuit covers. `Examples/MullerRing.lean` proves, for all `n`
   and `k`, that a Muller ring with `n` stages and `k` tokens is live iff `1 ≤ k ≤ n - 1`, and
   is always 1-safe.
-* **Free-choice nets** (`Petri/FreeChoice.lean`). Commoner's theorem for free-choice nets,
-  `live_of_siphonTrap`: an ordinary free-choice net in which every siphon contains an
-  initially marked trap is live.
+* **Free-choice nets** (`Petri/FreeChoice.lean`, `Petri/FreeChoiceNecessity.lean`).
+  Commoner's theorem, `live_iff_siphonTrap`: an ordinary free-choice net without isolated
+  places is live **iff** every non-empty siphon contains an initially marked trap. Both
+  directions are used: to prove liveness and to refute it.
 * **P-invariants, linear ranking functions, siphons and traps** (`Petri/`).
 * **Composition** (`LTS/Compose.lean`). Parallel composition, hiding and
   divergence-preserving weak bisimulation (a congruence that preserves deadlock and livelock
@@ -179,12 +185,14 @@ proves that QDI implies speed independence.
 | `LTS/Compose.lean` | parallel composition, hiding, divergence-preserving weak bisimulation |
 | `LTS/Fairness.lean` | infinite runs, strong fairness, "will happen" theorems |
 | `Petri/Basic.lean`, `Invariant.lean`, `SiphonTrap.lean` | Petri nets, P-invariants, bounds, ranking functions, siphons and traps |
-| `Petri/FreeChoice.lean` | free-choice nets, Commoner's liveness theorem |
+| `Petri/FreeChoice.lean`, `FreeChoiceNecessity.lean` | free-choice nets, Commoner's theorem (both directions) |
+| `Petri/SiphonCheck.lean` | kernel-checked branching certificates for the siphon–trap property |
 | `MarkedGraph/Basic.lean` | Commoner's theorem for marked graphs, circuit tokens, safeness, rank certificates |
 | `Stg/Basic.lean` | STGs: state graph, consistency, CSC, output persistence, implementation by gates, CSC ⇔ implementable |
 | `Stg/Concrete.lean` | concrete STGs `Stg`, checkers and refutations for all STG properties |
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
-| `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, QDI, proof that QDI implies speed independence |
+| `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, isochronic forks, QDI, proof that QDI implies speed independence |
+| `Circuit/Packed.lean` | bit-packed circuit states for fast checking |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -219,16 +227,19 @@ proves that QDI implies speed independence.
   and speed-independent circuits this is the standard semantics for these properties.
 * Liveness is L4-liveness. Fairness-based "will happen" properties are derived from it in
   `LTS/Fairness.lean`. Livelock is divergence: an infinite run of internal actions.
-* Free-choice liveness is proved in the sufficient direction (siphon–trap ⇒ live), which is
-  the one needed for verification. `async_structural` enumerates siphons, so it is meant for
-  nets with up to a dozen or so places.
+* The siphon–trap property is co-NP-complete, so its certificates can be exponential for
+  some nets — typically those with exponentially many minimal siphons, such as long rings
+  of independent choices. Pipelines, controllers and resource-sharing nets with dozens of
+  places check in seconds.
 * The model checker needs a finite reachable state space. Kernel checking takes roughly
-  10–60 ms per reachable state. For example, 7 dining philosophers (408 states) take 8 s,
-  and two composed 8-stage FIFOs (65 536 states) take 36 s after minimisation. Designs with
-  up to a few thousand states are practical. Beyond that, use the structural tactics, the
-  theory, or composition.
-* Lake does not track design files read by the importers: after editing a `.g`, `.pnml` or
-  `.v` file, rebuild the Lean file that imports it (for example by touching it).
+  10–30 ms per reachable state: 7 dining philosophers (408 states) take 8 s, two composed
+  8-stage FIFOs (65 536 states) take 36 s after minimisation, and a five-stage C-element
+  ring with all ten wires delayed (640 states) is proved QDI in 11 s. Designs with up to a
+  few thousand states are practical. Beyond that, use the structural tactics, the theory, or
+  composition.
+* Design files read by the importers are tracked by Lake when declared as an `input_dir`
+  needed by the library that imports them (see `Import/Basic.lean`; this repository does so
+  for its examples).
 
 ## Building
 

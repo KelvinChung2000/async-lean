@@ -104,7 +104,7 @@ example (M₀ : Marking (Fin 5)) :
 
 /-- Liveness of a free-choice net (here written as an abstract `Net`): a request forks into
 an acknowledgement and an environment-resolved choice, which join again.  Commoner's
-siphon–trap theorem applies. -/
+siphon–trap theorem applies (`Net.live_iff_siphonTrap`; it also refutes liveness). -/
 def choiceNet : Net (Fin 6) (Fin 6) where
   pre := ![![1, 0, 0, 0, 0, 0], ![0, 1, 0, 0, 0, 0], ![0, 1, 0, 0, 0, 0],
     ![0, 0, 0, 1, 0, 0], ![0, 0, 0, 0, 1, 0], ![0, 0, 1, 0, 0, 1]]
@@ -185,6 +185,12 @@ theorem forkCircuit_not_qdi : ¬ forkCircuit.QDI :=
 /-- …unless the forks of `c` (signal 0) and `b` (signal 2) are isochronic. -/
 theorem forkCircuit_qdi_iso : forkCircuit.QDI [0, 2] := by async_decide
 
+/-- Finer: only the fork from `c` to gates `a` (1) and `b` (2), and the fork from `b` to gates
+`c` (0) and `a` (1), are isochronic; each shares one wire whose delay is still arbitrary. -/
+theorem forkCircuit_qdi_groups :
+    forkCircuit.QDI { groups := [[(1, 0), (2, 0)], [(0, 2), (1, 2)]] } := by
+  async_decide
+
 /-! ## 6. Fairness
 
 `Live` says every action *can* always happen again.  Under a strongly fair scheduler it
@@ -206,6 +212,7 @@ theorem handshake_fair (r : handshake.toNet.lts.Run handshake.M₀) (hfair : r.S
 -/
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live
-  spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso handshake_fair
+  spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
+  forkCircuit_qdi_groups handshake_fair
 
 end AsyncLean.Tutorial

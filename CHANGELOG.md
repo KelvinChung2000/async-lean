@@ -2,6 +2,20 @@
 
 ## 0.2.0
 
+Latest additions:
+
+* **Commoner's theorem for free-choice nets, both directions** (`Net.live_iff_siphonTrap`);
+  the necessity direction refutes liveness.
+* **Siphon–trap certificates.** The siphon–trap property is checked from a kernel-verified
+  branching certificate on bit masks instead of enumerating sets of places;
+  `async_structural` also proves deadlock freedom of ordinary nets this way.
+* **Isochronic forks per branch.** `Forks` declares isochronic signals or groups of branches
+  sharing one wire.
+* **Faster circuit checking.** Bit-packed circuit states, recursor-based gate evaluation,
+  circuits evaluated to literals once, and labelled-successor certificates for persistence
+  (about 3× faster on wired circuits).
+* **Design files tracked by Lake** through an `input_dir` target.
+
 New models and theory:
 
 * **STGs.** Signal transition graphs (`StgModel`, `Stg`) with consistency, complete state
