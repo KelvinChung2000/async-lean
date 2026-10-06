@@ -158,7 +158,16 @@ waiting while a permitted channel is free:
   injections, so packets cannot keep moving forever without reaching their destinations.
 
 Together they give the drain theorem `Network.Correct.drain`: from every reachable
-configuration, all packets are delivered once injection stops.
+configuration, all packets are delivered once injection stops. With injection going on
+forever:
+
+* **starvation freedom** (`Network.StarvationFree`): along every strongly fair run, every
+  packet in the network is eventually delivered (`Routing/Fairness.lean`).
+
+The model above is store-and-forward or virtual cut-through switching: each packet holds one
+channel. **Wormhole switching** (`Routing/Wormhole.lean`) lets a packet span several channels,
+and a blocked head blocks the whole packet. `Network.WormholeCorrect` is deadlock and livelock
+freedom for packets of every length, under every selection function.
 
 ```lean
 -- XY routing on virtual channel 0 (the escape channels, listed first) plus fully adaptive
@@ -183,14 +192,27 @@ locally:
   packet; `async_routing (escape := R₁)` names the escape subfunction;
 * `Network.livelockFree_of_ranking`: a rank that decreases on every permitted hop, such as
   the distance for minimal routing, or distance plus misrouting budget for bounded
-  non-minimal routing. `Network.packet_hops_le` bounds the number of hops of every packet.
+  non-minimal routing. `Network.packet_hops_le` bounds the number of hops of every packet;
+* `Network.wormholeDeadlockFree_of_escape` (**Duato for wormhole switching**): every legal
+  packet may request an escape channel, and the *extended* dependency graph of the escape
+  channels, with the indirect dependencies through adaptive channels, is acyclic.
+  `async_decide` tries all channels, then the channels of the first-listed hops;
+  `async_routing (escape := E)` names them.
+
+Duato's condition is also **necessary** (`Network.staticDeadlockFree_iff_exists_escape`):
+when finitely many channels carry legal packets, every configuration of legal packets can
+move iff some connected routing subfunction has an acyclic dependency graph. When every legal
+configuration is reachable, this makes deadlock freedom itself equivalent to Duato's condition
+(`Network.deadlockFree_iff_exists_escape`).
 
 Failures come with counterexamples: a set of injections and hops that fills a dependency
 cycle with blocked packets (`Network.not_deadlockFree_of_refuteB`), or a packet that can go
-round a cycle forever (`Network.not_livelockFree_of_refuteB`). `Examples/Routing.lean`
-proves XY, Duato-adaptive and bounded-misrouting meshes correct. It refutes a plain ring, a
-fully adaptive mesh without escape channels and a deflection-routed mesh. It also proves
-dateline rings of every size correct.
+round a cycle forever (`Network.not_livelockFree_of_refuteB`), and their wormhole versions. `Examples/Routing.lean`
+proves XY, Duato-adaptive and bounded-misrouting meshes correct and starvation free, and XY
+and Duato meshes correct under wormhole switching. It refutes a plain ring (with two long
+packets under wormhole switching), a fully adaptive mesh without escape channels and a
+deflection-routed mesh. Dateline rings of every size are proved correct, starvation free
+and wormhole correct.
 
 ### Large designs: structure and composition
 
@@ -216,10 +238,11 @@ dateline rings of every size correct.
 * **Composition** (`LTS/Compose.lean`). Parallel composition, hiding and
   divergence-preserving weak bisimulation (a congruence that preserves deadlock and livelock
   freedom).
-* **Routing** (`Routing/Basic.lean`). Duato's theorem, Dally and Seitz's theorem, ranking
-  functions for livelock freedom and hop bounds, the drain theorem, and the reduction of
+* **Routing** (`Routing/`). Duato's theorem as an equivalence, Dally and Seitz's theorem,
+  ranking functions for livelock freedom and hop bounds, the drain theorem, the reduction of
   every selection policy to fully adaptive routing (`Network.deadlockFree_iff_adaptive`,
-  `Network.livelockFree_iff_adaptive`).
+  `Network.livelockFree_iff_adaptive`), starvation freedom under fairness, and wormhole
+  switching with Duato's extended dependency graph.
 * **Fairness** (`LTS/Fairness.lean`). Infinite runs and strong fairness: live actions happen
   infinitely often, and progress holds even when internal cycles exist.
 * **Generic rules** (`LTS/Properties.lean`). Inductive invariants, ranking functions into any
@@ -242,8 +265,10 @@ dateline rings of every size correct.
 | `Stg/Concrete.lean` | concrete STGs `Stg`, checkers and refutations for all STG properties |
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
 | `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, QDI, proof that QDI implies speed independence |
-| `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's and Dally–Seitz's theorems, livelock by ranking, drain theorem, refutations |
-| `Routing/Check.lean` | trusted routing checker `Network.checkCert`, untrusted certificate search and diagnosis |
+| `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's theorem (sufficient and necessary) and Dally–Seitz's theorem, livelock by ranking, drain theorem, refutations |
+| `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
+| `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
+| `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -276,11 +301,12 @@ dateline rings of every size correct.
 
 * Semantics are interleaving: one transition, or one gate, at a time. For Petri nets, STGs
   and speed-independent circuits this is the standard semantics for these properties.
-* Networks use one-packet channel buffers (store-and-forward or virtual cut-through
-  switching). Wormhole switching, where a packet spans several channels, is not modelled.
-  Routing livelock freedom is "no infinite run without injections". Starvation of a packet by
-  an unbounded stream of new injections is a fairness question and is not covered. Duato's
-  theorem is proved in the sufficient direction.
+* Networks are modelled with store-and-forward / virtual cut-through switching (one channel
+  per packet) or wormhole switching (a packet spans up to `tail p + 1` channels, with one-flit
+  channel buffers). Routing livelock freedom is "no infinite run without injections".
+  Starvation freedom assumes a strongly fair scheduler and is proved for store-and-forward
+  switching. Duato's condition is proved necessary and sufficient for store-and-forward
+  switching; for wormhole switching the sufficient direction is proved.
 * Liveness is L4-liveness. Fairness-based "will happen" properties are derived from it in
   `LTS/Fairness.lean`. Livelock is divergence: an infinite run of internal actions.
 * Free-choice liveness is proved in the sufficient direction (siphon–trap ⇒ live), which is

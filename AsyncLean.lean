@@ -28,7 +28,10 @@ import AsyncLean.Circuit.Wires
 import AsyncLean.Circuit.QDI
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.Basic
+import AsyncLean.Routing.Fairness
 import AsyncLean.Routing.Check
+import AsyncLean.Routing.Wormhole
+import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing

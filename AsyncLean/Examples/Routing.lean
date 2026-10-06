@@ -27,6 +27,11 @@ destination node (plus a misrouting budget in `misrouteMesh`).  The statements h
   unproductive hops, is livelock free because the budget bounds the detours
   (`misrouteMesh_correct`).  With unbounded misrouting (`deflectionMesh`) a packet can bounce
   between two nodes forever (`deflectionMesh_livelocks`).
+* Starvation freedom under fair scheduling (`duatoMesh_starvationFree`, and
+  `datelineRing_starvationFree` for every ring size).
+* Wormhole switching: XY and Duato meshes and dateline rings of every size are correct for
+  packets of every length; two long packets deadlock the plain ring
+  (`ring_wormhole_deadlocks`).
 -/
 
 namespace AsyncLean.Examples
@@ -107,42 +112,68 @@ theorem dl_step {n c d : ℕ} (hl : dlLegal n c d) (ha : (datelineRing n).arrive
     simp only [List.cons.injEq, Prod.mk.injEq, and_true]
     omega
 
+theorem dl_closed (n : ℕ) : (datelineRing n).Closed (dlLegal n) := by
+  constructor
+  · intro q hq
+    simp only [datelineRing, allPairs, List.mem_flatMap, List.mem_range, List.mem_map,
+      List.mem_filter] at hq
+    obtain ⟨s, hs, d, ⟨hd, -⟩, rfl⟩ := hq
+    exact ⟨hd, Or.inl hs⟩
+  · intro c d q hl ha hq
+    have hd := hl.1
+    rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
+      rw [hr, List.mem_singleton] at hq <;> subst hq
+    · exact ⟨hd, Or.inl h1⟩
+    · exact ⟨hd, Or.inr ⟨le_refl _, by omega⟩⟩
+    · exact ⟨hd, Or.inr ⟨by omega, by omega⟩⟩
+
+theorem dl_conn (n : ℕ) : ∀ c d, dlLegal n c d → (datelineRing n).arrived c d = false →
+    (datelineRing n).route c d ≠ [] := by
+  intro c d hl ha
+  rcases dl_step hl ha with ⟨hr, -⟩ | ⟨hr, -⟩ | ⟨hr, -⟩ <;> simp [hr]
+
+theorem dl_wf (n : ℕ) :
+    WellFounded (flip ((datelineRing n).Dep (dlLegal n) (datelineRing n).route)) := by
+  refine wf_of_rank (dlChan n) ?_
+  rintro c c' ⟨d, d', hl, ha, hq⟩
+  have hd := hl.1
+  rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
+    rw [hr, List.mem_singleton, Prod.mk.injEq] at hq <;> obtain ⟨hc', -⟩ := hq <;>
+    subst hc' <;> simp only [dlChan] <;> omega
+
+theorem dl_rank (n : ℕ) : ∀ c d q, dlLegal n c d → (datelineRing n).arrived c d = false →
+    q ∈ (datelineRing n).route c d → dlRank n q.1 q.2 < dlRank n c d := by
+  rintro c d q hl ha hq
+  have hd := hl.1
+  rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
+    rw [hr, List.mem_singleton] at hq <;> subst hq <;> simp only [dlRank] <;>
+    split_ifs <;> omega
+
+theorem dl_finite (n : ℕ) : {q : ℕ × ℕ | dlLegal n q.1 q.2}.Finite := by
+  refine (Finset.finite_toSet (Finset.range (2 * n) ×ˢ Finset.range n)).subset ?_
+  rintro ⟨c, d⟩ ⟨hd, hc⟩
+  simp only [Finset.coe_product, Finset.coe_range, Set.mem_prod, Set.mem_Iio]
+  omega
+
 /-- **Every dateline ring is deadlock and livelock free**, under every dynamic routing
 policy (Dally and Seitz's theorem with the dependency order `dlChan`, and the ranking
 function `dlRank`). -/
-theorem datelineRing_correct (n : ℕ) : (datelineRing n).Correct := by
-  have hcl : (datelineRing n).Closed (dlLegal n) := by
-    constructor
-    · intro q hq
-      simp only [datelineRing, allPairs, List.mem_flatMap, List.mem_range, List.mem_map,
-        List.mem_filter] at hq
-      obtain ⟨s, hs, d, ⟨hd, -⟩, rfl⟩ := hq
-      exact ⟨hd, Or.inl hs⟩
-    · intro c d q hl ha hq
-      have hd := hl.1
-      rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
-        rw [hr, List.mem_singleton] at hq <;> subst hq
-      · exact ⟨hd, Or.inl h1⟩
-      · exact ⟨hd, Or.inr ⟨le_refl _, by omega⟩⟩
-      · exact ⟨hd, Or.inr ⟨by omega, by omega⟩⟩
-  refine ⟨(datelineRing n).deadlockFree_of_cdg hcl ?_ (wf_of_rank (dlChan n) ?_),
-    (datelineRing n).livelockFree_of_ranking hcl ?_ (dlRank n) ?_⟩
-  · intro c d hl ha
-    rcases dl_step hl ha with ⟨hr, -⟩ | ⟨hr, -⟩ | ⟨hr, -⟩ <;> simp [hr]
-  · rintro c c' ⟨d, d', hl, ha, hq⟩
-    have hd := hl.1
-    rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
-      rw [hr, List.mem_singleton, Prod.mk.injEq] at hq <;> obtain ⟨hc', -⟩ := hq <;>
-      subst hc' <;> simp only [dlChan] <;> omega
-  · refine (Set.finite_lt_nat (2 * n)).subset ?_
-    rintro c ⟨d, hd, hc⟩
-    change c < 2 * n
-    omega
-  · rintro c d q hl ha hq
-    have hd := hl.1
-    rcases dl_step hl ha with ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ | ⟨hr, h1, h2⟩ <;>
-      rw [hr, List.mem_singleton] at hq <;> subst hq <;> simp only [dlRank] <;>
-      split_ifs <;> omega
+theorem datelineRing_correct (n : ℕ) : (datelineRing n).Correct :=
+  ⟨(datelineRing n).deadlockFree_of_cdg (dl_closed n) (dl_conn n) (dl_wf n),
+    (datelineRing n).livelockFree_of_ranking (dl_closed n)
+      ((dl_finite n).image Prod.fst |>.subset fun c ⟨d, hl⟩ => ⟨(c, d), hl, rfl⟩)
+      (dlRank n) (dl_rank n)⟩
+
+/-- **No packet of any dateline ring starves** along a strongly fair run. -/
+theorem datelineRing_starvationFree (n : ℕ) : (datelineRing n).StarvationFree :=
+  (datelineRing n).starvationFree_of_escape_ranking (dl_closed n) (dl_finite n) _
+    (fun _ _ _ _ _ h => h) (dl_conn n) (dl_wf n) (dlRank n) (dl_rank n)
+
+/-- **Every dateline ring is correct under wormhole switching**, for packets of every
+length. -/
+theorem datelineRing_wormholeCorrect (n : ℕ) : (datelineRing n).WormholeCorrect :=
+  ⟨(datelineRing n).wormholeDeadlockFree_of_cdg (dl_closed n) (dl_conn n) (dl_wf n),
+    (datelineRing n).wormholeLivelockFree_of_ranking (dl_closed n) (dlRank n) (dl_rank n)⟩
 
 /-! ### Meshes -/
 
@@ -256,7 +287,53 @@ theorem deflectionMesh_livelocks : ¬ (deflectionMesh 3).LivelockFree :=
   Network.not_livelockFree_of_refuteB (pre := [.inject 8 1, .hop 8 5 1, .hop 5 30 1, .hop 30 41 1])
     (cyc := [.hop 41 52 1, .hop 52 41 1]) (by decide +kernel)
 
-/-! ### Consequences -/
+/-! ### Starvation freedom
+
+`Correct` lets the network drain once injection stops.  `StarvationFree` says more: along
+every strongly fair run, with injection going on forever, every packet is delivered. -/
+
+theorem duatoMesh_starvationFree : (duatoMesh 3).StarvationFree := by async_decide
+
+/-- Concretely, under the congestion-aware policy `firstFree`: the packet in any channel at any
+time is eventually ejected. -/
+example (r : ((duatoMesh 3).ltsWith (duatoMesh 3).firstFree).Run empty) (hfair : r.StronglyFair)
+    (n c : ℕ) (hc : r.st n c ≠ none) : (duatoMesh 3).Delivered r n c :=
+  duatoMesh_starvationFree _ (firstFree_valid _) r hfair n c hc
+
+/-! ### Wormhole switching
+
+Packets span several channels; a blocked head blocks the whole packet.  The results hold for
+packets of every length.  Duato's theorem now needs the *extended* dependency graph of the
+escape channels, which includes the indirect dependencies through adaptive channels. -/
+
+theorem xyMesh_wormholeCorrect : (xyMesh 4).WormholeCorrect := by async_decide
+
+/-- Duato's wormhole theorem with the channels of the first-listed hops (virtual channel 0) as
+escape channels. -/
+theorem duatoMesh_wormholeCorrect : (duatoMesh 4).WormholeCorrect := by async_decide
+
+/-- The same, naming the escape channels: the virtual-channel-0 channels have even numbers. -/
+example : (duatoMesh 3).WormholeDeadlockFree := by
+  async_routing (escape := fun c => c % 2 == 0)
+
+/-- Under wormhole switching two packets suffice to deadlock the plain ring: each is two flits
+long, holds two channels and waits for a channel held by the other. -/
+theorem ring_wormhole_deadlocks : ¬ (ring 4).WormholeDeadlockFree :=
+  Network.not_wormholeDeadlockFree_of_refuteB (tail := fun _ => 1)
+    (as := [.inject 0 3, .advance 0 1 3, .inject 2 1, .advance 2 3 1]) (by decide +kernel)
+
+/-- Deflection routing livelocks under wormhole switching too. -/
+theorem deflectionMesh_wormhole_livelocks : ¬ (deflectionMesh 3).WormholeLivelockFree :=
+  Network.not_wormholeLivelockFree_of_refuteB (tail := fun _ => 0)
+    (pre := [.inject 8 1, .advance 8 5 1, .advance 5 30 1, .advance 30 41 1])
+    (cyc := [.advance 41 52 1, .advance 52 41 1]) (by decide +kernel)
+
+/-! `misrouteMesh` is correct and starvation free under store-and-forward switching, but under
+wormhole switching Duato's condition fails for it: a packet holding an escape channel can
+misroute on virtual channel 1 and then request an escape channel "behind" it, and these
+indirect dependencies close a cycle (`#eval (misrouteMesh 3 2).explainWormhole` shows it).
+
+### Consequences -/
 
 /-- Under the congestion-aware policy "take the first free permitted channel", every
 reachable configuration of the Duato mesh drains: all packets are delivered once
@@ -273,7 +350,10 @@ theorem duatoMesh_never_stuck {sel : Selection ℕ ℕ} (hsel : (duatoMesh 4).Va
   duatoMesh_correct.1.lts (by decide) hsel
 
 #assert_standard_axioms ring_deadlocks datelineRing_correct_8 datelineRing_correct
+  datelineRing_starvationFree datelineRing_wormholeCorrect
   xyMesh_correct adaptiveMesh_deadlocks duatoMesh_correct misrouteMesh_correct
-  deflectionMesh_livelocks duatoMesh_drains duatoMesh_never_stuck
+  deflectionMesh_livelocks duatoMesh_starvationFree xyMesh_wormholeCorrect
+  duatoMesh_wormholeCorrect ring_wormhole_deadlocks deflectionMesh_wormhole_livelocks
+  duatoMesh_drains duatoMesh_never_stuck
 
 end AsyncLean.Examples

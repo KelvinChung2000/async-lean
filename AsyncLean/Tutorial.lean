@@ -246,9 +246,16 @@ example {sel : Network.Selection ℕ ℕ} (hsel : datelineRing4.ValidSel sel) {f
       Network.empty :=
   datelineRing4_correct.drain hsel hf
 
-/-! Adaptive meshes with Duato's escape channels, bounded misrouting (livelock freedom from a
-misrouting budget), deflection routing (a livelock) and a proof for dateline rings of every
-size are in `Examples/Routing.lean`.
+/-- Under a strongly fair scheduler no packet starves, even with injection going on forever. -/
+theorem datelineRing4_starvationFree : datelineRing4.StarvationFree := by async_decide
+
+/-- Under wormhole switching packets span several channels; the dateline ring stays correct for
+packets of every length. -/
+theorem datelineRing4_wormhole : datelineRing4.WormholeCorrect := by async_decide
+
+/-! Adaptive meshes with Duato's escape channels (also under wormhole switching), bounded
+misrouting (livelock freedom from a misrouting budget), deflection routing (a livelock) and
+proofs for dateline rings of every size are in `Examples/Routing.lean`.
 
 ## Where next
 
@@ -262,6 +269,6 @@ size are in `Examples/Routing.lean`.
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso handshake_fair
-  ring4_deadlocks datelineRing4_correct
+  ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
 
 end AsyncLean.Tutorial

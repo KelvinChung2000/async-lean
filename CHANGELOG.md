@@ -18,11 +18,24 @@
   (`Network.checkCert`), with no exploration of network configurations. On failure it reports
   a deadlock or livelock counterexample and the theorem that proves it. `async_routing
   (escape := R₁)` names the escape channels. `#eval N.explain` prints the same report.
+* **Duato's condition is necessary** (`Network.staticDeadlockFree_iff_exists_escape`,
+  `Network.deadlockFree_iff_exists_escape`): an equivalence when finitely many channels carry
+  legal packets.
+* **Starvation freedom** (`Routing/Fairness.lean`): `Network.StarvationFree`, every packet is
+  delivered along every strongly fair run (`Network.delivered_of_ranking`,
+  `Network.starvationFree_of_escape_ranking`); `async_decide` proves it.
+* **Wormhole switching** (`Routing/Wormhole.lean`, `Routing/WormholeCheck.lean`): packets
+  spanning several channels, Duato's theorem with the extended dependency graph
+  (`Network.wormholeDeadlockFree_of_escape`), Dally and Seitz's theorem, livelock freedom by
+  ranking and the drain theorem, for packets of every length. Kernel-checked certificates
+  through `async_decide` and `async_routing (escape := E)`, refutations and diagnosis
+  (`#eval N.explainWormhole`).
 * `LTS.LivelockFree.mono`, `LTS.LivelockFree.of_sub`, `LTS.Path.iStep_rtc`,
   `LTS.Path.iStep_transGen`.
-* Examples (`Examples/Routing.lean`): rings with and without a dateline, with a proof for
-  dateline rings of every size; XY, fully adaptive, Duato, bounded-misrouting and deflection
-  meshes. A tutorial section on routing.
+* Examples (`Examples/Routing.lean`): rings with and without a dateline, with proofs for
+  dateline rings of every size (correct, starvation free, wormhole correct); XY, fully
+  adaptive, Duato, bounded-misrouting and deflection meshes, under store-and-forward and
+  wormhole switching. A tutorial section on routing.
 
 ## 0.2.0
 

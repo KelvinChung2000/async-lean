@@ -14,7 +14,7 @@ import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
 import AsyncLean.Auto.Structural
-import AsyncLean.Routing.Check
+import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
 
 /-!
@@ -56,7 +56,15 @@ open LTS
   Network.adaptive_valid Network.freeOnly_valid Network.firstFree_valid
   Network.StepWith.packetStep Network.legal_of_reachable
   Network.not_deadlockFree_of_refuteB Network.not_livelockFree_of_refuteB
-  Network.correct_of_checkCert
+  Network.correct_of_checkCert Network.spec_of_checkCert Network.starvationFree_of_checkCert
+  Network.exists_escape_of_static Network.staticDeadlockFree_iff_exists_escape
+  Network.deadlockFree_iff_exists_escape Network.reachable_of_injectable
+  Network.delivered_of_ranking Network.starvationFree_of_escape_ranking
+  Network.reachable_finite Network.exists_leave
+  Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
+  Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
+  Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
+  Network.wormholeCorrect_of_wcheckCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms

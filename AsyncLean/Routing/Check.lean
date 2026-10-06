@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Routing.Basic
+import AsyncLean.Routing.Fairness
 import AsyncLean.Checker.Explicit
 
 /-!
@@ -67,13 +67,18 @@ def checkCert (esc : C → P → List (C × P)) (pairs : BTree ((C × P) × ℕ)
 
 end Check
 
-/-- **Soundness of the checker**: a certificate that passes `checkCert` proves that the network
-is deadlock free and livelock free under every dynamic routing policy.  The comparison
-functions only guide the search: any function is sound. -/
-theorem correct_of_checkCert {N : Network C P} {cmpC : C → C → Ordering}
+/-- What a passing certificate establishes: a closed, finite set of legal pairs, a connected
+escape subfunction with a well-founded dependency graph, and a ranking function. -/
+theorem spec_of_checkCert {N : Network C P} {cmpC : C → C → Ordering}
     {cmpQ : C × P → C × P → Ordering} {esc : C → P → List (C × P)}
     {pairs : BTree ((C × P) × ℕ)} {ranks : BTree (C × ℕ)}
-    (h : N.checkCert cmpC cmpQ esc pairs ranks = true) : N.Correct := by
+    (h : N.checkCert cmpC cmpQ esc pairs ranks = true) :
+    ∃ legal : C → P → Prop, N.Closed legal ∧ {q : C × P | legal q.1 q.2}.Finite ∧
+      (∀ c p q, legal c p → N.arrived c p = false → q ∈ esc c p → q ∈ N.route c p) ∧
+      (∀ c p, legal c p → N.arrived c p = false → esc c p ≠ []) ∧
+      WellFounded (flip (N.Dep legal esc)) ∧
+      ∃ rk : C → P → ℕ, ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p →
+        rk q.1 q.2 < rk c p := by
   simp only [checkCert, Bool.and_eq_true, List.all_eq_true, BTree.all_eq_true] at h
   obtain ⟨hinj, hall⟩ := h
   let legal : C → P → Prop := fun c p => legalB cmpQ pairs (c, p) = true
@@ -86,21 +91,39 @@ theorem correct_of_checkCert {N : Network C P} {cmpC : C → C → Ordering}
     obtain ⟨r, hr⟩ := Option.isSome_iff_exists.1 hl
     have := hall _ (BTree.mem_toList_of_findData hr)
     simpa [checkPair, ha, List.isEmpty_iff, and_assoc] using this
-  have hcl : N.Closed legal :=
-    ⟨fun q hq => hinj q hq, fun c p q hl ha hq => ((hpair c p hl ha).1 q hq).1⟩
-  have hfin : {c | ∃ p, legal c p}.Finite := by
-    refine (Finset.finite_toSet ((pairs.toList.map fun e => e.1.1).toFinset)).subset ?_
-    rintro c ⟨p, hl⟩
+  refine ⟨legal, ⟨fun q hq => hinj q hq, fun c p q hl ha hq => ((hpair c p hl ha).1 q hq).1⟩,
+    ?_, fun c p q hl ha hq => ((hpair c p hl ha).2.2 q hq).1,
+    fun c p hl ha => (hpair c p hl ha).2.1, wf_of_rank (chanRank cmpC ranks) ?_,
+    fun c p => pairRank cmpQ pairs (c, p), fun c p q hl ha hq => ((hpair c p hl ha).1 q hq).2⟩
+  · refine (Finset.finite_toSet ((pairs.toList.map fun e => e.1).toFinset)).subset ?_
+    rintro q hl
     obtain ⟨r, hr⟩ := Option.isSome_iff_exists.1 hl
     simp only [Finset.mem_coe, List.mem_toFinset, List.mem_map]
     exact ⟨_, BTree.mem_toList_of_findData hr, rfl⟩
-  refine ⟨N.deadlockFree_of_escape hcl esc (fun c p q hl ha hq => ((hpair c p hl ha).2.2 q hq).1)
-    (fun c p hl ha => (hpair c p hl ha).2.1)
-    (wf_of_rank (chanRank cmpC ranks) ?_),
-    N.livelockFree_of_ranking hcl hfin (fun c p => pairRank cmpQ pairs (c, p))
-      (fun c p q hl ha hq => ((hpair c p hl ha).1 q hq).2)⟩
-  rintro c c' ⟨p, p', hl, ha, hq⟩
-  exact ((hpair c p hl ha).2.2 _ hq).2
+  · rintro c c' ⟨p, p', hl, ha, hq⟩
+    exact ((hpair c p hl ha).2.2 _ hq).2
+
+/-- **Soundness of the checker**: a certificate that passes `checkCert` proves that the network
+is deadlock free and livelock free under every dynamic routing policy.  The comparison
+functions only guide the search: any function is sound. -/
+theorem correct_of_checkCert {N : Network C P} {cmpC : C → C → Ordering}
+    {cmpQ : C × P → C × P → Ordering} {esc : C → P → List (C × P)}
+    {pairs : BTree ((C × P) × ℕ)} {ranks : BTree (C × ℕ)}
+    (h : N.checkCert cmpC cmpQ esc pairs ranks = true) : N.Correct := by
+  obtain ⟨legal, hcl, hfin, hsub, hconn, hwf, rk, hrk⟩ := spec_of_checkCert h
+  have hchan : {c | ∃ p, legal c p}.Finite :=
+    (hfin.image Prod.fst).subset fun c ⟨p, hl⟩ => ⟨(c, p), hl, rfl⟩
+  exact ⟨N.deadlockFree_of_escape hcl esc hsub hconn hwf,
+    N.livelockFree_of_ranking hcl hchan rk hrk⟩
+
+/-- A passing certificate also proves **starvation freedom**: along every strongly fair run,
+every packet is delivered. -/
+theorem starvationFree_of_checkCert {N : Network C P} {cmpC : C → C → Ordering}
+    {cmpQ : C × P → C × P → Ordering} {esc : C → P → List (C × P)}
+    {pairs : BTree ((C × P) × ℕ)} {ranks : BTree (C × ℕ)}
+    (h : N.checkCert cmpC cmpQ esc pairs ranks = true) : N.StarvationFree := by
+  obtain ⟨legal, hcl, hfin, hsub, hconn, hwf, rk, hrk⟩ := spec_of_checkCert h
+  exact N.starvationFree_of_escape_ranking hcl hfin esc hsub hconn hwf rk hrk
 
 /-! ### Untrusted certificate search
 
