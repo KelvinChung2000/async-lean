@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+* **Interconnection networks with dynamic routing** (`Routing/Basic.lean`). `Network` models
+  packet-switched networks with one-packet channel buffers, adaptive routing functions and
+  run-time selection functions. `Network.Correct` is routing deadlock freedom and routing
+  livelock freedom under *every* work-conserving selection function. The new results:
+  * Duato's theorem (`Network.deadlockFree_of_escape`) and Dally and Seitz's theorem
+    (`Network.deadlockFree_of_cdg`);
+  * livelock freedom from a ranking function, for minimal or bounded non-minimal routing
+    (`Network.livelockFree_of_ranking`), with per-packet hop bounds
+    (`Network.packet_hops_le`);
+  * the drain theorem (`Network.Correct.drain`);
+  * the reduction of every selection policy to fully adaptive routing;
+  * refutations from counterexample runs.
+* `async_decide` proves `Network.Correct` by kernel-checked local certificates
+  (`Network.checkCert`), with no exploration of network configurations. On failure it reports
+  a deadlock or livelock counterexample and the theorem that proves it. `async_routing
+  (escape := R₁)` names the escape channels. `#eval N.explain` prints the same report.
+* **Duato's condition is necessary** (`Network.staticDeadlockFree_iff_exists_escape`,
+  `Network.deadlockFree_iff_exists_escape`): an equivalence when finitely many channels carry
+  legal packets.
+* **Starvation freedom** (`Routing/Fairness.lean`): `Network.StarvationFree`, every packet is
+  delivered along every strongly fair run (`Network.delivered_of_ranking`,
+  `Network.starvationFree_of_escape_ranking`); `async_decide` proves it.
+* **Wormhole switching** (`Routing/Wormhole.lean`, `Routing/WormholeCheck.lean`): packets
+  spanning several channels, Duato's theorem with the extended dependency graph
+  (`Network.wormholeDeadlockFree_of_escape`), Dally and Seitz's theorem, livelock freedom by
+  ranking and the drain theorem, for packets of every length. Kernel-checked certificates
+  through `async_decide` and `async_routing (escape := E)`, refutations and diagnosis
+  (`#eval N.explainWormhole`).
+* `LTS.LivelockFree.mono`, `LTS.LivelockFree.of_sub`, `LTS.Path.iStep_rtc`,
+  `LTS.Path.iStep_transGen`.
+* Examples (`Examples/Routing.lean`): rings with and without a dateline, with proofs for
+  dateline rings of every size (correct, starvation free, wormhole correct); XY, fully
+  adaptive, Duato, bounded-misrouting and deflection meshes, under store-and-forward and
+  wormhole switching. A tutorial section on routing.
+
 ## 0.2.0
 
 New models and theory:

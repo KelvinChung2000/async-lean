@@ -21,6 +21,7 @@ every step is checked.  Read it top to bottom; each section is independent of th
 4. From an STG specification to a gate-level implementation.
 5. Gate delays and wire delays: speed independence and quasi-delay-insensitivity.
 6. From "can" to "will": fairness.
+7. Networks with dynamic routing: routing deadlock and livelock.
 
 Every theorem below is audited at the end with `#assert_standard_axioms`: the build fails if
 any of them depends on `sorry`, `native_decide` or an axiom other than `propext`,
@@ -196,16 +197,78 @@ theorem handshake_fair (r : handshake.toNet.lts.Run handshake.M₀) (hfair : r.S
   r.infOften_label_of_live (PNet.reachable_finite_of_bounded handshake_safe) hfair
     (handshake_correct.2.2 t)
 
-/-! ## Where next
+/-! ## 7. Networks with dynamic routing
+
+An interconnection network (a network on chip, a router mesh) is a `Network C P`: channels
+`C` with one-packet buffers (a virtual channel is a channel of its own) and packet headers `P`.
+`route c p` lists the hops a packet with header `p` in channel `c` may take; with *adaptive*
+routing there are several, and which one is taken is decided at run time by a *selection
+function*, typically the least congested free channel.  `N.Correct` says: for **every**
+work-conserving selection function, the network is deadlock free (whenever it holds a packet,
+some packet can move) and livelock free (no packet keeps moving forever without arriving).
+
+No configuration of the network is explored: `async_decide` checks the routing function
+locally — an acyclic channel dependency graph (Dally and Seitz) or acyclic *escape* channels
+(Duato), and a ranking function that decreases on every hop.
+
+A ring of four nodes, where channel `i` leads from node `i` to node `i + 1` and the header is
+the destination, deadlocks: -/
+
+def ring4 : Network ℕ ℕ where
+  arrived c d := (c + 1) % 4 == d
+  route c d := [((c + 1) % 4, d)]
+  inject := [(0, 2), (1, 3), (2, 0), (3, 1)]
+
+/--
+info: "DEADLOCK: the channel dependency cycle 0 → 1 → 2 → 3 → 0 can be filled with blocked packets by the run [.inject 1 3, .inject 2 0, .inject 3 1, .inject 0 2].\nProve it with: Network.not_deadlockFree_of_refuteB (as := [.inject 1 3, .inject 2 0, .inject 3 1, .inject 0 2]) (by decide +kernel)"
+-/
+#guard_msgs in
+#eval ring4.explain
+
+theorem ring4_deadlocks : ¬ ring4.DeadlockFree :=
+  Network.not_deadlockFree_of_refuteB (as := [.inject 1 3, .inject 2 0, .inject 3 1, .inject 0 2])
+    (by decide +kernel)
+
+/-- A second virtual channel per link (channels `4 + i`), used after crossing the dateline
+from node 3 to node 0, breaks the cycle. -/
+def datelineRing4 : Network ℕ ℕ where
+  arrived c d := (c % 4 + 1) % 4 == d
+  route c d := let i := (c % 4 + 1) % 4; [(if i = 0 then 4 else i + 4 * (c / 4), d)]
+  inject := [(0, 2), (1, 3), (2, 0), (3, 1)]
+
+theorem datelineRing4_correct : datelineRing4.Correct := by async_decide
+
+/-- Whatever the selection function, every reachable configuration drains: once injection
+stops, all packets are delivered. -/
+example {sel : Network.Selection ℕ ℕ} (hsel : datelineRing4.ValidSel sel) {f}
+    (hf : (datelineRing4.ltsWith sel).Reachable Network.empty f) :
+    Relation.ReflTransGen ((datelineRing4.ltsWith sel).IStep Network.Act.IsMove) f
+      Network.empty :=
+  datelineRing4_correct.drain hsel hf
+
+/-- Under a strongly fair scheduler no packet starves, even with injection going on forever. -/
+theorem datelineRing4_starvationFree : datelineRing4.StarvationFree := by async_decide
+
+/-- Under wormhole switching packets span several channels; the dateline ring stays correct for
+packets of every length. -/
+theorem datelineRing4_wormhole : datelineRing4.WormholeCorrect := by async_decide
+
+/-! Adaptive meshes with Duato's escape channels (also under wormhole switching), bounded
+misrouting (livelock freedom from a misrouting budget), deflection routing (a livelock) and
+proofs for dateline rings of every size are in `Examples/Routing.lean`.
+
+## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
   that compositions far too large to explore can be checked.
 * `Examples/Imported.lean`: designs read from `.g`, PNML and Verilog files.
 * `Examples/MullerRing.lean`: a proof for Muller rings of *every* size, using the theory
   directly.
+* `Examples/Routing.lean`: dynamically routed meshes and rings.
 -/
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso handshake_fair
+  ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
 
 end AsyncLean.Tutorial
