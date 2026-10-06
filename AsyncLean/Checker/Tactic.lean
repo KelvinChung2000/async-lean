@@ -8,6 +8,7 @@ import AsyncLean.Circuit.Wires
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
+import AsyncLean.Routing.Check
 
 /-!
 # The `async_decide` tactic
@@ -17,7 +18,12 @@ import AsyncLean.Checker.Packed
 * `N.Correct`, `N.toNet.lts.DeadlockFree N.M₀`, `N.toNet.lts.LivelockFree N.Internal N.M₀`,
   `N.toNet.lts.Live N.M₀`, `N.toNet.lts.Persistent N.M₀` for a Petri net `N : PNet`;
 * `C.Correct`, `C.lts.DeadlockFree C.s₀`, `C.lts.LivelockFree C.Internal C.s₀`,
-  `C.lts.Live C.s₀`, `C.SpeedIndependent` for a gate-level circuit `C : Circuit`.
+  `C.lts.Live C.s₀`, `C.SpeedIndependent` for a gate-level circuit `C : Circuit`;
+* `N.Correct`, `N.DeadlockFree`, `N.LivelockFree` for an interconnection network
+  `N : Network ℕ ℕ` with dynamic routing.  No configuration of the network is explored: the
+  routing function is checked locally (Dally–Seitz with the full routing function, then
+  Duato with the first-listed hop of every packet as its escape channel).  `async_routing
+  (escape := R₁)` names the escape subfunction explicitly.
 
 It works in three steps:
 
@@ -452,6 +458,42 @@ def matchExplicit (tgt : Expr) : Option (Expr × Expr × Option Expr × Goal) :=
     pure (E, s₀, some j, .livelock)
   | _ => none
 
+/-- Recognise a goal about a concrete interconnection network. -/
+def matchNetwork (tgt : Expr) : Option (Expr × Goal) :=
+  match tgt.getAppFnArgs with
+  | (``Network.Correct, #[_, _, N, _]) => some (N, .correct)
+  | (``Network.DeadlockFree, #[_, _, N, _]) => some (N, .deadlock)
+  | (``Network.LivelockFree, #[_, _, N, _]) => some (N, .livelock)
+  | _ => none
+
+/-- Prove a routing goal by `Network.correct_of_checkCert`, trying the escape subfunctions
+`escs` in turn; on failure, diagnose with `diagEsc`. -/
+def decideRouting (goal : MVarId) (N : Expr) (escs : List Expr) (diagEsc : Expr) (p : Goal)
+    (fuel : ℕ) (tac : String) : TacticM Unit := do
+  let (``Network, #[C, P]) := (← whnfR (← inferType N)).getAppFnArgs
+    | throwError "{tac}: expected a network"
+  let cmpC ← mkAppOptM ``StateOrd.cmp #[C, none]
+  let cmpQ ← mkAppOptM ``StateOrd.cmp #[← mkAppM ``Prod #[C, P], none]
+  let pairs ← evalToLiteral (← mkAppM ``Network.mkPairs #[N, cmpQ, mkNatLit fuel])
+  for esc in escs do
+    let ranks ← evalToLiteral (← mkAppM ``Network.mkRanks #[N, cmpC, esc, pairs])
+    let chk ← mkAppM ``Network.checkCert #[N, cmpC, cmpQ, esc, pairs, ranks]
+    if ← evalBool chk then
+      let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq chk (mkConst ``Bool.true))
+      let pf ← mkAppM ``Network.correct_of_checkCert #[h]
+      let pf ← match p with
+        | .deadlock => mkAppM ``And.left #[pf]
+        | .livelock => mkAppM ``And.right #[pf]
+        | _ => pure pf
+      unless ← isDefEq (← inferType pf) (← goal.getType) do
+        throwError "{tac}: could not match the goal with{indentExpr (← inferType pf)}"
+      goal.assign pf
+      replaceMainGoal [h.mvarId!]
+      evalTactic (← `(tactic| decide +kernel))
+      return
+  let diag ← mkAppM ``Network.diagnose #[N, cmpC, cmpQ, diagEsc, mkNatLit fuel]
+  throwError "{tac}: {← evalString diag}"
+
 /-- Deadlock and livelock freedom of an explicit LTS. -/
 def decideExplicit (goal : MVarId) (E s₀ : Expr) (j : Option Expr) (p : Goal) (fuel : ℕ) :
     TacticM Unit := do
@@ -633,10 +675,13 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
         (fun h => app ``Stg.implementation_correct_of_check #[N, gates, lit, lit', h]) p
   else if let some (E, s₀, j, p) := matchExplicit tgt then
     decideExplicit goal E s₀ j p fuel
+  else if let some (N, p) := matchNetwork tgt then
+    let route ← mkAppM ``Network.route #[N]
+    decideRouting goal N [route, ← mkAppM ``Network.firstHop #[N]] route p fuel "async_decide"
   else
     throwError "async_decide: unsupported goal{indentExpr tgt}\nExpected a property of a \
-      concrete `PNet`, `Circuit` or `Stg` (or of an STG implementation), or deadlock / \
-      livelock freedom of an explicit LTS."
+      concrete `PNet`, `Circuit`, `Stg` (or of an STG implementation) or `Network`, or \
+      deadlock / livelock freedom of an explicit LTS."
 
 end Tactic
 
@@ -652,6 +697,36 @@ elab_rules : tactic
         maxRecDepth := max ctx.maxRecDepth 1000000
         options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
       (Tactic.asyncDecide (n.map (·.getNat) |>.getD 100000))
+
+/-- `async_routing` proves `N.Correct`, `N.DeadlockFree` or `N.LivelockFree` for a concrete
+interconnection network `N` with dynamic routing, like `async_decide`.
+`async_routing (escape := R₁)` uses the routing subfunction `R₁` as the escape channels of
+Duato's theorem. -/
+syntax (name := asyncRoutingStx) "async_routing" (" (" &"escape" " := " term ")")?
+  (" (" &"fuel" " := " num ")")? : tactic
+
+elab_rules : tactic
+  | `(tactic| async_routing $[ (escape := $e)]? $[ (fuel := $n)]?) =>
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) }) do
+      let goal ← getMainGoal
+      let tgt ← instantiateMVars (← goal.getType)
+      let some (N, p) := Tactic.matchNetwork tgt
+        | throwError "async_routing: expected `N.Correct`, `N.DeadlockFree` or \
+            `N.LivelockFree` for a concrete network `N`"
+      let fuel := n.map (·.getNat) |>.getD 100000
+      match e with
+      | some e =>
+        let (``Network, #[C, P]) := (← whnfR (← inferType N)).getAppFnArgs
+          | throwError "async_routing: expected a network"
+        let ty ← mkArrow C (← mkArrow P (← mkAppM ``List #[← mkAppM ``Prod #[C, P]]))
+        let esc ← instantiateMVars (← Tactic.elabTermEnsuringType e ty)
+        Tactic.decideRouting goal N [esc] esc p fuel "async_routing"
+      | none =>
+        let route ← mkAppM ``Network.route #[N]
+        Tactic.decideRouting goal N [route, ← mkAppM ``Network.firstHop #[N]] route p fuel
+          "async_routing"
 
 /-- `async_minimize` (or `async_minimize right`) replaces the left (right) component of a
 parallel composition of explicit LTSs by its minimal quotient modulo branching bisimulation,

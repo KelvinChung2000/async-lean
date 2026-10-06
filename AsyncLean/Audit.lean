@@ -14,6 +14,7 @@ import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
 import AsyncLean.Auto.Structural
+import AsyncLean.Routing.Check
 import AsyncLean.AxiomAudit
 
 /-!
@@ -36,12 +37,26 @@ open LTS
   not_liveLabel_of_dead not_persistent_of
   FunBisim.deadlockFree_iff FunBisim.livelockFree_iff FunBisim.live_iff FunBisim.persistent_iff
   StepEqOn.reachable_iff StepEqOn.deadlockFree_iff StepEqOn.livelockFree_iff StepEqOn.live_iff
-  StepEqOn.persistent_iff
+  StepEqOn.persistent_iff LivelockFree.mono LivelockFree.of_sub Path.iStep_rtc
+  Path.iStep_transGen
 
 -- Fairness
 #assert_standard_axioms
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
+
+-- Interconnection networks with dynamic routing
+#assert_standard_axioms
+  Network.deadlockFree_of_escape Network.deadlockFree_of_cdg Network.movable_of_escape
+  Network.wf_of_acyclic Network.wf_of_rank Network.livelockFree_of_ranking
+  Network.livelockFree_of_ranking' Network.packetLivelockFree_of_ranking
+  Network.packet_hops_le Network.inevitablyEmpty Network.InevitablyEmpty.drain
+  Network.Correct.inevitablyEmpty Network.Correct.drain Network.DeadlockFree.lts
+  Network.deadlockFree_iff_adaptive Network.livelockFree_iff_adaptive
+  Network.adaptive_valid Network.freeOnly_valid Network.firstFree_valid
+  Network.StepWith.packetStep Network.legal_of_reachable
+  Network.not_deadlockFree_of_refuteB Network.not_livelockFree_of_refuteB
+  Network.correct_of_checkCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms

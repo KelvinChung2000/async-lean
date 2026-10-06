@@ -1,11 +1,12 @@
 # async-lean
 
 A Lean 4 / Mathlib formalisation of the theory needed to **prove that an asynchronous design
-never deadlocks and never livelocks**. It is fully machine-checked, with **no `sorry` and no
+never deadlocks and never livelocks**, including interconnection networks with **dynamic
+(adaptive) routing**. It is fully machine-checked, with **no `sorry` and no
 axioms** beyond Lean's three standard foundational ones (`propext`, `Classical.choice`,
 `Quot.sound`).
 
-It covers four ways of describing a design:
+It covers five ways of describing a design:
 
 | Model | Lean type | Typical use |
 |---|---|---|
@@ -13,6 +14,7 @@ It covers four ways of describing a design:
 | Signal transition graphs (STGs) | `StgModel`, `Stg` | specifications of asynchronous controllers, and their gate-level implementations |
 | Marked graphs, free-choice nets | `MarkedGraph`, `Net.FreeChoice` | pipelines, rings, choice-free and free-choice control |
 | Gate-level netlists | `Circuit` | C-element circuits, hazard analysis, speed independence, QDI |
+| Packet-switched networks | `Network` | networks on chip, router meshes and rings with adaptive routing and virtual channels |
 
 Designs can be written in Lean or imported from `.g` (Petrify / Workcraft), PNML and
 structural Verilog.
@@ -47,7 +49,8 @@ and transported to every model:
 | `Persistent s₀` | an enabled action is never disabled by another one (semi-modularity, i.e. speed independence / hazard freedom for circuits) |
 
 `PNet.Correct`, `StgModel.Correct` and `Circuit.Correct` bundle deadlock freedom, livelock
-freedom and liveness. `PNet.Bounded k` and `PNet.Safe` bound the number of tokens per place.
+freedom and liveness. For networks, `Network.Correct` is routing deadlock and livelock freedom
+under every dynamic routing policy (see below). `PNet.Bounded k` and `PNet.Safe` bound the number of tokens per place.
 
 The progress theorem `LTS.inevitablyExternal` shows what deadlock freedom plus livelock
 freedom buys you: from every reachable state, *every* run of internal steps inevitably
@@ -139,6 +142,56 @@ arbitrary gate delays; `QDI iso` also puts an independent delay on every wire br
 the forks of the signals in `iso` (isochronic forks). `Circuit.speedIndependent_of_qdi`
 proves that QDI implies speed independence.
 
+### Networks with dynamic routing
+
+A `Network C P` has channels `C`, each with a one-packet buffer (store-and-forward or virtual
+cut-through switching; a virtual channel is a channel of its own), and packet headers `P` (a
+destination, possibly with routing state such as a misrouting budget). `route c p` lists the
+hops a packet may take next. With adaptive routing there are several, and a **selection
+function** picks one at run time, for example the least congested free channel. `N.Correct`
+quantifies over every *work-conserving* selection function, one that never leaves a packet
+waiting while a permitted channel is free:
+
+* **routing deadlock freedom** (`Network.DeadlockFree`): whenever the network holds a
+  packet, some packet can move;
+* **routing livelock freedom** (`Network.LivelockFree`): there is no infinite run without new
+  injections, so packets cannot keep moving forever without reaching their destinations.
+
+Together they give the drain theorem `Network.Correct.drain`: from every reachable
+configuration, all packets are delivered once injection stops.
+
+```lean
+-- XY routing on virtual channel 0 (the escape channels, listed first) plus fully adaptive
+-- minimal routing on virtual channel 1 (mesh helpers from `Examples/Routing.lean`)
+def duatoMesh (k : ℕ) : Network ℕ ℕ where
+  arrived c d := head k c == d
+  route c d := let u := head k c
+    (ch u (xy k u d) 0, d) :: (productive k u d).map fun dr => (ch u dr 1, d)
+  inject := allPairs (k * k) fun s => ch s 4 0
+
+theorem duatoMesh_correct : (duatoMesh 4).Correct := by async_decide
+```
+
+The configurations of the network are never explored. The routing function is checked
+locally:
+
+* `Network.deadlockFree_of_cdg` (**Dally and Seitz**): the channel dependency graph is
+  acyclic;
+* `Network.deadlockFree_of_escape` (**Duato**): a connected routing subfunction (the escape
+  channels) has an acyclic dependency graph, even if the full adaptive routing function does
+  not. `async_decide` tries the full routing function, then the first-listed hop of every
+  packet; `async_routing (escape := R₁)` names the escape subfunction;
+* `Network.livelockFree_of_ranking`: a rank that decreases on every permitted hop, such as
+  the distance for minimal routing, or distance plus misrouting budget for bounded
+  non-minimal routing. `Network.packet_hops_le` bounds the number of hops of every packet.
+
+Failures come with counterexamples: a set of injections and hops that fills a dependency
+cycle with blocked packets (`Network.not_deadlockFree_of_refuteB`), or a packet that can go
+round a cycle forever (`Network.not_livelockFree_of_refuteB`). `Examples/Routing.lean`
+proves XY, Duato-adaptive and bounded-misrouting meshes correct. It refutes a plain ring, a
+fully adaptive mesh without escape channels and a deflection-routed mesh. It also proves
+dateline rings of every size correct.
+
 ### Large designs: structure and composition
 
 * `async_structural` proves safeness and boundedness (place invariants), livelock freedom
@@ -163,6 +216,10 @@ proves that QDI implies speed independence.
 * **Composition** (`LTS/Compose.lean`). Parallel composition, hiding and
   divergence-preserving weak bisimulation (a congruence that preserves deadlock and livelock
   freedom).
+* **Routing** (`Routing/Basic.lean`). Duato's theorem, Dally and Seitz's theorem, ranking
+  functions for livelock freedom and hop bounds, the drain theorem, and the reduction of
+  every selection policy to fully adaptive routing (`Network.deadlockFree_iff_adaptive`,
+  `Network.livelockFree_iff_adaptive`).
 * **Fairness** (`LTS/Fairness.lean`). Infinite runs and strong fairness: live actions happen
   infinitely often, and progress holds even when internal cycles exist.
 * **Generic rules** (`LTS/Properties.lean`). Inductive invariants, ranking functions into any
@@ -185,15 +242,17 @@ proves that QDI implies speed independence.
 | `Stg/Concrete.lean` | concrete STGs `Stg`, checkers and refutations for all STG properties |
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
 | `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, QDI, proof that QDI implies speed independence |
+| `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's and Dally–Seitz's theorems, livelock by ranking, drain theorem, refutations |
+| `Routing/Check.lean` | trusted routing checker `Network.checkCert`, untrusted certificate search and diagnosis |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
 | `Checker/Diagnose.lean`, `Minimize.lean` | untrusted counterexample search, certificate and quotient computation |
-| `Checker/Tactic.lean` | the `async_decide` and `async_minimize` tactics |
+| `Checker/Tactic.lean` | the `async_decide`, `async_routing` and `async_minimize` tactics |
 | `Auto/Simplex.lean`, `Auto/Structural.lean` | exact rational simplex (untrusted) and `async_structural` |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, routing |
 
 ## Why the results can be trusted
 
@@ -217,6 +276,11 @@ proves that QDI implies speed independence.
 
 * Semantics are interleaving: one transition, or one gate, at a time. For Petri nets, STGs
   and speed-independent circuits this is the standard semantics for these properties.
+* Networks use one-packet channel buffers (store-and-forward or virtual cut-through
+  switching). Wormhole switching, where a packet spans several channels, is not modelled.
+  Routing livelock freedom is "no infinite run without injections". Starvation of a packet by
+  an unbounded stream of new injections is a fairness question and is not covered. Duato's
+  theorem is proved in the sufficient direction.
 * Liveness is L4-liveness. Fairness-based "will happen" properties are derived from it in
   `LTS/Fairness.lean`. Livelock is divergence: an infinite run of internal actions.
 * Free-choice liveness is proved in the sufficient direction (siphon–trap ⇒ live), which is

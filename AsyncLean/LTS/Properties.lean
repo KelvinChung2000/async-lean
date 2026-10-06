@@ -28,6 +28,9 @@ system modelled as an LTS, and proves the generic proof rules used to establish 
 * `LiveLabel.of_ranking` : a distance function guiding the system to enable `l`.
 * `livelockFree_iff_acc` : livelock freedom is exactly well-foundedness of the internal
   step relation on the reachable states.
+* `LivelockFree.mono` / `LivelockFree.of_sub` : livelock freedom survives counting fewer
+  labels as internal, and passing to a system with fewer steps (a refinement, for example a
+  scheduler or a routing policy that resolves some of the nondeterminism).
 * `inevitablyExternal` : deadlock freedom + livelock freedom imply that along *every*
   internal path an external (observable) action eventually becomes enabled.
 
@@ -190,6 +193,22 @@ theorem LivelockFree.of_ranking {internal : L → Prop} {s₀ : S} (I : S → Pr
     A.LivelockFree internal s₀ :=
   LivelockFree.of_ranking_wf I h₀ hstep (· < ·) wellFounded_lt V hV
 
+/-- Livelock freedom is preserved when fewer labels count as internal. -/
+theorem LivelockFree.mono {internal internal' : L → Prop} {s₀ : S}
+    (hi : ∀ l, internal' l → internal l) (h : A.LivelockFree internal s₀) :
+    A.LivelockFree internal' s₀ :=
+  livelockFree_iff_acc.2 fun _ hs =>
+    Subrelation.accessible (fun ⟨l, hl, hst⟩ => ⟨l, hi l hl, hst⟩) (h.acc hs)
+
+/-- Livelock freedom is inherited by a system with fewer steps (a refinement). -/
+theorem LivelockFree.of_sub {B : LTS S L} {internal : L → Prop} {s₀ : S}
+    (hsub : ∀ s l s', B.step s l s' → A.step s l s') (h : A.LivelockFree internal s₀) :
+    B.LivelockFree internal s₀ := by
+  have hr : ∀ {s}, B.Reachable s₀ s → A.Reachable s₀ s := fun hs =>
+    Relation.ReflTransGen.mono (fun _ _ ⟨l, hl⟩ => ⟨l, hsub _ _ _ hl⟩) _ _ hs
+  exact livelockFree_iff_acc.2 fun _ hs =>
+    Subrelation.accessible (fun ⟨l, hl, hst⟩ => ⟨l, hl, hsub _ _ _ hst⟩) (h.acc (hr hs))
+
 /-- If no label is internal, the system is trivially livelock free. -/
 theorem LivelockFree.of_no_internal {internal : L → Prop} {s₀ : S}
     (h : ∀ l, ¬ internal l) : A.LivelockFree internal s₀ :=
@@ -213,6 +232,25 @@ steps diverges. -/
 theorem not_livelockFree_of_cycle {internal : L → Prop} {s₀ s : S} (hs : A.Reachable s₀ s)
     (hc : Relation.TransGen (A.IStep internal) s s) : ¬ A.LivelockFree internal s₀ :=
   fun h => not_acc_of_transGen_self hc (h.acc hs)
+
+/-- A path all of whose labels are internal is a sequence of internal steps. -/
+theorem Path.iStep_rtc {internal : L → Prop} {s s' : S} {ls : List L} (h : A.Path s ls s')
+    (hi : ∀ l ∈ ls, internal l) : Relation.ReflTransGen (A.IStep internal) s s' := by
+  induction h with
+  | nil => exact Relation.ReflTransGen.refl
+  | cons hst _ ih =>
+    exact Relation.ReflTransGen.head ⟨_, hi _ List.mem_cons_self, hst⟩
+      (ih fun l hl => hi l (List.mem_cons_of_mem _ hl))
+
+/-- A non-empty path all of whose labels are internal is a non-empty sequence of internal
+steps. -/
+theorem Path.iStep_transGen {internal : L → Prop} {s s' : S} {ls : List L} (h : A.Path s ls s')
+    (hi : ∀ l ∈ ls, internal l) (hne : ls ≠ []) : Relation.TransGen (A.IStep internal) s s' := by
+  cases h with
+  | nil => exact absurd rfl hne
+  | cons hst hp =>
+    exact Relation.TransGen.head' ⟨_, hi _ List.mem_cons_self, hst⟩
+      (hp.iStep_rtc fun l hl => hi l (List.mem_cons_of_mem _ hl))
 
 /-! ### Persistence -/
 
