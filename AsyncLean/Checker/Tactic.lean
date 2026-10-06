@@ -12,6 +12,7 @@ import AsyncLean.Checker.Packed
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
+import AsyncLean.Checker.FastPOR
 import AsyncLean.Import.Basic
 
 /-!
@@ -298,6 +299,14 @@ def treeE {β : Type} (α : Expr) (f : β → Expr) : BTree β → Expr
   | .node l x r => mkApp4 (mkConst ``BTree.node [Level.zero]) α (treeE α f l) (f x) (treeE α f r)
 def boolE (b : Bool) : Expr := if b then mkConst ``Bool.true else mkConst ``Bool.false
 
+/-- A net as a literal, with raw numerals. -/
+def pnetE (Nv : PNet) : Expr :=
+  let nats (xs : List ℕ) := listE natT (xs.map mkRawNatLit)
+  let tr (t : PTrans) := mkAppN (mkConst ``PTrans.mk)
+    #[toExpr t.name, nats t.pre, nats t.post, boolE t.internal, toExpr t.edge]
+  mkAppN (mkConst ``PNet.mk)
+    #[mkRawNatLit Nv.places, listE (mkConst ``PTrans) (Nv.trans.map tr), nats Nv.init]
+
 /-- A fast certificate as a literal. -/
 def certE (c : Fast.Cert) : Expr :=
   let n2 := prodT natT natT
@@ -329,6 +338,24 @@ def checkFastE (N : Expr) (Nv : PNet) (w : ℕ) (c : Fast.Cert) (dl ll lv : Bool
   mkAppN (mkConst ``PNet.checkFast) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), tb,
     mkRawNatLit (cond ll Nv.imask 0), boolE dl, boolE ll, boolE lv,
     mkRawNatLit (PNet.encW w Nv.init), certE c]
+
+/-- A table entry of the reduced search as a literal. -/
+def sentryE (e : PNet.SEntry) : Expr :=
+  let p2 := prodT natT natT
+  let p3 := prodT natT p2
+  let scs := listE p3 (e.2.2.map fun (a, b, c) =>
+    pairE natT p2 (mkRawNatLit a) (pairE natT natT (mkRawNatLit b) (mkRawNatLit c)))
+  pairE (mkConst ``PNet.FEntry) (prodT natT (listT p3)) (fentryE e.1)
+    (pairE natT (listT p3) (mkRawNatLit e.2.1) scs)
+
+/-- The reduced-state-space check `PNet.checkPOR` for the net `N` (with value `Nv`). -/
+def checkPORE (N : Expr) (Nv : PNet) (w : ℕ) (t : BTree (ℕ × ℕ)) : Expr :=
+  let B := 2 ^ w
+  let tb := listE (mkConst ``PNet.SEntry) ((Nv.stable w).map sentryE)
+  let tE := treeE (prodT natT natT) (fun (a, b) => pairE natT natT (mkRawNatLit a)
+    (mkRawNatLit b)) t
+  mkAppN (mkConst ``PNet.checkPOR) #[N, mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1), tb,
+    mkRawNatLit (PNet.encW w Nv.init), tE]
 
 end FastExpr
 
@@ -478,6 +505,23 @@ def closeWithCheckLit (goal : MVarId) (checkE : Expr) (mkPf : Expr → Expr) (p 
   let hTy ← mkEq checkE (mkConst ``Bool.true)
   let h ← mkFreshExprSyntheticOpaqueMVar hTy
   let pf ← project (mkPf h) p
+  let pfTy ← inferType pf
+  let pfTy' := pfTy.replace fun e => if e == lit then some orig else none
+  let gTy ← goal.getType
+  unless ← isDefEq pfTy' gTy do
+    let msg := "async_decide: the goal must be stated for the design's own initial state " ++
+      "and internal predicate; can prove"
+    throwError "{msg}{indentExpr pfTy'}\nbut the goal is{indentExpr gTy}"
+  goal.assign (← mkExpectedTypeHint pf gTy)
+  replaceMainGoal [h.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+
+/-- Variant of `closeWithCheckLit` whose proof builder runs in `MetaM`. -/
+def closeWithCheckLitM (goal : MVarId) (checkE : Expr) (mkPf : Expr → MetaM Expr)
+    (orig lit : Expr) : TacticM Unit := do
+  let hTy ← mkEq checkE (mkConst ``Bool.true)
+  let h ← mkFreshExprSyntheticOpaqueMVar hTy
+  let pf ← mkPf h
   let pfTy ← inferType pf
   let pfTy' := pfTy.replace fun e => if e == lit then some orig else none
   let gTy ← goal.getType
@@ -745,6 +789,14 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
     | _, some K =>
       unless ← decideAbstract goal N p (mkNatLit K) fuelE do abstractionTooCoarse (mkNatLit K)
     | _, none =>
+      -- deadlock freedom: partial-order reduction (stubborn sets) first
+      if p matches .deadlock then
+        let Nv ← evalAs PNet N
+        if let .ok (w, t) := Nv.mkPORCert fuel then
+          let lit := FastExpr.pnetE Nv
+          closeWithCheckLitM goal (FastExpr.checkPORE lit Nv w t)
+            (fun h => mkAppM ``PNet.deadlockFree_of_checkPOR #[h]) N lit
+          return
       -- a quick probe: if the state space does not close (e.g. an unbounded net), try the
       -- counter abstraction first
       unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do
@@ -768,8 +820,9 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
         | _ => (true, true, true, ``PNet.correct_of_checkFast)
       let Nv ← evalAs PNet N
       if let .ok (w, c) := Nv.mkFastCert dl ll lv fuel then
-        closeWithCheckM goal (FastExpr.checkFastE N Nv w c dl ll lv)
-          (fun h => mkAppM thm #[h]) .correct
+        let lit := FastExpr.pnetE Nv
+        closeWithCheckLitM goal (FastExpr.checkFastE lit Nv w c dl ll lv)
+          (fun h => mkAppM thm #[h]) N lit
         return
       -- safe nets that can always return to their initial marking
       let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``PNet.mkPackedHomeCert #[N, fuelE]))

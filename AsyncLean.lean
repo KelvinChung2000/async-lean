@@ -19,6 +19,8 @@ import AsyncLean.Checker.Packed
 import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.Fast
 import AsyncLean.Checker.FastPetri
+import AsyncLean.Petri.Stubborn
+import AsyncLean.Checker.FastPOR
 import AsyncLean.Stg.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Import.Basic
@@ -57,4 +59,5 @@ import AsyncLean.Examples.QDI
 import AsyncLean.Examples.Routing
 import AsyncLean.Examples.Step
 import AsyncLean.Examples.Unbounded
+import AsyncLean.Examples.Scale
 import AsyncLean.Tutorial

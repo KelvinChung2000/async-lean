@@ -207,6 +207,19 @@ theorem encW_fireL {w : ℕ} (pre post : List ℕ) :
     rw [e1, this, Nat.sub_add_cancel h0]
     ring
 
+/-- Firing in the packed encoding: add the output vector, subtract the input vector. -/
+theorem encW_fire (w : ℕ) (tr : PTrans) (xs : List ℕ) (hen : enabledL xs tr.pre = true) :
+    encW w xs + (fentry w xs.length tr).2.2.1 - (fentry w xs.length tr).2.1 =
+      encW w (fireL tr.pre tr.post 0 xs) := by
+  have := encW_fireL (w := w) tr.pre tr.post xs 0 fun k hk => by
+    simp only [enabledL, List.all_eq_true, decide_eq_true_eq] at hen
+    by_cases hp : k ∈ tr.pre
+    · have := hen k hp
+      rwa [Nat.zero_add, List.getD_eq_getElem _ _ hk] at *
+    · rw [Nat.zero_add, List.count_eq_zero_of_not_mem hp]; exact Nat.zero_le _
+  simp only [fentry, ← List.range_eq_range'] at this ⊢
+  omega
+
 theorem fOk_spec {w : ℕ} {xs : List ℕ} (hg : ∀ x ∈ xs, x < 2 ^ w) (places : ℕ) (t : PTrans)
     (h : fOk (2 ^ w - 1) (2 ^ w) (encW w xs) (fentry w places t).2.2.2 = true) :
     ∀ x ∈ fireL t.pre t.post 0 xs, x < 2 ^ w := by
@@ -249,14 +262,7 @@ theorem encodes (w : ℕ) :
       encW w xs + (fentry w N.places (N.tr t)).2.2.1 - (fentry w N.places (N.tr t)).2.1 =
         encW w (fireL (N.tr t).pre (N.tr t).post 0 xs) := by
     intro xs t hg hen
-    have := encW_fireL (w := w) (N.tr t).pre (N.tr t).post xs 0 fun k hk => by
-      simp only [enabledL, List.all_eq_true, decide_eq_true_eq] at hen
-      by_cases hp : k ∈ (N.tr t).pre
-      · have := hen k hp
-        rwa [Nat.zero_add, List.getD_eq_getElem _ _ hk] at *
-      · rw [Nat.zero_add, List.count_eq_zero_of_not_mem hp]; exact Nat.zero_le _
-    simp only [fentry, hg.1, ← List.range_eq_range'] at this ⊢
-    omega
+    rw [← hg.1]; exact encW_fire w _ xs hen
   refine ⟨fun xs hg i m' hm => ?_, fun xs t xs' hg hst => ?_⟩
   · obtain ⟨k, hk, rfl, hen, rfl, hok⟩ := mem_fsuccAux.1 hm
     have hkn : k < N.trans.length := by rwa [hlen] at hk
