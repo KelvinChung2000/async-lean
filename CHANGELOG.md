@@ -41,6 +41,18 @@
 
 Latest additions:
 
+* **Concurrent firing.** Step semantics for Petri nets (any multiset of enabled transitions
+  fires at once) and circuits (any set of excited gates switches at once), with proofs that
+  they agree with the interleaving semantics: always for nets, and for speed-independent
+  circuits (`Circuit.correct_iff_stepCorrect`).
+* **Unbounded nets.** Checking through finite over-approximations (`ExplicitLTS.Abstracts`,
+  with must-distances for liveness) and the counter abstraction of Petri nets
+  (`PNet.of_checkAbs`); `async_decide` uses it when the state space does not close, and
+  `async_decide (cap := k)` refines it.
+* **No dead end on hard siphon–trap instances.** The certificate search has a size budget;
+  beyond it `async_structural` falls back on model checking.
+* Faster untrusted search: AVL trees for explored states (sorted insertions no longer
+  degrade), and counterexample search in linear space.
 * **Commoner's theorem for free-choice nets, both directions** (`Net.live_iff_siphonTrap`);
   the necessity direction refutes liveness.
 * **Siphon–trap certificates.** The siphon–trap property is checked from a kernel-verified
