@@ -18,6 +18,7 @@ import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
+import AsyncLean.Checker.Abstract
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
@@ -86,6 +87,11 @@ open LTS
   Net.stepLts_reachable_iff Net.stepLts_deadlockFree_iff Net.stepLts_livelockFree_iff
   Net.stepLive_iff Circuit.stepLts_reachable_iff Circuit.stepLts_deadlockFree_iff
   Circuit.stepLts_livelockFree_iff Circuit.stepLive_iff Circuit.correct_iff_stepCorrect
+
+-- Unbounded nets: counter abstraction
+#assert_standard_axioms
+  ExplicitLTS.of_checkACert PNet.abstracts PNet.of_checkAbs PNet.correct_of_checkAbs
+  PNet.deadlockFree_of_checkAbs PNet.livelockFree_of_checkAbs PNet.live_of_checkAbs
 
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms

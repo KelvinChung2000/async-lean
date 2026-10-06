@@ -165,7 +165,7 @@ def exploreAux : ℕ → List S → BStore S → BStore S
   | fuel + 1, s :: stack, visited =>
     let r := (E.succ s).foldl
       (fun (acc : List S × BStore S) e =>
-        if acc.2.tree.find cmp e.2 then acc else (e.2 :: acc.1, acc.2.push cmp e.2))
+        if acc.2.find cmp e.2 then acc else (e.2 :: acc.1, acc.2.push cmp e.2))
       (stack, visited)
     exploreAux fuel r.1 r.2
 
@@ -177,7 +177,7 @@ def explore (fuel : ℕ) (s₀ : S) : BTree S :=
 def heightAux (internal : L → Bool) : ℕ → BStore (S × ℕ) → S → ℕ × BStore (S × ℕ)
   | 0, memo, _ => (0, memo)
   | fuel + 1, memo, s =>
-    match memo.tree.lookup cmp s with
+    match memo.lookup cmp s with
     | some h => (h, memo)
     | none =>
       let r := (E.succ s).foldl
@@ -201,7 +201,7 @@ def distAux (states : List S) : ℕ → ℕ → BStore (S × ℕ) → BTree S �
   | 0, _, tbl, _ => tbl
   | fuel + 1, k, tbl, layer =>
     let next := states.filter fun s =>
-      (tbl.tree.lookup cmp s).isNone && (E.succ s).any fun e => layer.find cmp e.2
+      (tbl.lookup cmp s).isNone && (E.succ s).any fun e => layer.find cmp e.2
     if next.isEmpty then tbl
     else distAux states fuel (k + 1)
       (next.foldl (fun tb s => tb.pushKV cmp s (k + 1)) tbl) (BTree.ofList next)

@@ -6,6 +6,8 @@ import AsyncLean.Auto.Structural
 import AsyncLean.Import.G
 import AsyncLean.Circuit.QDI
 import AsyncLean.LTS.Fairness
+import AsyncLean.Checker.Abstract
+import AsyncLean.Circuit.Step
 import AsyncLean.AxiomAudit
 import Mathlib.Data.Fin.VecNotation
 
@@ -22,6 +24,7 @@ every step is checked.  Read it top to bottom; each section is independent of th
 5. Gate delays and wire delays: speed independence and quasi-delay-insensitivity.
 6. From "can" to "will": fairness.
 7. Networks with dynamic routing: routing deadlock and livelock.
+7. Unbounded nets and concurrent firing.
 
 Every theorem below is audited at the end with `#assert_standard_axioms`: the build fails if
 any of them depends on `sorry`, `native_decide` or an axiom other than `propext`,
@@ -264,6 +267,29 @@ misrouting (livelock freedom from a misrouting budget), deflection routing (a li
 proofs for dateline rings of every size are in `Examples/Routing.lean`.
 
 ## Where next
+/-! ## 7. Unbounded nets and concurrent firing
+
+A net whose places can grow without bound has infinitely many reachable markings.
+`async_decide` then checks its *counter abstraction*, which tracks each place exactly up to
+a cap and as "cap or more" above it; the result transfers to the net (`PNet.of_checkAbs`). -/
+
+/-- A requester that may run ahead of its server: the request queue (place 1) is unbounded. -/
+def queue : PNet where
+  places := 4
+  trans := [
+    { name := "req", pre := [0], post := [0, 1] },
+    { name := "start", pre := [1, 2], post := [3] },
+    { name := "finish", pre := [3], post := [2], internal := true }]
+  init := [1, 0, 1, 0]
+
+theorem queue_correct : queue.Correct := by async_decide
+
+/-- The results hold when gates switch simultaneously, too: for a speed-independent circuit,
+the step semantics reaches exactly the same states (`Circuit.correct_iff_stepCorrect`). -/
+theorem forkCircuit_stepCorrect : forkCircuit.StepCorrect :=
+  (Circuit.correct_iff_stepCorrect forkCircuit_si.2).1 forkCircuit_si.1
+
+/-! ## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
   that compositions far too large to explore can be checked.
@@ -277,6 +303,6 @@ proofs for dateline rings of every size are in `Examples/Routing.lean`.
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso handshake_fair
   ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
-  forkCircuit_qdi_groups handshake_fair
+  forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
 
 end AsyncLean.Tutorial

@@ -152,28 +152,113 @@ def rebalance (t : BTree α) : BTree α := ofList (t.toListAcc [])
 
 end BTree
 
-/-- A tree together with its size and a rebalancing threshold: inserting keeps the tree
-balanced up to a constant factor in amortised `O(log n)` time. -/
+/-- An AVL tree: the balanced search tree used by the untrusted searches (insertion in any
+order, e.g. sorted, stays logarithmic). -/
+inductive AVL (α : Type*) where
+  | leaf : AVL α
+  | node (h : ℕ) (l : AVL α) (x : α) (r : AVL α) : AVL α
+  deriving Inhabited
+
+namespace AVL
+
+variable {α β : Type*}
+
+/-- Height. -/
+def height : AVL α → ℕ
+  | leaf => 0
+  | node h _ _ _ => h
+
+/-- Node with its height. -/
+def mk (l : AVL α) (x : α) (r : AVL α) : AVL α := node (max l.height r.height + 1) l x r
+
+/-- Restore the balance at a node whose subtrees differ in height by at most two. -/
+def balance (l : AVL α) (x : α) (r : AVL α) : AVL α :=
+  if l.height > r.height + 1 then
+    match l with
+    | node _ ll lx lr =>
+      if ll.height ≥ lr.height then mk ll lx (mk lr x r)
+      else match lr with
+        | node _ lrl lrx lrr => mk (mk ll lx lrl) lrx (mk lrr x r)
+        | leaf => mk l x r
+    | leaf => mk l x r
+  else if r.height > l.height + 1 then
+    match r with
+    | node _ rl rx rr =>
+      if rr.height ≥ rl.height then mk (mk l x rl) rx rr
+      else match rl with
+        | node _ rll rlx rlr => mk (mk l x rll) rlx (mk rlr rx rr)
+        | leaf => mk l x r
+    | leaf => mk l x r
+  else mk l x r
+
+/-- Insertion (no-op if an element comparing equal is present). -/
+def insert (cmp : α → α → Ordering) (a : α) : AVL α → AVL α
+  | leaf => node 1 leaf a leaf
+  | node h l x r =>
+    match cmp a x with
+    | .lt => balance (insert cmp a l) x r
+    | .gt => balance l x (insert cmp a r)
+    | .eq => node h l x r
+
+/-- Map insertion, comparing on keys (overwrites). -/
+def insertKV (cmp : α → α → Ordering) (a : α) (b : β) : AVL (α × β) → AVL (α × β)
+  | leaf => node 1 leaf (a, b) leaf
+  | node h l x r =>
+    match cmp a x.1 with
+    | .lt => balance (insertKV cmp a b l) x r
+    | .gt => balance l x (insertKV cmp a b r)
+    | .eq => node h l (a, b) r
+
+/-- Membership, by the comparison. -/
+def mem (cmp : α → α → Ordering) (a : α) : AVL α → Bool
+  | leaf => false
+  | node _ l x r =>
+    match cmp a x with
+    | .lt => mem cmp a l
+    | .gt => mem cmp a r
+    | .eq => true
+
+/-- Map lookup, by the comparison on keys. -/
+def lookup (cmp : α → α → Ordering) (a : α) : AVL (α × β) → Option β
+  | leaf => none
+  | node _ l x r =>
+    match cmp a x.1 with
+    | .lt => lookup cmp a l
+    | .gt => lookup cmp a r
+    | .eq => some x.2
+
+/-- The same (balanced) tree as a `BTree`. -/
+def toBTree : AVL α → BTree α
+  | leaf => .leaf
+  | node _ l x r => .node l.toBTree x r.toBTree
+
+end AVL
+
+/-- A growing set or map used by the untrusted searches. -/
 structure BStore (α : Type*) where
-  tree : BTree α := .leaf
-  size : ℕ := 0
-  cap : ℕ := 8
+  /-- The elements. -/
+  avl : AVL α := .leaf
 
 namespace BStore
 
 variable {α β : Type*}
 
-/-- Insert a new element (the caller ensures it is new); rebalance when the size doubles. -/
-def push (cmp : α → α → Ordering) (s : BStore α) (a : α) : BStore α :=
-  let t := s.tree.insert cmp a
-  if s.size + 1 < s.cap then { tree := t, size := s.size + 1, cap := s.cap }
-  else { tree := t.rebalance, size := s.size + 1, cap := 2 * s.cap }
+/-- Insert an element. -/
+def push (cmp : α → α → Ordering) (s : BStore α) (a : α) : BStore α := ⟨s.avl.insert cmp a⟩
 
 /-- Insert or overwrite a key–value pair. -/
 def pushKV (cmp : α → α → Ordering) (s : BStore (α × β)) (a : α) (b : β) : BStore (α × β) :=
-  let t := s.tree.insertKV cmp a b
-  if s.size + 1 < s.cap then { tree := t, size := s.size + 1, cap := s.cap }
-  else { tree := t.rebalance, size := s.size + 1, cap := 2 * s.cap }
+  ⟨s.avl.insertKV cmp a b⟩
+
+/-- Membership. -/
+def find (cmp : α → α → Ordering) (s : BStore α) (a : α) : Bool := s.avl.mem cmp a
+
+/-- Lookup. -/
+def lookup (cmp : α → α → Ordering) (s : BStore (α × β)) (a : α) : Option β :=
+  s.avl.lookup cmp a
+
+/-- The contents as a balanced `BTree`. -/
+def tree (s : BStore α) : BTree α := s.avl.toBTree
 
 end BStore
 

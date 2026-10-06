@@ -10,6 +10,7 @@ import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Minimize
 import AsyncLean.Checker.Packed
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Checker.Abstract
 import AsyncLean.Import.Basic
 
 /-!
@@ -43,6 +44,10 @@ contains data and a kernel-checked decision, so it depends on no axiom beyond `p
 If the design is incorrect, the tactic fails with a counterexample and the exact
 refutation theorem that proves the negation.  `async_decide (fuel := n)` raises the bound on
 the number of explored states (default `100000`).
+
+If the state space of a Petri net does not close (it may be unbounded), the tactic checks the
+net's counter abstraction instead (`AsyncLean.Checker.Abstract`), with caps just above the arc
+weights; `async_decide (cap := k)` chooses the cap.
 -/
 
 namespace AsyncLean
@@ -212,7 +217,7 @@ def diagnoseCSC (fuel : ℕ := 100000) : String :=
   let ps := N.paths fuel
   let tbl := (ps.foldl (fun (st : BStore (List Bool × (List (Fin N.net.trans.length) ×
       List (ℕ × Bool)))) p =>
-    if (st.tree.lookup Circuit.boolLexCmp p.1.2).isSome then st
+    if (st.lookup Circuit.boolLexCmp p.1.2).isSome then st
     else st.pushKV Circuit.boolLexCmp p.1.2 (p.2, N.edgesOf (N.succ p.1))) {}).tree
   match ps.findSome? fun p =>
       match tbl.lookup Circuit.boolLexCmp p.1.2 with
@@ -637,8 +642,32 @@ def minimize (right : Bool) (fuel : ℕ) : TacticM Unit := do
   evalTactic (← `(tactic| decide +kernel))
   evalTactic (← `(tactic| decide +kernel))
 
+/-- Try to prove a property of a Petri net from its counter abstraction with cap `K`; returns
+whether it succeeded. -/
+def decideAbstract (goal : MVarId) (N : Expr) (p : Goal) (K fuelE : Expr) : TacticM Bool := do
+  let app (n : Name) (args : Array Expr) : Expr := mkAppN (mkConst n) args
+  let (dl, ll, lv, thm) := match p with
+    | .deadlock => (true, false, false, ``PNet.deadlockFree_of_checkAbs)
+    | .livelock => (false, true, false, ``PNet.livelockFree_of_checkAbs)
+    | .live => (false, false, true, ``PNet.live_of_checkAbs)
+    | _ => (true, true, true, ``PNet.correct_of_checkAbs)
+  let litA := toExpr (← evalAs (ExplicitLTS.ACert (List ℕ))
+    (app ``PNet.mkAbsCert #[N, K, toExpr ll, toExpr lv, fuelE]))
+  let chkA := app ``PNet.checkAbs #[N, K, toExpr dl, toExpr ll, toExpr lv, litA]
+  if ← evalBool chkA then
+    closeWithCheck goal chkA (fun h => app thm #[N, K, litA, h]) .correct
+    return true
+  return false
+
+/-- The error reported when the counter abstraction with cap `K` is too coarse. -/
+def abstractionTooCoarse {α : Type} (K : Expr) : MetaM α := do
+  throwError "async_decide: the net's state space exceeds the fuel (it may be unbounded) and \
+    no counterexample was found, but the counter abstraction with cap {← evalAs ℕ K} is too \
+    coarse to prove the goal; try a larger cap with `async_decide (cap := k)`, or \
+    `async_structural`"
+
 /-- The `async_decide` tactic (see the module documentation). -/
-def asyncDecide (fuel : ℕ) : TacticM Unit := do
+def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
   let goal ← getMainGoal
   let tgt ← instantiateMVars (← goal.getType)
   let fuelE := mkNatLit fuel
@@ -651,13 +680,32 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
         exceeds it), or its state space exceeds the fuel"
     closeWithCheck goal chk (fun h => app ``PNet.bounded_of_check #[N, k, lit, h]) .correct
   else if let some (N, p) := matchPNet tgt then
-    let lit := toExpr (← evalAs (ExplicitLTS.Cert (List ℕ)) (app ``PNet.mkCert #[N, fuelE]))
-    match p with
-    | .persistent =>
+    let cert : MetaM Expr := do
+      return toExpr (← evalAs (ExplicitLTS.Cert (List ℕ)) (app ``PNet.mkCert #[N, fuelE]))
+    match p, cap with
+    | .persistent, _ =>
+      let lit ← cert
       let chk := app ``PNet.checkCertPersistent #[N, lit]
       ensure chk (app ``PNet.diagnosePersistent #[N, fuelE])
       closeWithCheck goal chk (fun h => app ``PNet.persistent_of_checkCert #[N, lit, h]) p
-    | _ =>
+    | _, some K =>
+      unless ← decideAbstract goal N p (mkNatLit K) fuelE do abstractionTooCoarse (mkNatLit K)
+    | _, none =>
+      -- a quick probe: if the state space does not close (e.g. an unbounded net), try the
+      -- counter abstraction first
+      unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do
+        -- caps above the arc weights keep the places holding few tokens exact
+        let k ← evalAs ℕ (app ``PNet.minCap #[N])
+        let mut proved := false
+        for K in [k + 1, k + 3] do
+          unless proved do
+            proved ← decideAbstract goal N p (mkNatLit K) fuelE
+        if proved then return
+        unless ← evalBool (app ``PNet.closes #[N, fuelE]) do
+          -- look for a counterexample among the first few thousand states
+          let d ← evalString (app ``PNet.diagnose #[N, mkNatLit (min fuel 500)])
+          unless d.startsWith "no counterexample" do throwError "async_decide: {d}"
+          abstractionTooCoarse (mkNatLit (k + 3))
       -- fastest path: safe nets that can always return to their initial marking
       let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``PNet.mkPackedHomeCert #[N, fuelE]))
       let chkH := app ``PNet.checkPackedHome #[N, litH]
@@ -677,6 +725,7 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
       if ← evalBool chkH then
         closeWithCheck goal chkH (fun h => app ``PNet.correct_of_checkCertHome #[N, litH, h]) p
       else
+      let lit ← cert
       let chk := app ``PNet.checkCert #[N, lit]
       ensure chk (app ``PNet.diagnose #[N, fuelE])
       closeWithCheck goal chk (fun h => app ``PNet.correct_of_checkCert #[N, lit, h]) p
@@ -761,18 +810,29 @@ def asyncDecide (fuel : ℕ) : TacticM Unit := do
 
 end Tactic
 
+/-- An option of `async_decide`: `(fuel := n)` or `(cap := k)`. -/
+syntax asyncDecideOpt := " (" (&"fuel" <|> &"cap") " := " num ")"
+
 /-- `async_decide` proves deadlock freedom, livelock freedom, liveness or persistence of a
 concrete `PNet` / `Circuit` by a kernel-checked certificate (see `AsyncLean.Checker.Tactic`).
--/
-syntax (name := asyncDecideStx) "async_decide" (" (" &"fuel" " := " num ")")? : tactic
+`(fuel := n)` bounds the number of explored states; `(cap := k)` checks a Petri net through
+its counter abstraction with cap `k` (see `AsyncLean.Checker.Abstract`). -/
+syntax (name := asyncDecideStx) "async_decide" asyncDecideOpt* : tactic
 
 elab_rules : tactic
-  | `(tactic| async_decide $[ (fuel := $n)]?) =>
+  | `(tactic| async_decide $opts*) => do
+    let mut fuel := 100000
+    let mut cap : Option ℕ := none
+    for o in opts do
+      match o with
+      | `(asyncDecideOpt| (fuel := $n)) => fuel := n.getNat
+      | `(asyncDecideOpt| (cap := $n)) => cap := some n.getNat
+      | _ => Lean.Elab.throwUnsupportedSyntax
     -- large certificates are big terms: lift the recursion limit while handling them
     withTheReader Core.Context (fun ctx => { ctx with
         maxRecDepth := max ctx.maxRecDepth 1000000
         options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
-      (Tactic.asyncDecide (n.map (·.getNat) |>.getD 100000))
+      (Tactic.asyncDecide fuel cap)
 
 /-- `async_routing` proves `N.Correct`, `N.DeadlockFree` or `N.LivelockFree` for a concrete
 interconnection network `N` with dynamic routing, like `async_decide`.
