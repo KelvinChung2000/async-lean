@@ -56,8 +56,8 @@ noncomputable def kany (l : List α) (p : α → Bool) : Bool :=
 /-- Lookup in a search tree keyed by natural numbers. -/
 noncomputable def kfind {β : Type*} (k : ℕ) (t : BTree (ℕ × β)) : Option β :=
   BTree.rec (motive := fun _ => Option β) none
-    (fun _ x _ rl rr => Bool.rec (motive := fun _ => Option β)
-      (Bool.rec (motive := fun _ => Option β) rr rl (Nat.blt k x.1)) (some x.2) (Nat.beq k x.1))
+    (fun _ x _ rl rr => Bool.rec (motive := fun _ => Option β) rl
+      (Bool.rec (motive := fun _ => Option β) rr (some x.2) (Nat.beq k x.1)) (Nat.ble x.1 k))
     t
 
 /-- `BTree.all`, by the recursor. -/
@@ -111,17 +111,17 @@ theorem mem_of_kfind {β : Type*} {k : ℕ} {t : BTree (ℕ × β)} {b : β} (h 
   | leaf => cases h
   | node l x r ihl ihr =>
     simp only [BTree.toList, List.mem_append, List.mem_cons]
-    change Bool.rec (motive := fun _ => Option β)
-      (Bool.rec (motive := fun _ => Option β) (kfind k r) (kfind k l) (Nat.blt k x.1)) (some x.2)
-      (Nat.beq k x.1) = some b at h
-    cases hb : Nat.beq k x.1
-    · rw [hb] at h
-      cases hl : Nat.blt k x.1
-      · rw [hl] at h; exact Or.inr (Or.inr (ihr h))
-      · rw [hl] at h; exact Or.inl (ihl h)
-    · rw [hb] at h
-      cases h
-      exact Or.inr (Or.inl (by rw [Nat.eq_of_beq_eq_true hb]))
+    change Bool.rec (motive := fun _ => Option β) (kfind k l)
+      (Bool.rec (motive := fun _ => Option β) (kfind k r) (some x.2) (Nat.beq k x.1))
+      (Nat.ble x.1 k) = some b at h
+    cases hl : Nat.ble x.1 k
+    · rw [hl] at h; exact Or.inl (ihl h)
+    · rw [hl] at h
+      cases hb : Nat.beq k x.1
+      · rw [hb] at h; exact Or.inr (Or.inr (ihr h))
+      · rw [hb] at h
+        cases h
+        exact Or.inr (Or.inl (by rw [Nat.eq_of_beq_eq_true hb]))
 
 theorem ktall_iff {t : BTree α} {p : α → Bool} : ktall t p = true ↔ ∀ x ∈ t.toList, p x = true := by
   rw [← BTree.all_eq_true]

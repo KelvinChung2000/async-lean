@@ -14,6 +14,7 @@ import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
 import AsyncLean.Checker.FastPORLive
+import AsyncLean.Checker.BDDGen
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
 
@@ -397,6 +398,33 @@ def checkPInvE (N : Expr) (f g J : ℕ) (cols : BTree (ℕ × ℕ × ℕ)) (bs :
   mkAppN (mkConst ``PNet.checkPInv)
     #[N, mkRawNatLit f, mkRawNatLit g, mkRawNatLit J, colsE, natsE bs]
 
+/-- A symbolic certificate as a literal. -/
+def bcertE (c : PNet.BCert) : Expr :=
+  let n := mkRawNatLit
+  let n2 := prodT natT natT
+  let n3 := prodT natT n2
+  let n4 := prodT natT n3
+  let lnat := listT natT
+  let nodeE := fun (k, (b : PNet.BNode)) => pairE natT (mkConst ``PNet.BNode) (n k)
+    (mkAppN (mkConst ``PNet.BNode.mk) #[n b.lvl, n b.var, n b.lo, n b.hi, n b.k1, n b.k0])
+  let leafE := fun (k, (l : PNet.BLeaf)) => pairE natT (mkConst ``PNet.BLeaf) (n k)
+    (mkAppN (mkConst ``PNet.BLeaf.mk) #[n l.wit, n l.d, n l.r, n l.k1, n l.k0,
+      listE lnat (l.traces.map fun tr => listE natT (tr.map n)), boolE l.dat])
+  let tripE := fun ((k, a, b, j) : ℕ × ℕ × ℕ × ℕ) =>
+    pairE natT n3 (n k) (pairE natT n2 (n a) (pairE natT natT (n b) (n j)))
+  let transE := fun (t : PNet.BTrans) => mkAppN (mkConst ``PNet.BTrans.mk) #[n t.pre, n t.post,
+    listE n3 (t.us.map fun (v, l, k) => pairE natT n2 (n v) (pairE natT natT (n l) (n k))),
+    treeE n4 tripE t.psI, treeE n4 tripE t.psR, treeE n4 tripE t.psD]
+  mkAppN (mkConst ``PNet.BCert.mk) #[n c.H, n c.rI, n c.rR, n c.rD,
+    treeE (prodT natT (mkConst ``PNet.BNode)) nodeE c.nodes,
+    treeE (prodT natT (mkConst ``PNet.BLeaf)) leafE c.leaves,
+    listE (mkConst ``PNet.BTrans) (c.trans.map transE), treeE n4 tripE c.covR,
+    treeE n4 tripE c.covD]
+
+/-- The symbolic check `PNet.checkBDD`. -/
+def checkBDDE (N : Expr) (dl ll lv : Bool) (c : PNet.BCert) : Expr :=
+  mkAppN (mkConst ``PNet.checkBDD) #[N, boolE dl, boolE ll, boolE lv, bcertE c]
+
 end FastExpr
 
 /-! ### Evaluation at elaboration time -/
@@ -616,6 +644,54 @@ def decideSE (goal : MVarId) (N : Expr) : TacticM Bool := do
       mkAppN (mkConst ``PNet.checkSE)
         #[lit, FastExpr.natsE bs, FastExpr.natsE yp, FastExpr.natsE yn, FastExpr.natsE z]])
     (fun hs => mkAppM ``PNet.deadlockFree_of_pinv hs.toArray)
+
+/-- Prove a property of a safe `PNet` from a symbolic certificate (`PNet.of_checkBDD`):
+`p = none` asks for safety.  Returns `false` (leaving the goal untouched) when no certificate
+is found. -/
+def decideBDD (goal : MVarId) (N : Expr) (p : Option Goal) (fuel : ℕ) : TacticM Bool := do
+  let net ← evalAs PNet N
+  unless net.packedWf do return false
+  let noInt := net.noInternal
+  let (dl, ll, lv) := match p with
+    | none => (false, false, false)
+    | some .deadlock => (true, false, false)
+    | some .livelock => (false, !noInt, false)
+    | some .live => (false, false, true)
+    | _ => (true, !noInt, true)
+  let needNoInt := noInt && (p matches some .livelock || p matches some .correct)
+  match PNet.BDDGen.mkBDDCert net dl ll lv fuel with
+  | .error _ => return false
+  | .ok (c, _) =>
+    closeWithChecksLit goal N net
+      (fun lit => FastExpr.checkBDDE lit dl ll lv c ::
+        (if needNoInt then [mkApp (mkConst ``PNet.noInternal) lit] else []))
+      (fun hs => match p with
+        | none => mkAppM ``PNet.safe_of_checkBDD #[hs[0]!]
+        | some .deadlock => mkAppM ``PNet.deadlockFree_of_checkBDD #[hs[0]!]
+        | some .live => mkAppM ``PNet.live_of_checkBDD #[hs[0]!]
+        | some .livelock =>
+          if needNoInt then mkAppM ``PNet.livelockFree_of_noInternal #[hs[1]!]
+          else mkAppM ``PNet.livelockFree_of_checkBDD #[hs[0]!]
+        | _ => do
+          if needNoInt then
+            mkAppM ``And.left #[← mkAppM ``PNet.correct_of_checkBDD_lf
+              #[hs[0]!, ← mkAppM ``PNet.livelockFree_of_noInternal #[hs[1]!]]]
+          else mkAppM ``And.left #[← mkAppM ``PNet.correct_of_checkBDD #[hs[0]!]])
+
+/-- `async_bdd`: prove a property of a concrete safe `PNet` from a symbolic certificate. -/
+def asyncBDD (fuel : ℕ) : TacticM Unit := do
+  let goal ← getMainGoal
+  let tgt ← instantiateMVars (← goal.getType)
+  let (N, p) ← match matchPNet tgt, matchBounded tgt with
+    | some (N, p), _ => pure (N, some p)
+    | none, some (N, k) =>
+      unless (← evalAs ℕ k) == 1 do throwError "async_bdd: only safety (`Bounded 1`)"
+      pure (N, none)
+    | none, none => throwError "async_bdd: unsupported goal{indentExpr tgt}"
+  if p matches some .persistent then throwError "async_bdd: persistence is not supported"
+  unless ← decideBDD goal N p fuel do
+    throwError "async_bdd: no symbolic certificate found (the net must be safe, without \
+      repeated arcs, and satisfy the property)"
 
 /-- Prove `N.Bounded k` from packed place invariants (`PNet.bounded_of_checkPInv`). -/
 def decideBounded (goal : MVarId) (N k : Expr) : TacticM Bool := do
@@ -857,6 +933,10 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
   let fuelE := mkNatLit fuel
   let app (n : Name) (args : Array Expr) : Expr := mkAppN (mkConst n) args
   if let some (N, k) := matchBounded tgt then
+    -- safety of a large safe net: a symbolic invariant
+    if (← evalAs ℕ k) == 1 then
+      unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do
+        if ← decideBDD goal N none 200000 then return
     let lit := toExpr (← evalAs (ExplicitLTS.InvCert (List ℕ) Unit) (app ``PNet.mkBoundCert #[N, fuelE]))
     let chk := app ``PNet.checkBounded #[N, k, lit]
     unless ← evalBool chk do
@@ -918,6 +998,8 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
       -- a quick probe: if the state space does not close (e.g. an unbounded net), try the
       -- counter abstraction first
       unless ← evalBool (app ``PNet.closes #[N, mkNatLit (min fuel 10000)]) do
+        -- a large safe net: a symbolic certificate (decision diagrams)
+        if ← decideBDD goal N (some p) 200000 then return
         -- caps above the arc weights keep the places holding few tokens exact
         let k ← evalAs ℕ (app ``PNet.minCap #[N])
         let mut proved := false
@@ -1105,6 +1187,18 @@ elab_rules : tactic
         let route ← mkAppM ``Network.route #[N]
         Tactic.decideRouting goal N [route, ← mkAppM ``Network.firstHop #[N]] route p fuel
           "async_routing"
+/-- `async_bdd` proves deadlock freedom, livelock freedom, liveness, correctness or safety of
+a concrete safe `PNet` from a symbolic certificate: a decision diagram of an inductive
+invariant with ranks, distances and witnesses, checked by the kernel without enumerating the
+markings (`PNet.of_checkBDD`).  `(fuel := n)` bounds the number of diagram nodes. -/
+syntax (name := asyncBddStx) "async_bdd" (" (" &"fuel" " := " num ")")? : tactic
+
+elab_rules : tactic
+  | `(tactic| async_bdd $[ (fuel := $n)]?) =>
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
+      (Tactic.asyncBDD (n.map (·.getNat) |>.getD 300000))
 
 /-- `async_minimize` (or `async_minimize right`) replaces the left (right) component of a
 parallel composition of explicit LTSs by its minimal quotient modulo branching bisimulation,

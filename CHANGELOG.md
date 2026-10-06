@@ -50,6 +50,13 @@ Latest additions:
   `async_decide` proves `Correct`, livelock freedom and liveness this way
   (`PNet.correct_of_checkPORc`): a 40-stage FIFO is `Correct` in 4.4 s, a 12-stage one in
   0.25 s instead of 13 s.
+* **Symbolic certificates.** Decision diagrams of an inductive invariant, of witnesses, and of
+  distances and ranks, checked by the kernel through joint walks before and after each
+  transition without enumerating any marking (`PNet.of_checkBDD`); computed by a small
+  untrusted decision-diagram package (`PNet.BDDGen.mkBDDCert`). New tactic `async_bdd`;
+  `async_decide` falls back on it for large safe nets.
+* **Faster kernel lookups.** `Fast.kfind` compares with `Nat.ble` instead of `Nat.blt`,
+  which halves the cost of a lookup in the kernel and speeds up every fast checker.
 * **The state equation.** Deadlock freedom from a Farkas certificate refuting every dead
   solution of `M = M₀ + C · x` (`Net.deadlockFree_of_stateEq`), found by linear programming,
   with no exploration; used by `async_structural`, and by `async_decide` when the reduced

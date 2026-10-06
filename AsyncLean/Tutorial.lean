@@ -326,6 +326,16 @@ marking by marking, so whole `Correct` goals scale too. -/
 theorem fifo30_correct : (Examples.fifo 30 "in" "out").Correct := by
   async_decide
 
+/-! For safe nets there is also a *symbolic* route: `async_bdd` describes the reachable
+markings by a decision diagram, an inductive invariant that the kernel checks transition by
+transition without enumerating a single marking (`PNet.of_checkBDD`).  It proves safety and
+deadlock freedom, and liveness and livelock freedom when distances and ranks also have small
+diagrams. -/
+
+/-- Ten philosophers never put two tokens on a place, from a symbolic invariant. -/
+theorem tenPhilosophers_safe : (Examples.philosophers 10 true).Safe := by
+  async_bdd
+
 /-! ## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
@@ -341,6 +351,6 @@ theorem fifo30_correct : (Examples.fifo 30 "in" "out").Correct := by
   ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree datelineRing4_wormhole
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
   forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
-  fifo30_deadlockFree twelvePhilosophers_deadlockFree fifo30_correct
+  fifo30_deadlockFree twelvePhilosophers_deadlockFree fifo30_correct tenPhilosophers_safe
 
 end AsyncLean.Tutorial

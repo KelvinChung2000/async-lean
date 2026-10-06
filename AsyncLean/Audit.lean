@@ -22,6 +22,7 @@ import AsyncLean.Checker.Abstract
 import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
 import AsyncLean.Checker.FastPORLive
+import AsyncLean.Checker.BDD
 import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
@@ -112,6 +113,12 @@ open LTS
   Net.livelockFree_of_stubborn PNet.of_checkPORc PNet.correct_of_checkPORc
   PNet.correct_of_checkPORc_lf PNet.live_of_checkPORc PNet.livelockFree_of_checkPORc
   PNet.livelockFree_of_noInternal
+
+-- Symbolic certificates: decision diagrams of invariants, witnesses, distances and ranks
+#assert_standard_axioms
+  PNet.funBisimOn_packed PNet.Reach.known PNet.tclaim PNet.of_checkBDD PNet.correct_of_checkBDD
+  PNet.correct_of_checkBDD_lf PNet.deadlockFree_of_checkBDD PNet.livelockFree_of_checkBDD
+  PNet.live_of_checkBDD PNet.safe_of_checkBDD
 
 -- The state equation: deadlock freedom and bounds without exploration
 #assert_standard_axioms

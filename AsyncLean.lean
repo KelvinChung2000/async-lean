@@ -23,6 +23,8 @@ import AsyncLean.Petri.Stubborn
 import AsyncLean.Checker.FastPOR
 import AsyncLean.Petri.StubbornLive
 import AsyncLean.Checker.FastPORLive
+import AsyncLean.Checker.BDD
+import AsyncLean.Checker.BDDGen
 import AsyncLean.Petri.StateEquation
 import AsyncLean.Auto.StateEq
 import AsyncLean.Stg.Basic
@@ -64,4 +66,5 @@ import AsyncLean.Examples.Routing
 import AsyncLean.Examples.Step
 import AsyncLean.Examples.Unbounded
 import AsyncLean.Examples.Scale
+import AsyncLean.Examples.Symbolic
 import AsyncLean.Tutorial
