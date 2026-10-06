@@ -6,6 +6,7 @@ import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
 import AsyncLean.Petri.SiphonCheck
 import AsyncLean.Circuit.QDI
+import AsyncLean.Circuit.Packed
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -66,6 +67,11 @@ open LTS
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
   Network.wormholeCorrect_of_wcheckCert
+-- Bit-packed circuit checking
+#assert_standard_axioms
+  Circuit.bisimP Circuit.correct_of_checkCertP Circuit.correct_of_checkCertHomeP
+  Circuit.speedIndependent_of_checkCertP Circuit.speedIndependent_of_checkPCertP
+  ExplicitLTS.persistent_of_checkPCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms
