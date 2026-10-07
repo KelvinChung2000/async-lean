@@ -31,6 +31,7 @@ import AsyncLean.Routing.WormholeHold
 import AsyncLean.Routing.RTL
 import AsyncLean.Checker.BitmapPetri
 import AsyncLean.Checker.AbstractPot
+import AsyncLean.Routing.Optimal
 import AsyncLean.AxiomAudit
 
 /-!
@@ -91,6 +92,12 @@ open LTS
   Network.wormholeStarvationFree_of_escape_ranking Network.wormholeStarvationFree_of_wcheckCert
   Network.wormholeDeadlockFree_of_holds Network.wormholeDeadlockFree_of_wholdCheck
   Network.wormholeDeadlockFree_of_wholdCert
+
+-- Maximally adaptive routing
+#assert_standard_axioms
+  Network.not_deadlockFree_of_refuteBetweenB Network.not_deadlockFree_of_checkTree
+  Network.maximallyAdaptive_of_maxCheck Network.MaximallyAdaptive.not_deadlockFree
+  Network.not_maximallyAdaptive_of_extends Network.Path.of_extends Network.Extends.trans
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms
