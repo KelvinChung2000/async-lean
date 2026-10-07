@@ -14,6 +14,8 @@ import AsyncLean.Checker.FastPetri
 import AsyncLean.Checker.FastPOR
 import AsyncLean.Checker.FastPORLive
 import AsyncLean.Checker.BDDGen
+import AsyncLean.Checker.BitmapGen
+import AsyncLean.Checker.AbstractPot
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
 import AsyncLean.Routing.WormholeCheck
@@ -424,6 +426,46 @@ def bcertE (c : PNet.BCert) : Expr :=
 def checkBDDE (N : Expr) (dl ll lv : Bool) (c : PNet.BCert) : Expr :=
   mkAppN (mkConst ``PNet.checkBDD) #[N, boolE dl, boolE ll, boolE lv, bcertE c]
 
+/-- A test of a packed transition table as a literal. -/
+def testE (a : Aff.Test) : Expr :=
+  mkAppN (mkConst ``Aff.Test.mk) #[mkRawNatLit a.sh, mkRawNatLit a.w, mkRawNatLit a.c,
+    mkRawNatLit a.kind]
+
+/-- A packed transition as a literal. -/
+def trE (e : Aff.Tr) : Expr :=
+  let tT := mkConst ``Aff.Test
+  mkAppN (mkConst ``Aff.Tr.mk) #[listE tT (e.guard.map testE), listE tT (e.ok.map testE),
+    mkRawNatLit e.add, mkRawNatLit e.sub]
+
+/-- A layout as a literal. -/
+def layoutE (L : List LField) : Expr :=
+  listE (mkConst ``LField) (L.map fun f => mkAppN (mkConst ``LField.mk)
+    #[mkRawNatLit f.sh, mkRawNatLit f.w, natsE f.ps, boolE f.comp])
+
+/-- A bitmap certificate as a literal; equal bitmaps share one literal. -/
+def bitmapCertE (c : Bitmap.Cert) : Expr := Id.run do
+  let mut memo : Std.HashMap ℕ Expr := {}
+  for (_, a) in c.1.toList do
+    unless memo.contains a do memo := memo.insert a (mkRawNatLit a)
+  let lit (v : ℕ) : Expr := memo.getD v (mkRawNatLit v)
+  let p2 := prodT natT natT
+  let tE := treeE p2 (fun (h, a) => pairE natT natT (mkRawNatLit h) (lit a)) c.1
+  let lln := listT (listT natT)
+  let hubT := prodT natT lln
+  let hubs := listE hubT (c.2.1.map fun (h, trs) => pairE natT lln (mkRawNatLit h)
+    (listE (listT natT) (trs.map fun tr => listE natT (tr.map mkRawNatLit))))
+  let restT := prodT (listT hubT) p2
+  return pairE (mkApp (mkConst ``BTree [Level.zero]) p2) restT tE
+    (pairE (listT hubT) p2 hubs (pairE natT natT (mkRawNatLit c.2.2.1) (mkRawNatLit c.2.2.2)))
+
+/-- The bitmap check `PNet.checkBitmap` for the net `N` (with value `Nv`). -/
+def checkBitmapE (N : Expr) (Nv : PNet) (L : List LField) (k : ℕ) (dl ll lv : Bool)
+    (c : Bitmap.Cert) (pR : List ℕ × ℕ) (pD : List ℕ × ℕ × ℕ) : Expr :=
+  mkAppN (mkConst ``PNet.checkBitmap) #[N, layoutE L, mkRawNatLit k,
+    mkRawNatLit (cond ll Nv.imask 0), mkRawNatLit pR.2, mkRawNatLit pD.2.1, mkRawNatLit pD.2.2,
+    natsE pR.1, natsE pD.1, boolE dl, boolE ll, boolE lv,
+    mkRawNatLit (PNet.encV L Nv.initVec), bitmapCertE c]
+
 end FastExpr
 
 /-! ### Evaluation at elaboration time -/
@@ -692,6 +734,57 @@ def asyncBDD (fuel : ℕ) : TacticM Unit := do
     throwError "async_bdd: no symbolic certificate found (the net must be safe, without \
       repeated arcs, and satisfy the property)"
 
+/-- Estimated kernel time, in seconds, of a bitmap certificate: every round (closure, ranks,
+distances) costs, per transition and chunk, a fixed overhead and a time per byte of bitmap. -/
+def bitmapCost (T k : ℕ) (c : Bitmap.Cert) : Float :=
+  let chunks := c.1.toList.length
+  let rounds := 1 + c.2.2.1 + c.2.2.2
+  rounds.toFloat * T.toFloat * chunks.toFloat * (0.0004 + (2 ^ k / 8 : ℕ).toFloat * 3.0e-8)
+
+/-- Prove a property of a bounded `PNet` from a bitmap certificate (`PNet.of_checkBitmap`):
+`p = none` asks for the bound `K`.  Returns `false` (leaving the goal untouched) when no
+certificate is found, or when its estimated cost exceeds `limit` (seconds). -/
+def decideBitmap (goal : MVarId) (N : Expr) (p : Option Goal) (K : ℕ := 1)
+    (maxChunks : ℕ := 100000) (low : ℕ := 20) (limit : Option Float := none) : TacticM Bool := do
+  let net ← evalAs PNet N
+  unless net.wf do return false
+  let (dl, ll, lv) := match p with
+    | none => (false, false, false)
+    | some .deadlock => (true, false, false)
+    | some .livelock => (false, true, false)
+    | some .live => (false, false, true)
+    | _ => (true, true, true)
+  match net.mkBitmapCert dl ll lv p.isNone maxChunks low with
+  | .error _ => return false
+  | .ok (L, k, c, pR, pD) =>
+    if p.isNone && !net.layoutBound L K then return false
+    if let some lim := limit then
+      if bitmapCost net.trans.length k c > lim then return false
+    closeWithChecksLit goal N net
+      (fun lit => FastExpr.checkBitmapE lit net L k dl ll lv c pR pD ::
+        (if p.isNone then [mkApp3 (mkConst ``PNet.layoutBound) lit (FastExpr.layoutE L)
+          (mkRawNatLit K)] else []))
+      (fun hs => match p with
+        | none => mkAppM ``PNet.bounded_of_checkBitmap #[hs[0]!, hs[1]!]
+        | some .deadlock => mkAppM ``PNet.deadlockFree_of_checkBitmap #[hs[0]!]
+        | some .live => mkAppM ``PNet.live_of_checkBitmap #[hs[0]!]
+        | some .livelock => mkAppM ``PNet.livelockFree_of_checkBitmap #[hs[0]!]
+        | _ => mkAppM ``PNet.correct_of_checkBitmap #[hs[0]!])
+
+/-- `async_bitmap`: prove a property of a concrete bounded `PNet` from a bitmap certificate. -/
+def asyncBitmap (maxChunks low : ℕ) : TacticM Unit := do
+  let goal ← getMainGoal
+  let tgt ← instantiateMVars (← goal.getType)
+  let ok ← match matchPNet tgt, matchBounded tgt with
+    | some (N, p), _ =>
+      if p matches .persistent then throwError "async_bitmap: persistence is not supported"
+      decideBitmap goal N (some p) 1 maxChunks low
+    | none, some (N, k) => decideBitmap goal N none (← evalAs ℕ k) maxChunks low
+    | none, none => throwError "async_bitmap: unsupported goal{indentExpr tgt}"
+  unless ok do
+    throwError "async_bitmap: no bitmap certificate found (the net must be bounded, satisfy \
+      the property, and its packed reachable markings fit in the chunk budget)"
+
 /-- Prove `N.Bounded k` from packed place invariants (`PNet.bounded_of_checkPInv`). -/
 def decideBounded (goal : MVarId) (N k : Expr) : TacticM Bool := do
   let net ← evalAs PNet N
@@ -916,6 +1009,39 @@ def decideAbstract (goal : MVarId) (N : Expr) (p : Goal) (K fuelE : Expr) : Tact
   if ← evalBool chkA then
     closeWithCheck goal chkA (fun h => app thm #[N, K, litA, h]) .correct
     return true
+  -- linear potentials see what the cap hides: lexicographic ranks and must-distances
+  let net ← evalAs PNet N
+  let Kv ← evalAs ℕ K
+  let fuel ← evalAs ℕ fuelE
+  unless net.wf && net.capOk Kv do return false
+  let thmP := match p with
+    | .deadlock => ``PNet.deadlockFree_of_checkAbsP
+    | .livelock => ``PNet.livelockFree_of_checkAbsP
+    | .live => ``PNet.live_of_checkAbsP
+    | _ => ``PNet.correct_of_checkAbsP
+  let internal : ℕ → Bool := if ll then net.internalKey else fun _ => false
+  let labels := if lv then List.range net.trans.length else []
+  let a₀ := net.init.map (min · Kv)
+  let allMask := 2 ^ net.trans.length - 1
+  let dCands : List (List ℕ × ℕ × ℕ) := ([], 0, allMask) ::
+    (if lv then
+      let w := PNet.BDDGen.linLex net (List.range net.trans.length)
+      let (d, k) := net.potMasks w
+      if d != 0 then [(w, d, k)] else []
+    else [])
+  for (wR, dR) in net.rankCands ll do
+    for (wD, dD, kD) in dCands do
+      let c := (net.abstr Kv).mkACertP lexCmp Fin.val internal dR.testBit dD.testBit kD.testBit
+        labels fuel a₀
+      if (net.abstr Kv).checkACertP lexCmp Fin.val dl internal dR.testBit dD.testBit kD.testBit
+          labels a₀ c then
+        let litP := toExpr c
+        let chk := app ``PNet.checkAbsP #[N, K, toExpr dl, toExpr ll, toExpr lv,
+          FastExpr.natsE wR, mkNatLit dR, FastExpr.natsE wD, mkNatLit dD, mkNatLit kD, litP]
+        closeWithCheck goal chk (fun h => mkAppN (mkConst thmP)
+          #[N, K, FastExpr.natsE wR, FastExpr.natsE wD, mkNatLit dR, mkNatLit dD, mkNatLit kD,
+            litP, h]) .correct
+        return true
   return false
 
 /-- The error reported when the counter abstraction with cap `K` is too coarse. -/
@@ -959,6 +1085,11 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
         let Nv ← evalAs PNet N
         match Nv.mkPORCert fuel with
         | .ok (w, t) =>
+          -- a large reduced state space: bitmaps may be cheaper (about a millisecond of
+          -- kernel time per reduced marking)
+          let n := t.toList.length
+          if n > 5000 then
+            if ← decideBitmap goal N (some p) 1 8192 20 (some (n.toFloat * 0.001)) then return
           let lit := FastExpr.pnetE Nv
           closeWithCheckLitM goal (FastExpr.checkPORE lit Nv w t)
             (fun h => mkAppM ``PNet.deadlockFree_of_checkPOR #[h]) N lit
@@ -968,6 +1099,7 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           -- unbounded): the state equation needs no exploration at all
           unless e.startsWith "deadlock" do
             if ← decideSE goal N then return
+            if ← decideBitmap goal N (some p) 1 8192 20 (some 120.0) then return
       -- partial-order reduction for livelock freedom and liveness too
       unless p matches .deadlock do
         let Nv ← evalAs PNet N
@@ -975,7 +1107,18 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
         -- without internal transitions, livelock freedom is immediate and the visibility
         -- conditions (which would force full expansion) are not needed
         let ll := !noInt && !(p matches .live)
-        if let .ok (w, t, hubs) := Nv.mkPORcCert ll fuel then
+        let porc := Nv.mkPORcCert ll fuel
+        -- bitmaps, when the reduced state space is large or the reduction does not reduce
+        let porcSize : Option ℕ := match porc with
+          | .ok (_, t, _) =>
+            let l := t.toList
+            if 2 * (l.filter fun x => x.2.2.2.1 == 0).length < l.length then some l.length
+            else none
+          | .error _ => none
+        if porcSize.all (· > 5000) then
+          let lim := (porcSize.map fun n => n.toFloat * 0.001).getD 120.0
+          if ← decideBitmap goal N (some p) 1 8192 20 (some lim) then return
+        if let .ok (w, t, hubs) := porc then
           let l := t.toList
           -- worth it only if the reduction actually reduces
           if 2 * (l.filter fun x => x.2.2.2.1 == 0).length < l.length then
@@ -1163,6 +1306,29 @@ elab_rules : tactic
         maxRecDepth := max ctx.maxRecDepth 1000000
         options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
       (Tactic.asyncBDD (n.map (·.getNat) |>.getD 300000))
+
+/-- `async_bitmap` proves `N.Correct`, deadlock freedom, livelock freedom, liveness or
+`N.Bounded k` of a concrete bounded `PNet` from a *bitmap* certificate: the reachable
+markings, packed by a layout of fields, grouped into chunks of bitmaps, each transition fired
+on a whole chunk by one shift, checked by the kernel (`PNet.of_checkBitmap`).
+`(chunks := n)` bounds the number of chunks. -/
+syntax asyncBitmapOpt := " (" (&"chunks" <|> &"low") " := " num ")"
+
+syntax (name := asyncBitmapStx) "async_bitmap" asyncBitmapOpt* : tactic
+
+elab_rules : tactic
+  | `(tactic| async_bitmap $opts*) => do
+    let mut chunks := 100000
+    let mut low := 20
+    for o in opts do
+      match o with
+      | `(asyncBitmapOpt| (chunks := $n)) => chunks := n.getNat
+      | `(asyncBitmapOpt| (low := $n)) => low := n.getNat
+      | _ => throwUnsupportedSyntax
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) })
+      (Tactic.asyncBitmap chunks low)
 
 /-- `async_routing` proves `N.Correct`, `N.DeadlockFree` or `N.LivelockFree` for a concrete
 interconnection network `N` with dynamic routing, like `async_decide`.
