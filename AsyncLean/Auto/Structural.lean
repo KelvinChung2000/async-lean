@@ -5,7 +5,9 @@ import AsyncLean.Auto.Simplex
 import AsyncLean.Import.Basic
 import AsyncLean.Petri.Invariant
 import AsyncLean.MarkedGraph.Basic
-import AsyncLean.Petri.FreeChoice
+import AsyncLean.Petri.SiphonCheck
+import AsyncLean.Checker.Tactic
+import AsyncLean.Auto.StateEq
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -20,9 +22,10 @@ search, in untrusted code) and has the kernel check them:
   (`PNet.bounded_of_pinvTable`);
 * `N.toNet.lts.LivelockFree N.Internal M₀` (for any `M₀`) — a linear ranking function
   (`PNet.livelockFree_of_rankingTable`);
-* `N.lts.Live M`, `N.lts.DeadlockFree M` for an ordinary free-choice net `N` — Commoner's
-  siphon–trap property (`Net.live_of_siphonTrap`), decided by enumerating siphons, so only
-  for nets with few places;
+* `N.lts.Live M` for an ordinary free-choice net, `N.lts.DeadlockFree M` for an ordinary net
+  — Commoner's siphon–trap property (`Net.live_of_siphonTrap`,
+  `Net.deadlockFree_of_siphonTrap`), from a branching certificate checked on bit masks
+  (`SiphonCheck.siphonTrap_of_check`);
 * `G.CircuitsMarked M`, `G.toNet.lts.Live M`, `G.toNet.lts.DeadlockFree M` for a marked graph
   over `Fin` types — a rank certificate for Commoner's theorem
   (`MarkedGraph.circuitsMarked_of_rankTable`).
@@ -83,23 +86,6 @@ end MarkedGraph
 /-! ### Certificate search (untrusted) -/
 
 namespace Auto
-
-/-- The incidence matrix `C[t][p] = post - pre`. -/
-def incidence (N : PNet) : List (List ℤ) :=
-  N.trans.map fun t => (List.range N.places).map fun p =>
-    (t.post.count p : ℤ) - (t.pre.count p : ℤ)
-
-/-- A non-negative place invariant `y` with `y p = 1` minimising `y · M₀`, scaled to integers. -/
-def pinvFor (N : PNet) (p : ℕ) : Option (List ℤ) := do
-  let C := incidence N
-  let m := N.places
-  let eqs : Array (Array Rat) := (C.map fun row => (row.map fun c => (c : Rat)).toArray).toArray
-  let unit : Array Rat := (Array.range m).map fun q => if q == p then 1 else 0
-  let A := eqs.push unit
-  let b : Array Rat := ((List.replicate C.length (0 : Rat)) ++ [1]).toArray
-  let c : Array Rat := (Array.range m).map fun q => ((N.init.getD q 0 : ℕ) : Rat)
-  let y ← Simplex.solve A b c
-  return Simplex.toInt y
 
 /-- A linear ranking function for the internal transitions. -/
 def rankingFor (N : PNet) : Option (List ℕ) := do
@@ -178,6 +164,8 @@ def structural : TacticM Unit := do
     let k ← match tgt.getAppFnArgs with
       | (``PNet.Bounded, #[_, k]) => pure k
       | _ => pure (mkNatLit 1)
+    -- sparse invariants, checked arc by arc
+    if ← Tactic.decideBounded goal N k then return
     let net : PNet ← evalStruct (mkConst ``PNet) N
     let kv : ℕ ← evalStruct (mkConst ``Nat) k
     let tbl ← (List.range net.places).mapM fun p => do
@@ -217,12 +205,59 @@ def structural : TacticM Unit := do
     let some (G, P, T) := mg?
       | -- not a marked graph: Commoner's theorem for free-choice nets
         match tgt.getAppFnArgs with
-        | (``LTS.Live, #[_, _, A, _]) | (``LTS.DeadlockFree, #[_, _, A, _]) =>
-          unless A.isAppOf ``Net.lts do fail "unsupported goal"
+        | (``LTS.Live, #[_, _, A, M₀]) | (``LTS.DeadlockFree, #[_, _, A, M₀]) =>
+          let (``Net.lts, #[P, T, net]) := A.getAppFnArgs | fail "unsupported goal"
+          -- deadlock freedom of a `PNet`: the state equation first (no exploration)
+          if tgt.isAppOf ``LTS.DeadlockFree then
+            if let (``PNet.toNet, #[N]) := net.getAppFnArgs then
+              if ← Tactic.decideSE goal N then return
+          let some m := (← whnf P).getAppFnArgs |> fun | (``Fin, #[m]) => some m | _ => none
+            | fail "the places must be `Fin m`"
+          let some n := (← whnf T).getAppFnArgs |> fun | (``Fin, #[n]) => some n | _ => none
+            | fail "the transitions must be `Fin n`"
+          let res : Except (Option (List ℕ)) SiphonCheck.Tree ← evalStruct
+            (mkApp2 (mkConst ``Except [0, 0])
+              (mkApp (mkConst ``Option [0]) (mkApp (mkConst ``List [0]) (mkConst ``Nat)))
+              (mkConst ``SiphonCheck.Tree))
+            (← mkAppOptM ``SiphonCheck.mkCert #[m, none, net, M₀, mkNatLit 5000])
+          let tree? ← match res with
+            | .ok t => pure (some t)
+            | .error (some S) => fail s!"the siphon {S} is not empty and contains no initially \
+                marked trap: Commoner's siphon–trap condition fails (a free-choice net is then \
+                not live)"
+            | .error none =>
+              -- the siphon–trap property is co-NP-complete and this net needs a large
+              -- certificate (e.g. exponentially many minimal siphons): use the state space
+              -- (or its counter abstraction) instead
+              let isPNet := match net.getAppFnArgs with
+                | (``PNet.toNet, _) => true
+                | _ => false
+              unless isPNet do
+                fail "the siphon–trap certificate exceeds its size budget; state the goal for \
+                  a `PNet` to fall back on model checking"
+              try Tactic.asyncDecide 100000
+              catch e => fail s!"the siphon–trap certificate exceeds its size budget, and model \
+                checking failed too: {← e.toMessageData.toString}"
+              pure none
+          let some tree := tree? | return
+          let ts : List (ℕ × ℕ) ← evalStruct (toTypeExpr (List (ℕ × ℕ)))
+            (← mkAppOptM ``SiphonCheck.table #[m, none, net])
+          let m0 : ℕ ← evalStruct (mkConst ``Nat) (← mkAppOptM ``SiphonCheck.markMask #[m, M₀])
+          let treeS ← Term.exprToSyntax (toExpr tree)
+          let tsS ← Term.exprToSyntax (toExpr ts)
+          let m0S ← Term.exprToSyntax (toExpr m0)
           if tgt.isAppOf ``LTS.Live then
-            evalTactic (← `(tactic| refine Net.live_of_siphonTrap ?_ ?_ ?_))
+            evalTactic (← `(tactic| refine Net.live_of_siphonTrap ?_
+              (SiphonCheck.freeChoice_of_checkFC (ts := $tsS) ?_ ?_)
+              (SiphonCheck.siphonTrap_of_check (ts := $tsS) (m0 := $m0S) (tree := $treeS)
+                ?_ ?_ ?_)))
           else
-            evalTactic (← `(tactic| refine Net.deadlockFree_of_siphonTrap_fc ?_ ?_ ?_))
+            let nS ← Term.exprToSyntax n
+            evalTactic (← `(tactic| have : Nonempty (Fin $nS) := ⟨⟨0, by decide⟩⟩))
+            evalTactic (← `(tactic| refine Net.deadlockFree_of_siphonTrap
+              (fun t p => ((?_ : Net.Ordinary _) t p).1)
+              (SiphonCheck.siphonTrap_of_check (ts := $tsS) (m0 := $m0S) (tree := $treeS)
+                ?_ ?_ ?_)))
           evalTactic (← `(tactic| all_goals decide +kernel))
         | _ => fail "unsupported goal"
     let some m := (← whnf P).getAppFnArgs |> fun | (``Fin, #[m]) => some m | _ => none

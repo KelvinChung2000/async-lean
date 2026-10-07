@@ -4,7 +4,12 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.LTS.Properties
 import AsyncLean.LTS.Fairness
 import AsyncLean.Petri.FreeChoice
+import AsyncLean.Petri.SiphonCheck
+import AsyncLean.Petri.FreeChoiceNecessity
 import AsyncLean.Circuit.QDI
+import AsyncLean.Circuit.Packed
+import AsyncLean.Petri.Step
+import AsyncLean.Circuit.Step
 import AsyncLean.Petri.Invariant
 import AsyncLean.Petri.SiphonTrap
 import AsyncLean.MarkedGraph.Basic
@@ -13,6 +18,12 @@ import AsyncLean.Circuit.Basic
 import AsyncLean.Stg.Concrete
 import AsyncLean.Checker.Quotient
 import AsyncLean.Checker.Packed
+import AsyncLean.Checker.Abstract
+import AsyncLean.Checker.FastPetri
+import AsyncLean.Checker.FastPOR
+import AsyncLean.Checker.FastPORLive
+import AsyncLean.Checker.BDD
+import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.AxiomAudit
@@ -45,6 +56,12 @@ open LTS
   Run.infOften_label_of_live Run.infOften_external_of_progress
   Run.infOften_external_of_livelockFree progress_of_dfLf PNet.reachable_finite_of_bounded
 
+-- Bit-packed circuit checking
+#assert_standard_axioms
+  Circuit.bisimP Circuit.correct_of_checkCertP Circuit.correct_of_checkCertHomeP
+  Circuit.speedIndependent_of_checkCertP Circuit.speedIndependent_of_checkPCertP
+  ExplicitLTS.persistent_of_checkPCert
+
 -- Interconnection networks with dynamic routing
 #assert_standard_axioms
   Network.deadlockFree_of_escape Network.deadlockFree_of_cdg Network.movable_of_escape
@@ -71,9 +88,54 @@ open LTS
   Circuit.speedIndependent_of_qdi Circuit.correct_of_qdi Circuit.deadlockFree_of_withWires
   Circuit.livelockFree_of_withWires Circuit.reachable_settle Circuit.reachable_proj
 
+-- Concurrent firing: step semantics
+#assert_standard_axioms
+  Net.stepLts_reachable_iff Net.stepLts_deadlockFree_iff Net.stepLts_livelockFree_iff
+  Net.stepLive_iff Circuit.stepLts_reachable_iff Circuit.stepLts_deadlockFree_iff
+  Circuit.stepLts_livelockFree_iff Circuit.stepLive_iff Circuit.correct_iff_stepCorrect
+
+-- Unbounded nets: counter abstraction
+#assert_standard_axioms
+  ExplicitLTS.of_checkACert PNet.abstracts PNet.of_checkAbs PNet.correct_of_checkAbs
+  PNet.deadlockFree_of_checkAbs PNet.livelockFree_of_checkAbs PNet.live_of_checkAbs
+
+-- Fast kernel checking: numeric states, recursor-based inner loops
+#assert_standard_axioms
+  Fast.of_check PNet.encodes PNet.of_checkFast PNet.correct_of_checkFast
+  PNet.deadlockFree_of_checkFast PNet.livelockFree_of_checkFast PNet.live_of_checkFast
+
+-- Partial-order reduction: stubborn sets preserve deadlocks
+#assert_standard_axioms
+  Net.reachable_red_of_dead Net.deadlockFree_of_stubborn PNet.deadlockFree_of_checkPOR
+
+-- Partial-order reduction for liveness (cycle proviso) and livelock freedom (visibility)
+#assert_standard_axioms
+  Net.stubborn_front Net.stubborn_commute Net.catchUp Net.live_of_stubborn
+  Net.livelockFree_of_stubborn PNet.of_checkPORc PNet.correct_of_checkPORc
+  PNet.correct_of_checkPORc_lf PNet.live_of_checkPORc PNet.livelockFree_of_checkPORc
+  PNet.livelockFree_of_noInternal
+
+-- Symbolic certificates: decision diagrams of invariants, witnesses, distances and ranks;
+-- linear potentials; cuts and diagonal shortcuts of the joint walks
+#assert_standard_axioms
+  PNet.funBisimOn_packed PNet.Reach.known PNet.Reach.congr PNet.Reach.leaf_mem PNet.phiL_fire
+  PNet.phiL_lt PNet.phiL_le PNet.nodesOk_spec PNet.vars_inj PNet.fire_agree PNet.cutsOk_spec
+  PNet.cut_reach PNet.walkCut_spec
+  PNet.tclaim PNet.of_checkBDD PNet.correct_of_checkBDD
+  PNet.correct_of_checkBDD_lf PNet.deadlockFree_of_checkBDD PNet.livelockFree_of_checkBDD
+  PNet.live_of_checkBDD PNet.safe_of_checkBDD
+
+-- The state equation: deadlock freedom and bounds without exploration
+#assert_standard_axioms
+  Net.stateEq_of_reachable Net.deadlockFree_of_stateEq PNet.deadlockFree_of_checkSE
+  PNet.le_of_checkBounds PNet.bounded_of_checkBounds PNet.deadlockFree_of_checks
+  PNet.le_of_checkPInv PNet.bounded_of_checkPInv PNet.deadlockFree_of_pinv
+
 -- Free-choice nets (Commoner's theorem)
 #assert_standard_axioms
   Net.live_of_siphonTrap Net.deadlockFree_of_siphonTrap_fc Net.le_of_deadAt
+  SiphonCheck.siphonTrap_of_check SiphonCheck.freeChoice_of_checkFC
+  Net.siphonTrap_of_live Net.live_iff_siphonTrap
 
 -- Compositional verification
 #assert_standard_axioms

@@ -239,17 +239,13 @@ theorem fire_packed (hwf : N.packedWf = true) {M : Marking (Fin N.places)} (hM :
     have h4 : q ∉ (N.tr t).post := fun h => hq (hpost q h)
     simp [h1, h2, h3, h4]
 
-/-- Transfer from the packed semantics: a set of packed states containing the initial one,
-closed under packed steps and on which firing is always safe, makes the packed semantics a
-faithful image of the net. -/
-theorem correct_of_packed (hwf : N.packedWf = true) (C : ℕ → Prop) (h₀ : C (N.pack N.M₀))
+/-- The packed semantics is a faithful image of the net on the safe markings whose packed
+encoding lies in a set `C` of packed states that contains the initial one, is closed under
+packed steps, and on which firing is always safe. -/
+theorem funBisimOn_packed (hwf : N.packedWf = true) (C : ℕ → Prop)
     (hclosed : ∀ m l m', C m → N.packed.toLTS.step m l m' → C m')
-    (hsafe : ∀ m, C m → N.safeNode m = true)
-    (hcorr : N.packed.toLTS.DeadlockFree (N.pack N.M₀) ∧
-      N.packed.toLTS.LivelockFree (fun t => (N.tr t).internal = true) (N.pack N.M₀) ∧
-      N.packed.toLTS.Live (N.pack N.M₀)) :
-    N.Correct ∧ N.Safe := by
-  obtain ⟨-, hM₀, -⟩ := packedWf_spec hwf
+    (hsafe : ∀ m, C m → N.safeNode m = true) :
+    LTS.FunBisimOn N.toNet.lts N.packed.toLTS N.pack (fun M => SafeM M ∧ C (N.pack M)) := by
   let J : Marking (Fin N.places) → Prop := fun M => SafeM M ∧ C (N.pack M)
   have hsafeAt : ∀ M, J M → ∀ t, N.toNet.Enabled M t →
       Nat.beq ((N.pack M ^^^ N.preMask t) &&& N.postMask t) 0 = true := by
@@ -275,17 +271,29 @@ theorem correct_of_packed (hwf : N.packedWf = true) (C : ℕ → Prop) (h₀ : C
       refine ⟨t, ?_⟩
       simp only [(enabled_iff_packed hwf hJ.1 t).2 hen, ↓reduceIte,
         (fire_packed hwf hJ.1 hen (hsafeAt M hJ t hen)).2]
-  have hbisim : LTS.FunBisimOn N.toNet.lts N.packed.toLTS N.pack J := by
-    refine ⟨fun M hJ t m => ?_, fun M hJ t M' hst => ?_⟩
-    · change (t, m) ∈ N.packedSucc (N.pack M) ↔ _
-      rw [hstep M hJ]
-      constructor
-      · rintro ⟨hen, rfl⟩; exact ⟨_, ⟨hen, rfl⟩, rfl⟩
-      · rintro ⟨M', ⟨hen, rfl⟩, rfl⟩; exact ⟨hen, rfl⟩
-    · obtain ⟨hen, rfl⟩ := hst
-      exact ⟨(fire_packed hwf hJ.1 hen (hsafeAt M hJ t hen)).1,
-        hclosed _ t _ hJ.2 ((hstep M hJ t _).2 ⟨hen, rfl⟩)⟩
-  have hJ₀ : J N.M₀ := ⟨hM₀, h₀⟩
+  refine ⟨fun M hJ t m => ?_, fun M hJ t M' hst => ?_⟩
+  · change (t, m) ∈ N.packedSucc (N.pack M) ↔ _
+    rw [hstep M hJ]
+    constructor
+    · rintro ⟨hen, rfl⟩; exact ⟨_, ⟨hen, rfl⟩, rfl⟩
+    · rintro ⟨M', ⟨hen, rfl⟩, rfl⟩; exact ⟨hen, rfl⟩
+  · obtain ⟨hen, rfl⟩ := hst
+    exact ⟨(fire_packed hwf hJ.1 hen (hsafeAt M hJ t hen)).1,
+      hclosed _ t _ hJ.2 ((hstep M hJ t _).2 ⟨hen, rfl⟩)⟩
+
+/-- Transfer from the packed semantics: a set of packed states containing the initial one,
+closed under packed steps and on which firing is always safe, makes the packed semantics a
+faithful image of the net. -/
+theorem correct_of_packed (hwf : N.packedWf = true) (C : ℕ → Prop) (h₀ : C (N.pack N.M₀))
+    (hclosed : ∀ m l m', C m → N.packed.toLTS.step m l m' → C m')
+    (hsafe : ∀ m, C m → N.safeNode m = true)
+    (hcorr : N.packed.toLTS.DeadlockFree (N.pack N.M₀) ∧
+      N.packed.toLTS.LivelockFree (fun t => (N.tr t).internal = true) (N.pack N.M₀) ∧
+      N.packed.toLTS.Live (N.pack N.M₀)) :
+    N.Correct ∧ N.Safe := by
+  obtain ⟨-, hM₀, -⟩ := packedWf_spec hwf
+  have hbisim := N.funBisimOn_packed hwf C hclosed hsafe
+  have hJ₀ : SafeM N.M₀ ∧ C (N.pack N.M₀) := ⟨hM₀, h₀⟩
   obtain ⟨hd, hl, hv⟩ := hcorr
   exact ⟨⟨(hbisim.deadlockFree_iff hJ₀).1 hd, (hbisim.livelockFree_iff hJ₀).1 hl,
     (hbisim.live_iff hJ₀).1 hv⟩, fun M hr p => (hbisim.inv_reachable hJ₀ hr).1 p⟩

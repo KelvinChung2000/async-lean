@@ -16,7 +16,9 @@ import AsyncLean.AxiomAudit
    `b`; `c` is a C-element of `a` and `b`.  With zero wire delays the AND gate sees `c` and
    `¬c` change together.  With wire delays, a transition of `c` on the wire to the AND gate is
    never acknowledged and can be overtaken by the next one: a glitch.  Declaring the forks of
-   `c` and `b` isochronic (`iso := [0, 2]`) restores hazard freedom.
+   `c` and `b` isochronic (`iso := [0, 2]`) restores hazard freedom.  It is enough to declare
+   two isochronic *groups of branches*: `c` to `a` and `b`, and `b` to `a` and `c`.  Each group
+   then shares one wire, whose delay is still arbitrary.
 -/
 
 namespace AsyncLean.Examples.QDI
@@ -71,7 +73,18 @@ theorem forkC_not_qdi : ¬ forkC.QDI :=
 /-- With the forks of `c` and `b` isochronic, it is hazard free. -/
 theorem forkC_qdi_iso : forkC.QDI [0, 2] := by async_decide
 
+/-- Finer: only the branches from `c` to gates `a` (1) and `b` (2) are isochronic, and so are the
+branches from `b` to gates `c` (0) and `a` (1); each pair shares a wire with arbitrary delay. -/
+theorem forkC_qdi_groups : forkC.QDI { groups := [[(1, 0), (2, 0)], [(0, 2), (1, 2)]] } := by
+  async_decide
+
+/-- One isochronic fork is not enough: the AND gate can still see a stale `b`. -/
+theorem forkC_not_qdi_one_group : ¬ forkC.QDI { groups := [[(1, 0), (2, 0)]] } :=
+  Circuit.not_speedIndependent_of_refute (gs := [2, 4, 6, 1, 3, 0, 5, 1, 2, 3, 4, 0, 5])
+    (g := ⟨1, by decide⟩) (g' := ⟨6, by decide⟩) (by decide +kernel)
+
 #assert_standard_axioms ring_qdi ring_qdiCorrect forkC_correct forkC_speedIndependent
-  forkC_qdiCorrect forkC_not_qdi forkC_qdi_iso
+  forkC_qdiCorrect forkC_not_qdi forkC_qdi_iso forkC_qdi_groups
+  forkC_not_qdi_one_group
 
 end AsyncLean.Examples.QDI

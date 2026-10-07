@@ -162,6 +162,29 @@ Deadlocks are reported as `DEADLOCK reachable by firing [...]` with
 **From a file.** `pnet_from_pnml arbiter "designs/arbiter.pnml" (internal := ["g1", "g2"])`
 defines `arbiter : PNet`. Paths are relative to the Lean file.
 
+**Unbounded nets.** When the state space does not close (a place can grow without bound),
+`async_decide` checks the *counter abstraction* instead: every place is tracked exactly up
+to a cap `K`, at least every arc weight, and as "`K` or more" above it
+(`Checker/Abstract.lean`). The abstraction over-approximates the net, so deadlock freedom
+and livelock freedom transfer directly; liveness uses *must*-distances, where every
+abstract successor of the chosen step gets closer, so it transfers too (`PNet.of_checkAbs`).
+This is sound for every net but can be too coarse; `async_decide (cap := k)` refines it.
+
+```lean
+def prodCons : PNet where     -- the buffer (place 1) is unbounded
+  places := 3
+  trans := [{ name := "produce", pre := [0], post := [0, 1] },
+            { name := "consume", pre := [1, 2], post := [2] }]
+  init := [1, 0, 1]
+
+theorem prodCons_correct : prodCons.Correct := by async_decide
+```
+
+**Large nets.** `async_decide` does not explore every interleaving: it checks a reduced state
+space (partial-order reduction), and falls back on the state equation or on symbolic
+certificates when that is still too large. Section 8 explains the methods and how far they
+go.
+
 ## 5. STGs: from specification to gates
 
 An STG is a Petri net whose transitions are signal edges. Read one from a file with
@@ -228,10 +251,17 @@ theorem cRing_qdi : cRing.QDI := by async_decide
 ```
 
 * `SpeedIndependent` means hazard freedom under arbitrary gate delays.
-* `QDI iso` also puts an independent delay on every wire branch, except on the forks of the
-  signals in `iso`, which are isochronic. `QDI` with no argument means no isochronic forks.
+* `QDI iso` also puts an independent delay on every wire branch, except on the isochronic
+  forks declared in `iso : Forks`: whole signals (`C.QDI [0, 2]`), or groups of branches of a
+  signal that share one wire (`C.QDI { groups := [[(1, 0), (2, 0)]] }`, gate `1` and gate
+  `2` reading signal `0`). `QDI` with no argument means no isochronic forks.
 * `Circuit.speedIndependent_of_qdi` proves that QDI implies speed independence.
 * `circuit_from_verilog ring "designs/ring.v"` reads a closed netlist.
+* Gates may also switch simultaneously: for a speed-independent circuit the step semantics
+  reaches exactly Muller's interleaving states, so correctness is the same in both
+  (`Circuit.correct_iff_stepCorrect`). Without speed independence it is not:
+  `Examples/Step.lean` shows a race whose simultaneous switch reaches a state no interleaving
+  reaches. For Petri nets the two semantics always agree (`Net.stepLts_deadlockFree_iff`, …).
 
 A failing speed-independence check reports the glitching gates and the trace, with
 `Circuit.not_speedIndependent_of_refute`.
@@ -339,9 +369,11 @@ example : (duatoMesh 3).WormholeDeadlockFree := by
 
 | Tactic | What it does | Use it when |
 |---|---|---|
-| `async_decide` | explores the reachable states (or, for networks, the routing function), builds a certificate, and has the kernel check it | the design is concrete and has up to a few thousand reachable states |
+| `async_decide` | explores the reachable states (for nets, a reduced state space; for networks, the routing function), builds a certificate, and has the kernel check it; for nets it falls back on the state equation, symbolic certificates or the counter abstraction | the design is concrete: the default choice |
 | `async_decide (fuel := n)` | the same, with a larger bound on explored states (default 100 000) | the error says the state space exceeds the fuel |
-| `async_structural` | place invariants, linear ranking functions, Commoner certificates; no state exploration | safeness and boundedness, livelock freedom for every initial marking, liveness of marked graphs and small free-choice nets; huge state spaces |
+| `async_decide (cap := k)` | the counter abstraction with cap `k` | an unbounded net whose abstraction is too coarse |
+| `async_bdd` | decision diagrams of an inductive invariant and of witness transitions, checked by the kernel without enumerating markings | large safe nets: `Correct` or safety with up to `2⁸⁰` markings |
+| `async_structural` | place invariants, linear ranking functions, state-equation (Farkas) and Commoner certificates; no state exploration | safeness and boundedness, deadlock freedom, livelock freedom for every initial marking, liveness of marked graphs and free-choice nets; huge state spaces |
 | `async_minimize` / `async_minimize right` | replaces one component of a parallel composition by its minimal quotient, certified | a composition is too large; then finish with `async_decide` |
 | `async_routing (escape := …)` | `async_decide` for networks, with the escape channels named | the default choice of escape channels fails |
 | the theorems directly | Commoner, Dally–Seitz, Duato, ranking functions, … | a statement for every size `n` (section 10) |
@@ -356,6 +388,52 @@ theorem twoFifos_ok : <deadlock freedom ∧ livelock freedom of the composition>
   async_minimize right  -- and so does the second
   async_decide          -- the remaining composition is small
 ```
+
+### Large state spaces
+
+* **Partial-order reduction.** At each marking `async_decide` fires only the enabled
+  transitions of a *stubborn set*, and the kernel checks marking by marking that the sets are
+  stubborn. Every reachable deadlock stays reachable (`Net.reachable_red_of_dead`), so the
+  reduced state space proves the net deadlock free (`Net.deadlockFree_of_stubborn`). For
+  liveness and livelock freedom the sets also satisfy the *cycle proviso* and *visibility*
+  conditions (`Net.live_of_stubborn`, `Net.livelockFree_of_stubborn`,
+  `PNet.correct_of_checkPORc`). A pipeline, whose stages move independently, needs one
+  interleaving per marking (`Examples/Scale.lean`).
+* **The state equation.** Every reachable marking satisfies `M = M₀ + C · x`. With bounds on
+  the places, a Farkas certificate found by linear programming shows that no solution is
+  dead (`Net.deadlockFree_of_stateEq`), with no exploration at all.
+* **Symbolic certificates.** For a safe net, `async_bdd` computes, by saturation, decision
+  diagrams of the reachable markings (an inductive invariant) and of a witness transition
+  enabled at each of them. The kernel checks every diagram by a *joint walk* before and
+  after firing each transition, node pair by node pair, and never enumerates the markings
+  (`PNet.of_checkBDD`, which also gives safety). Liveness and livelock freedom come from
+  *linear potentials*: weights on the places, found by linear programming, that every
+  witness (every internal transition) decreases, down to *hubs* from which a trace enables
+  each transition. When there are none, the measure is lexicographic: each witness (internal
+  transition) decreases a potential, or keeps it and decreases a diagram of distances
+  (ranks), which then counts only those steps (`Examples/Symbolic.lean`).
+* **Fast kernel checking.** Markings are packed into one number, a field of bits per place,
+  and the kernel's inner loops are written with recursors over natural numbers
+  (`Checker/Fast.lean`, `PNet.checkFast`); a check costs a few milliseconds per state.
+
+Measured end to end (search and kernel check), each goal in its own file, on one core
+(timings vary by about 10–20% from run to run):
+
+| Goal | Method | Time |
+|---|---|---|
+| 7 philosophers `Correct` (408 states) | partial-order reduction | 0.5 s |
+| 20-stage FIFO `Correct` (~10⁶ states) | partial-order reduction | 1.1 s |
+| 40-stage FIFO `Correct` (2⁴⁰ states) | partial-order reduction | 4.7 s |
+| 20 philosophers `Correct` | partial-order reduction | 4.4 s |
+| 12 philosophers deadlock free | state equation (no exploration) | 1.9 s |
+| 60-stage FIFO safe | packed place invariants | 4.7 s |
+| 60-stage FIFO safe | symbolic certificate | 3.3 s |
+| 12 philosophers `Correct` | symbolic certificate | 2.1 s |
+| 40-stage FIFO `Correct` | symbolic certificate | 2.5 s |
+| 20 philosophers `Correct` | symbolic certificate | 4.2 s |
+| 80-stage FIFO `Correct` (2⁸⁰ markings) | symbolic certificate | 11 s |
+| 40 philosophers `Correct` | symbolic certificate | 13 s |
+| 4 handshakes `Correct` (lexicographic measures) | symbolic certificate | 2.1 s |
 
 ## 9. Using a result in a larger proof
 
@@ -399,7 +477,7 @@ computed, in closed form, and apply the matching theorem.
 | Property | Certificate you provide | Theorem |
 |---|---|---|
 | marked graph live | every directed circuit carries a token | `MarkedGraph.live_iff_circuitsMarked` |
-| free-choice net live | every siphon contains a marked trap | `Net.live_of_siphonTrap` |
+| free-choice net live (or not) | every siphon contains a marked trap (or one does not) | `Net.live_iff_siphonTrap` |
 | bounded / safe | a P-invariant | `Net.IsPInvariant.bound`, `.safe` |
 | livelock free | a ranking that internal steps decrease | `LTS.LivelockFree.of_ranking`, `Net.livelockFree_of_linearRanking` |
 | deadlock free | an inductive invariant with progress | `LTS.DeadlockFree.of_invariant` |
@@ -425,12 +503,12 @@ channels is impossible, the network really can be blocked.
 | Symptom | What to do |
 |---|---|
 | `…exceeds the fuel` / `no counterexample found within N states` | raise it: `async_decide (fuel := 1000000)`, or switch to `async_structural`, `async_minimize` or the theory |
-| the kernel check is slow | kernel checking takes roughly 10–60 ms per reachable state; designs up to a few thousand states are practical. Add `set_option maxHeartbeats 0 in` before the theorem if Lean times out |
+| the kernel check is slow | explicit checking costs a few milliseconds per reachable (or reduced) state; for a large safe net try `async_bdd`, and for deadlock freedom `async_structural`. Add `set_option maxHeartbeats 0 in` before the theorem if Lean times out |
 | `the goal must be stated for the design's own initial state and internal predicate` | state the goal with `N.M₀` and `N.Internal` (or `C.s₀`, `C.Internal`), or use `N.Correct`; for other initial states use the theory |
 | `unsupported goal` | the tactic recognises the goals listed in sections 4–7; unfold your own definitions first, or split a conjunction with `⟨by async_decide, by async_decide⟩` |
 | `POTENTIAL DEADLOCK` for a network | list the escape hop first in `route`, or name escape channels with `async_routing (escape := …)` |
 | `ill-formed` net or circuit | `init` needs one entry per place or signal, and every arc must refer to an existing place |
-| an edited `.g`, `.pnml` or `.v` file has no effect | Lake does not track design files; rebuild the Lean file that imports it (for example by touching it) |
+| an edited `.g`, `.pnml` or `.v` file has no effect | declare the design directory as an `input_dir` needed by the library that imports it (see `Import/Basic.lean` and this repository's `lakefile.toml`); otherwise rebuild the Lean file that imports it |
 | you want to see an imported design | `#print arbiter`: it is an ordinary definition |
 
 ## 12. Reference
@@ -481,12 +559,17 @@ The network properties are listed in section 7.
 | `LTS/Compose.lean` | parallel composition, hiding, divergence-preserving weak bisimulation |
 | `LTS/Fairness.lean` | infinite runs, strong fairness, "will happen" theorems |
 | `Petri/Basic.lean`, `Invariant.lean`, `SiphonTrap.lean` | Petri nets, P-invariants, bounds, ranking functions, siphons and traps |
-| `Petri/FreeChoice.lean` | free-choice nets, Commoner's liveness theorem |
+| `Petri/FreeChoice.lean`, `FreeChoiceNecessity.lean` | free-choice nets, Commoner's theorem (both directions) |
+| `Petri/SiphonCheck.lean` | kernel-checked branching certificates for the siphon–trap property |
+| `Petri/Step.lean`, `Circuit/Step.lean` | step semantics (concurrent firing and switching) and their agreement with interleaving |
+| `Petri/Stubborn.lean`, `Petri/StubbornLive.lean` | stubborn sets: deadlocks preserved; cycle proviso and visibility for liveness and livelock freedom |
+| `Petri/StateEquation.lean` | the state equation and Farkas certificates for deadlock freedom |
 | `MarkedGraph/Basic.lean` | Commoner's theorem for marked graphs, circuit tokens, safeness, rank certificates |
 | `Stg/Basic.lean` | STGs: state graph, consistency, CSC, output persistence, implementation by gates, CSC ⇔ implementable |
 | `Stg/Concrete.lean` | concrete STGs `Stg`, checkers and refutations for all STG properties |
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
-| `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, QDI, proof that QDI implies speed independence |
+| `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, isochronic forks, QDI, proof that QDI implies speed independence |
+| `Circuit/Packed.lean` | bit-packed circuit states for fast checking |
 | `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's theorem (sufficient and necessary), Dally–Seitz, livelock by ranking, drain theorem, refutations |
 | `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
@@ -494,25 +577,39 @@ The network properties are listed in section 7.
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
+| `Checker/Abstract.lean` | checking through finite over-approximations; the counter abstraction of unbounded nets |
 | `Checker/Diagnose.lean`, `Minimize.lean` | untrusted counterexample search, certificate and quotient computation |
-| `Checker/Tactic.lean` | the `async_decide`, `async_routing` and `async_minimize` tactics |
-| `Auto/Simplex.lean`, `Auto/Structural.lean` | exact rational simplex (untrusted) and `async_structural` |
+| `Checker/Fast.lean`, `FastPetri.lean` | the fast kernel checker on numeric states, and its instance for nets packed into bit fields |
+| `Checker/FastPOR.lean`, `FastPORLive.lean` | kernel checks of reduced state spaces |
+| `Checker/BDD.lean`, `BDDGen.lean` | symbolic certificates: decision diagrams checked by joint walks; their untrusted computation |
+| `Checker/Tactic.lean` | the `async_decide`, `async_bdd`, `async_routing` and `async_minimize` tactics |
+| `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, routing |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing |
 
 ### Scope and limits
 
-* Semantics are interleaving: one transition, or one gate, at a time. For Petri nets, STGs
-  and speed-independent circuits this is the standard semantics for these properties.
+* Semantics are interleaving: one transition, or one gate, at a time. The step semantics
+  (concurrent firing) agrees with it for every Petri net and every speed-independent circuit
+  (section 6).
 * Liveness is L4-liveness. Fairness-based "will happen" properties are derived from it in
   `LTS/Fairness.lean`. Livelock is divergence: an infinite run of internal actions.
-* Free-choice liveness is proved in the sufficient direction (siphon–trap ⇒ live), which is
-  the one needed for verification. `async_structural` enumerates siphons, so it is meant for
-  nets with up to a dozen or so places.
-* The model checker needs a finite reachable state space. For example, 7 dining philosophers
-  (408 states) take 8 s, and two composed 8-stage FIFOs (65 536 states) take 36 s after
-  minimisation.
+* Deciding these properties is hard in general, and no tool avoids that: the siphon–trap
+  property is co-NP-complete, and reachability questions for unbounded Petri nets are
+  decidable only with non-elementary worst-case cost. `async_structural` checks the
+  siphon–trap property from a branching certificate and falls back on model checking when the
+  certificate would be too large. The counter abstraction of unbounded nets is sound but
+  incomplete, refined by raising the cap.
+* Reduction helps most when concurrency is loosely coupled. When the stubborn sets must be
+  large (tightly synchronised designs, or many internal transitions next to external ones),
+  the reduced state space approaches the full one; for safe nets `async_decide` then turns to
+  symbolic certificates. These cost about a millisecond of kernel time per pair of diagram
+  nodes walked (a few hundred to a few thousand pairs on the families of section 8), and
+  their untrusted search takes a few seconds at most. Liveness and livelock freedom are
+  cheapest when linear potentials exist; the diagrams of a lexicographic measure stay
+  polynomial on the handshakes of `Examples/Symbolic.lean`, but grow with the number of
+  steps keeping the potential that can be pending at once.
 * Networks are modelled with store-and-forward / virtual cut-through switching (one channel
   per packet) or wormhole switching (a packet spans up to `tail p + 1` channels, with one-flit
   channel buffers). Routing livelock freedom is "no infinite run without injections".

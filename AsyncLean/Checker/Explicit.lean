@@ -165,7 +165,7 @@ def exploreAux : ℕ → List S → BStore S → BStore S
   | fuel + 1, s :: stack, visited =>
     let r := (E.succ s).foldl
       (fun (acc : List S × BStore S) e =>
-        if acc.2.tree.find cmp e.2 then acc else (e.2 :: acc.1, acc.2.push cmp e.2))
+        if acc.2.find cmp e.2 then acc else (e.2 :: acc.1, acc.2.push cmp e.2))
       (stack, visited)
     exploreAux fuel r.1 r.2
 
@@ -177,7 +177,7 @@ def explore (fuel : ℕ) (s₀ : S) : BTree S :=
 def heightAux (internal : L → Bool) : ℕ → BStore (S × ℕ) → S → ℕ × BStore (S × ℕ)
   | 0, memo, _ => (0, memo)
   | fuel + 1, memo, s =>
-    match memo.tree.lookup cmp s with
+    match memo.lookup cmp s with
     | some h => (h, memo)
     | none =>
       let r := (E.succ s).foldl
@@ -201,7 +201,7 @@ def distAux (states : List S) : ℕ → ℕ → BStore (S × ℕ) → BTree S �
   | 0, _, tbl, _ => tbl
   | fuel + 1, k, tbl, layer =>
     let next := states.filter fun s =>
-      (tbl.tree.lookup cmp s).isNone && (E.succ s).any fun e => layer.find cmp e.2
+      (tbl.lookup cmp s).isNone && (E.succ s).any fun e => layer.find cmp e.2
     if next.isEmpty then tbl
     else distAux states fuel (k + 1)
       (next.foldl (fun tb s => tb.pushKV cmp s (k + 1)) tbl) (BTree.ofList next)
@@ -849,6 +849,90 @@ theorem not_persistent_of_refuteB {s₀ : S} {ls : List L} {l l' : L}
   · cases h
 
 end RefuteLabels
+
+/-! ### Persistence certificates with labelled successors
+
+The persistence check of `checkCertPersistent` recomputes the successors of every successor.
+A `PCert` stores, for each reachable state, its successors with their labels (as keys), so
+each state's successors are computed once, and the labels enabled after a step are read from
+the certificate. -/
+
+section PersistSection
+
+variable {S L : Type*} (E : ExplicitLTS S L) [DecidableEq S] (cmp : S → S → Ordering)
+  (key : L → ℕ)
+
+/-- Each state with its successors, labels replaced by their keys. -/
+abbrev PCert (S : Type*) := BTree (S × List (ℕ × S))
+
+/-- The successors of `s`, labels replaced by their keys. -/
+def keyedSucc (s : S) : List (ℕ × S) := (E.succ s).map fun e => (key e.1, e.2)
+
+/-- Check one state of a persistence certificate. -/
+def checkNodeP (c : PCert S) (s : S) : Bool :=
+  match c.findData cmp s with
+  | none => false
+  | some es =>
+    decide (E.keyedSucc key s = es) &&
+      es.all fun e' => match c.findData cmp e'.2 with
+        | none => false
+        | some es' => es.all fun e => e.1 == e'.1 || es'.any fun e'' => e''.1 == e.1
+
+/-- Check a persistence certificate (trusted). -/
+def checkPCert (s₀ : S) (c : PCert S) : Bool :=
+  (c.findData cmp s₀).isSome && c.all fun x => E.checkNodeP cmp key c x.1
+
+variable {E cmp key}
+
+theorem checkNodeP_spec {c : PCert S} {s : S} {es : List (ℕ × S)}
+    (hf : c.findData cmp s = some es) (h : E.checkNodeP cmp key c s = true) :
+    E.keyedSucc key s = es ∧ ∀ e' ∈ es, ∃ es', c.findData cmp e'.2 = some es' ∧
+      ∀ e ∈ es, e.1 = e'.1 ∨ ∃ e'' ∈ es', e''.1 = e.1 := by
+  unfold checkNodeP at h
+  rw [hf] at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
+  refine ⟨h.1, fun e' he' => ?_⟩
+  have := h.2 e' he'
+  split at this
+  · cases this
+  · rename_i es' hf'
+    refine ⟨es', hf', fun e he => ?_⟩
+    have := List.all_eq_true.1 this e he
+    simp only [Bool.or_eq_true, beq_iff_eq, List.any_eq_true] at this
+    exact this
+
+/-- **Persistence from a labelled-successor certificate.** -/
+theorem persistent_of_checkPCert (hkey : Function.Injective key) {s₀ : S} {c : PCert S}
+    (h : E.checkPCert cmp key s₀ c = true) : E.toLTS.Persistent s₀ := by
+  simp only [checkPCert, Bool.and_eq_true] at h
+  obtain ⟨h₀, hc⟩ := h
+  rw [BTree.all_eq_true] at hc
+  have hnode : ∀ s es, c.findData cmp s = some es → E.checkNodeP cmp key c s = true :=
+    fun s es hf => hc _ (BTree.mem_toList_of_findData hf)
+  have hstep : ∀ s l s', (∃ es, c.findData cmp s = some es) → E.toLTS.step s l s' →
+      ∃ es, c.findData cmp s' = some es := by
+    rintro s l s' ⟨es, hf⟩ hst
+    obtain ⟨hks, hall⟩ := checkNodeP_spec hf (hnode s es hf)
+    have hmem : (key l, s') ∈ es := hks ▸ List.mem_map_of_mem (f := fun e => (key e.1, e.2)) hst
+    obtain ⟨es', hf', -⟩ := hall _ hmem
+    exact ⟨es', hf'⟩
+  intro s hs l l' s' hne hen hst
+  have hgood := hs.invariant (Option.isSome_iff_exists.1 h₀) hstep
+  obtain ⟨es, hf⟩ := hgood
+  obtain ⟨hks, hall⟩ := checkNodeP_spec hf (hnode s es hf)
+  obtain ⟨s₁, h₁⟩ := hen
+  have hm₁ : (key l, s₁) ∈ es := hks ▸ List.mem_map_of_mem (f := fun e => (key e.1, e.2)) h₁
+  have hm' : (key l', s') ∈ es := hks ▸ List.mem_map_of_mem (f := fun e => (key e.1, e.2)) hst
+  obtain ⟨es', hf', hcond⟩ := hall _ hm'
+  rcases hcond _ hm₁ with heq | ⟨e'', he'', hk⟩
+  · exact absurd (hkey heq) hne
+  · obtain ⟨hks', -⟩ := checkNodeP_spec hf' (hnode s' es' hf')
+    rw [← hks', keyedSucc, List.mem_map] at he''
+    obtain ⟨e, he, rfl⟩ := he''
+    have : e.1 = l := hkey hk
+    exact ⟨e.2, by rw [← this]; exact he⟩
+
+end PersistSection
 
 end ExplicitLTS
 
