@@ -392,10 +392,13 @@ open AsyncLean.Examples Mesh
 
 -- Duato's mesh (XY escape on virtual channel 0) can be improved…
 example : ¬ (duatoMesh 3).MaximallyAdaptive (minimalHops 3) := duatoMesh_not_maximal
--- …by letting virtual channel 0 also follow the west-first turn model.
-example : (westFirstMesh 4).Correct := by async_decide
+-- …by letting virtual channel 0 also follow the west-first turn model. The result is correct
+-- for every mesh size, also under wormhole switching, and every packet takes a shortest path.
+example (k : ℕ) : (westFirstMesh k).Correct := westFirstMesh_correct k
+example (k : ℕ) : (westFirstMesh k).WormholeCorrect := westFirstMesh_wormholeCorrect k
 -- After that, no productive hop can be added without a deadlock.
 example : (westFirstMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
+example : (westFirstMesh 4).MaximallyAdaptive (minimalHops 4) := by async_decide
 example : (northLastMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
 -- The two maximal meshes are incomparable: no deadlock-free routing contains both.
 example (N : Network ℕ ℕ) (h₁ : (westFirstMesh 3).Extends N) (h₂ : (northLastMesh 3).Extends N)
@@ -403,7 +406,10 @@ example (N : Network ℕ ℕ) (h₁ : (westFirstMesh 3).Extends N) (h₂ : (nort
 ```
 
 So there is no single most adaptive deadlock-free routing function to look for. There are
-several maximal ones, and `MaximallyAdaptive` certifies that a design is one of them.
+several maximal ones, and `MaximallyAdaptive` certifies that a design is one of them. Wormhole
+deadlock freedom implies store-and-forward deadlock freedom
+(`Network.deadlockFree_of_wormholeDeadlockFree`), so maximality also holds under wormhole
+switching (`Network.MaximallyAdaptive.wormhole`).
 `#eval N.explainMaximal StateOrd.cmp StateOrd.cmp U` reports the search, or a hop that can be
 added.
 
@@ -659,10 +665,11 @@ The network properties are listed in section 7.
   Starvation freedom assumes a strongly fair scheduler and is proved for store-and-forward
   switching. Duato's condition is proved necessary and sufficient for store-and-forward
   switching; for wormhole switching the sufficient direction is proved.
-* `MaximallyAdaptive` is relative to the hops `U` you allow, compares routing functions only at
-  the pairs a packet can occupy, and is about store-and-forward deadlock freedom. It is
-  checked for one concrete network at a time (the mesh examples: 3 × 3); maximality for every
-  mesh size is not proved.
+* `MaximallyAdaptive` is relative to the hops `U` you allow and compares routing functions
+  only at the pairs a packet can occupy. It is checked for one concrete network at a time: the
+  west-first mesh on 3 × 3 and 4 × 4 (the 4 × 4 search and check take about five minutes), the
+  north-last mesh on 3 × 3. Maximality for every mesh size is not proved; correctness of the
+  west-first mesh is.
 
 ### Building the documentation
 

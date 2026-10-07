@@ -40,6 +40,8 @@ packet length function `tail`** and every work-conserving selection function.
 * `wormholeLivelockFree_of_ranking` — a ranking function that decreases on every hop rules out
   livelock, for packets of any length.
 * `WormholeCorrect.drain` — every reachable configuration drains once injection stops.
+* `deadlockFree_of_wormholeDeadlockFree` — one-flit packets behave like store-and-forward
+  packets, so wormhole deadlock freedom implies store-and-forward deadlock freedom.
 * `not_wormholeDeadlockFree_of_refuteB`, `not_wormholeLivelockFree_of_refuteB` — refutations
   from executable counterexample runs, decided by the kernel.
 -/
@@ -378,6 +380,180 @@ theorem WormholeCorrect.drain (h : N.WormholeCorrect) (tail : P → ℕ) {sel : 
     (hsel : N.WValidSel sel) {w : WConfig C P} (hw : (N.wltsWith tail sel).Reachable [] w) :
     Relation.ReflTransGen ((N.wltsWith tail sel).IStep WAct.IsMove) w [] :=
   N.wdrain (h.1 tail sel hsel) (h.2 tail sel hsel) hw
+
+/-! ### One-flit packets: store-and-forward switching
+
+Packets of one flit (`tail = fun _ => 0`) behave exactly like store-and-forward packets, so
+wormhole deadlock freedom (which is for packets of every length) implies store-and-forward
+deadlock freedom: `deadlockFree_of_wormholeDeadlockFree`.  Every refutation of store-and-forward
+deadlock freedom therefore refutes wormhole deadlock freedom too. -/
+
+section OneFlit
+
+variable [DecidableEq C]
+
+/-- The wormhole configuration `w` holds exactly the packets of the store-and-forward
+configuration `f`, each as a one-flit packet. -/
+def OneFlit (w : WConfig C P) (f : Config C P) : Prop :=
+  (∀ x ∈ w, ∃ q, x = [q]) ∧ w.Nodup ∧ ∀ c p, f c = some p ↔ [(c, p)] ∈ w
+
+omit [DecidableEq C] in
+theorem OneFlit.occ {w : WConfig C P} {f : Config C P} (h : OneFlit w f) {c : C} :
+    w.Occ c ↔ f c ≠ none := by
+  constructor
+  · rintro ⟨x, hx, q, hq, rfl⟩
+    obtain ⟨q', rfl⟩ := h.1 x hx
+    rw [List.mem_singleton] at hq
+    subst hq
+    rw [(h.2.2 q.1 q.2).2 hx]
+    simp
+  · intro hn
+    obtain ⟨p, hp⟩ := Option.ne_none_iff_exists'.1 hn
+    exact ⟨_, (h.2.2 c p).1 hp, (c, p), List.mem_singleton_self _, rfl⟩
+
+theorem OneFlit.erase {w : WConfig C P} {f : Config C P} (h : OneFlit w f) {l₁ l₂ : WConfig C P}
+    {c : C} {p : P} (hw : w = l₁ ++ [(c, p)] :: l₂) :
+    (∀ x ∈ l₁ ++ l₂, ∃ q, x = [q]) ∧ (l₁ ++ l₂).Nodup ∧
+      ∀ c' p', Function.update f c none c' = some p' ↔ [(c', p')] ∈ l₁ ++ l₂ := by
+  subst hw
+  obtain ⟨h1, h2, h3⟩ := h
+  rw [List.nodup_middle, List.nodup_cons] at h2
+  refine ⟨fun x hx => h1 x (List.mem_append.2 ((List.mem_append.1 hx).imp id
+    (List.mem_cons_of_mem _))), h2.2, fun c' p' => ?_⟩
+  by_cases hc : c' = c
+  · subst hc
+    simp only [Function.update_self, reduceCtorEq, false_iff]
+    intro hmem
+    have hp' := (h3 c' p').2 (List.mem_append.2 ((List.mem_append.1 hmem).imp id
+      (List.mem_cons_of_mem _)))
+    have hp := (h3 c' p).2 (by simp)
+    rw [hp] at hp'
+    cases hp'
+    exact h2.1 hmem
+  · rw [Function.update_of_ne hc, h3]
+    simp only [List.mem_append, List.mem_cons, List.cons.injEq, Prod.mk.injEq, and_true]
+    constructor
+    · rintro (h | ⟨rfl, -⟩ | h)
+      · exact Or.inl h
+      · exact absurd rfl hc
+      · exact Or.inr h
+    · rintro (h | h)
+      · exact Or.inl h
+      · exact Or.inr (Or.inr h)
+
+/-- Every store-and-forward step is a step of one-flit packets. -/
+theorem oneFlit_step {f f' : Config C P} {a : Act C P} (hs : N.StepWith N.adaptive f a f')
+    {w : WConfig C P} (h : OneFlit w f) :
+    ∃ b w', (N.wltsWith (fun _ => 0) N.wadaptive).step w b w' ∧ OneFlit w' f' := by
+  cases hs with
+  | @inject c p hinj hfree =>
+    refine ⟨.inject c p, [(c, p)] :: w, WStep.inject hinj fun ho => h.occ.1 ho hfree,
+      fun x hx => ?_, List.nodup_cons.2 ⟨fun hm => ?_, h.2.1⟩, fun c' p' => ?_⟩
+    · rcases List.mem_cons.1 hx with rfl | hx
+      · exact ⟨_, rfl⟩
+      · exact h.1 x hx
+    · rw [(h.2.2 c p).2 hm] at hfree; cases hfree
+    · by_cases hc : c' = c
+      · subst hc
+        simp only [Function.update_self, Option.some.injEq, List.mem_cons, List.cons.injEq,
+          Prod.mk.injEq, true_and, and_true]
+        constructor
+        · rintro rfl; exact Or.inl rfl
+        · rintro (rfl | hm)
+          · rfl
+          · rw [(h.2.2 c' p').2 hm] at hfree; cases hfree
+      · rw [Function.update_of_ne hc, h.2.2]
+        simp [hc]
+  | @hop c c' p p' hp harr hq hfree =>
+    obtain ⟨l₁, l₂, hw⟩ := List.append_of_mem ((h.2.2 c p).1 hp)
+    have hne : c' ≠ c := by rintro rfl; rw [hp] at hfree; cases hfree
+    obtain ⟨e1, e2, e3⟩ := h.erase hw
+    refine ⟨.advance c c' p', l₁ ++ [(c', p')] :: l₂, ?_, fun x hx => ?_, ?_, fun c₀ p₀ => ?_⟩
+    · show N.WStep _ _ w _ _
+      have := WStep.advance (N := N) (tail := fun _ => 0) (sel := N.wadaptive) (l₁ := l₁)
+        (l₂ := l₂) (rest := []) harr hq (by rw [← hw]; exact fun ho => h.occ.1 ho hfree)
+      rw [← hw] at this
+      simpa using this
+    · rcases List.mem_append.1 hx with hx | hx
+      · exact e1 x (List.mem_append.2 (Or.inl hx))
+      · rcases List.mem_cons.1 hx with rfl | hx
+        · exact ⟨_, rfl⟩
+        · exact e1 x (List.mem_append.2 (Or.inr hx))
+    · rw [List.nodup_middle, List.nodup_cons]
+      refine ⟨fun hm => ?_, e2⟩
+      have := (e3 c' p').2 hm
+      rw [Function.update_of_ne hne, hfree] at this
+      cases this
+    · by_cases hc : c₀ = c'
+      · subst hc
+        simp only [Function.update_self, Option.some.injEq, List.mem_append, List.mem_cons,
+          List.cons.injEq, Prod.mk.injEq, true_and, and_true]
+        constructor
+        · rintro rfl; exact Or.inr (Or.inl rfl)
+        · rintro (hm | rfl | hm)
+          · have := (e3 c₀ p₀).2 (List.mem_append.2 (Or.inl hm))
+            rw [Function.update_of_ne hne, hfree] at this; cases this
+          · rfl
+          · have := (e3 c₀ p₀).2 (List.mem_append.2 (Or.inr hm))
+            rw [Function.update_of_ne hne, hfree] at this; cases this
+      · rw [Function.update_of_ne hc, e3]
+        simp only [List.mem_append, List.mem_cons, List.cons.injEq, Prod.mk.injEq, and_true]
+        constructor
+        · rintro (h | h)
+          · exact Or.inl h
+          · exact Or.inr (Or.inr h)
+        · rintro (h | ⟨rfl, -⟩ | h)
+          · exact Or.inl h
+          · exact absurd rfl hc
+          · exact Or.inr h
+  | @eject c p hp harr =>
+    obtain ⟨l₁, l₂, hw⟩ := List.append_of_mem ((h.2.2 c p).1 hp)
+    refine ⟨.eject c, l₁ ++ l₂, ?_, h.erase hw⟩
+    rw [hw]
+    exact WStep.eject harr
+
+theorem oneFlit_reachable {f : Config C P} (hf : N.lts.Reachable empty f) :
+    ∃ w, (N.wltsWith (fun _ => 0) N.wadaptive).Reachable [] w ∧ OneFlit w f := by
+  induction hf with
+  | refl => exact ⟨[], LTS.Reachable.refl _, by simp, List.nodup_nil, by simp [empty]⟩
+  | tail _ hst ih =>
+    obtain ⟨w, hw, h⟩ := ih
+    obtain ⟨a, ha⟩ := hst
+    obtain ⟨b, w', hst', h'⟩ := N.oneFlit_step ha h
+    exact ⟨w', hw.tail ⟨b, hst'⟩, h'⟩
+
+/-- **Wormhole deadlock freedom implies store-and-forward deadlock freedom**: packets of one
+flit behave like store-and-forward packets. -/
+theorem deadlockFree_of_wormholeDeadlockFree (h : N.WormholeDeadlockFree) : N.DeadlockFree := by
+  refine N.deadlockFree_iff_adaptive.2 fun f hf hne => ?_
+  obtain ⟨w, hw, hof⟩ := N.oneFlit_reachable hf
+  obtain ⟨c, p, hp⟩ := exists_of_ne_empty hne
+  have hwne : w ≠ [] := by
+    intro he
+    have := (hof.2.2 c p).1 hp
+    rw [he] at this
+    cases this
+  obtain ⟨a, w', ha, hst⟩ := h (fun _ => 0) N.wadaptive N.wadaptive_valid w hw hwne
+  change N.WStep (fun _ => 0) N.wadaptive w a w' at hst
+  cases hst with
+  | inject => simp [WAct.IsMove, WAct.isMove] at ha
+  | @advance l₁ l₂ c c' p p' rest harr hq hfree =>
+    obtain ⟨q, hx⟩ := hof.1 _ (List.mem_append.2 (Or.inr (List.mem_cons_self ..)))
+    simp only [List.cons.injEq] at hx
+    obtain ⟨rfl, rfl⟩ := hx
+    have hp' := (hof.2.2 c p).2 (List.mem_append.2 (Or.inr (List.mem_cons_self ..)))
+    have hfree' : f c' = none := by
+      by_contra hn
+      exact hfree (hof.occ.2 hn)
+    exact ⟨.hop c c' p', _, rfl, StepWith.hop hp' harr hq hfree'⟩
+  | @drain l₁ l₂ c p q rest harr =>
+    obtain ⟨q', hx⟩ := hof.1 _ (List.mem_append.2 (Or.inr (List.mem_cons_self ..)))
+    simp at hx
+  | @eject l₁ l₂ c p harr =>
+    have hp' := (hof.2.2 c p).2 (List.mem_append.2 (Or.inr (List.mem_cons_self ..)))
+    exact ⟨.eject c, _, rfl, StepWith.eject hp' harr⟩
+
+end OneFlit
 
 /-! ### Refutation -/
 

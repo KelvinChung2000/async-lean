@@ -14,12 +14,20 @@
     `#eval N.explainMaximal …` reports the search.
   * `Network.MaximallyAdaptive.not_deadlockFree`: two maximal networks that differ have no
     common deadlock-free extension.
+  * `Network.MaximallyAdaptive.wormhole`: maximality carries over to wormhole switching.
   * Examples (`Examples/OptimalRouting.lean`): Duato's mesh is not maximally adaptive. Two new
     schemes give virtual channel 0 a west-first or a north-last turn model on top of the XY
-    escape hop. Both are minimal, strictly more adaptive than Duato's mesh, correct (also
-    starvation free and under wormhole switching), and maximally adaptive among minimal
-    routing functions on two virtual channels. No deadlock-free routing function contains
-    both. Fully adaptive minimal routing on both virtual channels deadlocks.
+    escape hop. Both are minimal and strictly more adaptive than Duato's mesh, for every size.
+    The west-first mesh of **every size** is deadlock and livelock free, starvation free and
+    correct under wormhole switching, and every packet takes exactly as many hops as the
+    distance to its destination. It is maximally adaptive among minimal routing functions on
+    two virtual channels on the 3 × 3 and 4 × 4 meshes (the north-last mesh on 3 × 3), also
+    under wormhole switching. No deadlock-free routing function contains both. Fully adaptive
+    minimal routing on both virtual channels deadlocks.
+* `Network.deadlockFree_of_wormholeDeadlockFree`: one-flit packets behave like store-and-forward
+  packets, so wormhole deadlock freedom implies store-and-forward deadlock freedom.
+* `Network.packet_hops_eq` (exact hop counts when every hop decreases a ranking by one) and
+  `Network.wf_of_lexRank` (well-foundedness from a lexicographic numbering of the channels).
 
 * **Interconnection networks with dynamic routing** (`Routing/Basic.lean`). `Network` models
   packet-switched networks with one-packet channel buffers, adaptive routing functions and

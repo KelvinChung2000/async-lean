@@ -68,7 +68,8 @@ open LTS
   Network.deadlockFree_of_escape Network.deadlockFree_of_cdg Network.movable_of_escape
   Network.wf_of_acyclic Network.wf_of_rank Network.livelockFree_of_ranking
   Network.livelockFree_of_ranking' Network.packetLivelockFree_of_ranking
-  Network.packet_hops_le Network.inevitablyEmpty Network.InevitablyEmpty.drain
+  Network.packet_hops_le Network.packet_hops_eq Network.wf_of_lexRank Network.inevitablyEmpty
+  Network.InevitablyEmpty.drain
   Network.Correct.inevitablyEmpty Network.Correct.drain Network.DeadlockFree.lts
   Network.deadlockFree_iff_adaptive Network.livelockFree_iff_adaptive
   Network.adaptive_valid Network.freeOnly_valid Network.firstFree_valid
@@ -89,6 +90,7 @@ open LTS
   Network.not_deadlockFree_of_refuteBetweenB Network.not_deadlockFree_of_checkTree
   Network.maximallyAdaptive_of_maxCheck Network.MaximallyAdaptive.not_deadlockFree
   Network.not_maximallyAdaptive_of_extends Network.Path.of_extends Network.Extends.trans
+  Network.MaximallyAdaptive.wormhole Network.deadlockFree_of_wormholeDeadlockFree
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms
