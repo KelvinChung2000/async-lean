@@ -365,6 +365,48 @@ example : (duatoMesh 3).WormholeDeadlockFree := by
   async_routing (escape := fun c => c % 2 == 0)
 ```
 
+### How adaptive can routing be?
+
+More permitted hops give the selection function more free channels to choose from. Can a
+deadlock-free routing function always be made more adaptive? Fix the hops you allow, `U`
+(for minimal routing on a mesh with two virtual channels: every productive hop on either
+virtual channel, `minimalHops k`). Then:
+
+| Statement | Meaning |
+|---|---|
+| `N.Extends N'` | `N'` permits every hop of `N` (same arrivals and injections) |
+| `N.Within U` | every hop of `N` is a hop of `U` |
+| `N.MaximallyAdaptive U` | every deadlock-free network within `U` that extends `N` permits no other hop at any pair a packet of `N` can occupy: adding **any** set of hops of `U` introduces a deadlock |
+
+`async_decide` proves `N.MaximallyAdaptive U` for a concrete network. For every hop of `U` that
+`N` does not permit, it finds a run of `N` with that hop into a configuration that is
+deadlocked whatever else is added. When there is no such configuration, it splits on whether
+the hop that would free a packet is permitted. The kernel re-checks every run
+(`Network.maximallyAdaptive_of_maxCheck`).
+
+[`Examples/OptimalRouting.lean`](AsyncLean/Examples/OptimalRouting.lean) answers the question
+for meshes:
+
+```lean
+open AsyncLean.Examples Mesh
+
+-- Duato's mesh (XY escape on virtual channel 0) can be improved…
+example : ¬ (duatoMesh 3).MaximallyAdaptive (minimalHops 3) := duatoMesh_not_maximal
+-- …by letting virtual channel 0 also follow the west-first turn model.
+example : (westFirstMesh 4).Correct := by async_decide
+-- After that, no productive hop can be added without a deadlock.
+example : (westFirstMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
+example : (northLastMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
+-- The two maximal meshes are incomparable: no deadlock-free routing contains both.
+example (N : Network ℕ ℕ) (h₁ : (westFirstMesh 3).Extends N) (h₂ : (northLastMesh 3).Extends N)
+    (hU : N.Within (minimalHops 3)) : ¬ N.DeadlockFree := no_common_improvement N h₁ h₂ hU
+```
+
+So there is no single most adaptive deadlock-free routing function to look for. There are
+several maximal ones, and `MaximallyAdaptive` certifies that a design is one of them.
+`#eval N.explainMaximal StateOrd.cmp StateOrd.cmp U` reports the search, or a hop that can be
+added.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -574,6 +616,7 @@ The network properties are listed in section 7.
 | `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
+| `Routing/Optimal.lean` | comparing routing functions by adaptivity, maximally adaptive routing, refutations for intervals of routing functions |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -586,7 +629,7 @@ The network properties are listed in section 7.
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing |
 
 ### Scope and limits
 
@@ -616,6 +659,10 @@ The network properties are listed in section 7.
   Starvation freedom assumes a strongly fair scheduler and is proved for store-and-forward
   switching. Duato's condition is proved necessary and sufficient for store-and-forward
   switching; for wormhole switching the sufficient direction is proved.
+* `MaximallyAdaptive` is relative to the hops `U` you allow, compares routing functions only at
+  the pairs a packet can occupy, and is about store-and-forward deadlock freedom. It is
+  checked for one concrete network at a time (the mesh examples: 3 × 3); maximality for every
+  mesh size is not proved.
 
 ### Building the documentation
 

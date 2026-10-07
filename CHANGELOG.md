@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+* **Maximally adaptive routing** (`Routing/Optimal.lean`). `Network.Extends` and
+  `Network.Within` compare routing functions by the hops they permit.
+  `Network.MaximallyAdaptive U N` says that adding any set of hops of `U` to `N` introduces a
+  deadlock.
+  * `Network.not_deadlockFree_of_refuteBetweenB` refutes every routing function between two
+    bounds with one run. `Network.not_deadlockFree_of_checkTree` does the same with case
+    splits on single hops.
+  * The trusted checker `Network.maxCheck` and its soundness theorem
+    `Network.maximallyAdaptive_of_maxCheck`. `async_decide` proves `N.MaximallyAdaptive U`.
+    `#eval N.explainMaximal …` reports the search.
+  * `Network.MaximallyAdaptive.not_deadlockFree`: two maximal networks that differ have no
+    common deadlock-free extension.
+  * Examples (`Examples/OptimalRouting.lean`): Duato's mesh is not maximally adaptive. Two new
+    schemes give virtual channel 0 a west-first or a north-last turn model on top of the XY
+    escape hop. Both are minimal, strictly more adaptive than Duato's mesh, correct (also
+    starvation free and under wormhole switching), and maximally adaptive among minimal
+    routing functions on two virtual channels. No deadlock-free routing function contains
+    both. Fully adaptive minimal routing on both virtual channels deadlocks.
+
 * **Interconnection networks with dynamic routing** (`Routing/Basic.lean`). `Network` models
   packet-switched networks with one-packet channel buffers, adaptive routing functions and
   run-time selection functions. `Network.Correct` is routing deadlock freedom and routing

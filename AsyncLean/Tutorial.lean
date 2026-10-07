@@ -340,6 +340,10 @@ theorem datelineRing4_wormhole : datelineRing4.WormholeCorrect := by async_decid
 /-! Adaptive meshes with Duato's escape channels (also under wormhole switching), bounded
 misrouting (livelock freedom from a misrouting budget), deflection routing (a livelock) and
 proofs for dateline rings of every size are in `Examples/Routing.lean`.
+`Examples/OptimalRouting.lean` asks how adaptive a deadlock-free routing function can be: it
+improves Duato's mesh with a turn-model escape layer and proves, with `async_decide`, that the
+result is *maximally adaptive* (`Network.MaximallyAdaptive`): no further hop can be added
+without a deadlock.
 
 ## Where next
 
@@ -349,6 +353,7 @@ proofs for dateline rings of every size are in `Examples/Routing.lean`.
 * `Examples/MullerRing.lean`: a proof for Muller rings of *every* size, using the theory
   directly.
 * `Examples/Routing.lean`: dynamically routed meshes and rings.
+* `Examples/OptimalRouting.lean`: maximally adaptive deadlock-free routing.
 -/
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live

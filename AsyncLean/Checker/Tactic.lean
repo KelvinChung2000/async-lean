@@ -17,6 +17,7 @@ import AsyncLean.Checker.BDDGen
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.Optimal
 
 /-!
 # The `async_decide` tactic
@@ -32,7 +33,9 @@ import AsyncLean.Routing.WormholeCheck
   interconnection network `N : Network ℕ ℕ` with dynamic routing.  No configuration of the network is explored: the
   routing function is checked locally (Dally–Seitz with the full routing function, then
   Duato with the first-listed hop of every packet as its escape channel).  `async_routing
-  (escape := R₁)` names the escape subfunction explicitly.
+  (escape := R₁)` names the escape subfunction explicitly;
+* `N.MaximallyAdaptive U` for such a network: every hop of `U` that `N` does not permit is
+  refuted by a run into a deadlock (`Network.maximallyAdaptive_of_maxCheck`).
 
 It works in three steps:
 
@@ -71,6 +74,32 @@ def BTree.toExprAux {α : Type} [ToExpr α] : BTree α → Expr
 instance {α : Type} [ToExpr α] : ToExpr (BTree α) where
   toTypeExpr := mkApp (mkConst ``BTree [Level.zero]) (toTypeExpr α)
   toExpr := BTree.toExprAux
+
+/-- Literal syntax tree for a network action. -/
+def Network.Act.toExprAux {C P : Type} [ToExpr C] [ToExpr P] : Network.Act C P → Expr
+  | .inject c p => mkApp4 (mkConst ``Network.Act.inject [Level.zero, Level.zero])
+      (toTypeExpr C) (toTypeExpr P) (toExpr c) (toExpr p)
+  | .hop c c' p' => mkApp5 (mkConst ``Network.Act.hop [Level.zero, Level.zero])
+      (toTypeExpr C) (toTypeExpr P) (toExpr c) (toExpr c') (toExpr p')
+  | .eject c => mkApp3 (mkConst ``Network.Act.eject [Level.zero, Level.zero])
+      (toTypeExpr C) (toTypeExpr P) (toExpr c)
+
+instance {C P : Type} [ToExpr C] [ToExpr P] : ToExpr (Network.Act C P) where
+  toTypeExpr := mkApp2 (mkConst ``Network.Act [Level.zero, Level.zero]) (toTypeExpr C)
+    (toTypeExpr P)
+  toExpr := Network.Act.toExprAux
+
+/-- Literal syntax tree for a refutation tree. -/
+def Network.RefTree.toExprAux {C P : Type} [ToExpr C] [ToExpr P] : Network.RefTree C P → Expr
+  | .leaf as => mkApp3 (mkConst ``Network.RefTree.leaf [Level.zero, Level.zero])
+      (toTypeExpr C) (toTypeExpr P) (toExpr as)
+  | .split c p q t₁ t₂ => mkAppN (mkConst ``Network.RefTree.split [Level.zero, Level.zero])
+      #[toTypeExpr C, toTypeExpr P, toExpr c, toExpr p, toExpr q, t₁.toExprAux, t₂.toExprAux]
+
+instance {C P : Type} [ToExpr C] [ToExpr P] : ToExpr (Network.RefTree C P) where
+  toTypeExpr := mkApp2 (mkConst ``Network.RefTree [Level.zero, Level.zero]) (toTypeExpr C)
+    (toTypeExpr P)
+  toExpr := Network.RefTree.toExprAux
 
 /-! ### Human-readable diagnosis (untrusted) -/
 
@@ -782,6 +811,34 @@ def decideRouting (goal : MVarId) (N : Expr) (escs : List Expr) (diagEsc : Expr)
   let diag ← mkAppM ``Network.diagnose #[N, cmpC, cmpQ, diagEsc, mkNatLit fuel]
   throwError "{tac}: {← evalString diag}"
 
+/-- Recognise `N.MaximallyAdaptive U`; returns `N` and `U`. -/
+def matchMaximal (tgt : Expr) : Option (Expr × Expr) :=
+  match tgt.getAppFnArgs with
+  | (``Network.MaximallyAdaptive, #[_, _, _, U, N]) => some (N, U)
+  | _ => none
+
+/-- Prove `N.MaximallyAdaptive U` by `Network.maximallyAdaptive_of_maxCheck`: the pairs a packet
+can occupy, and a refutation tree for every hop of `U` that `N` does not permit. -/
+def decideMaximal (goal : MVarId) (N U : Expr) (fuel : ℕ) (tac : String) : TacticM Unit := do
+  let (``Network, #[C, P]) := (← whnfR (← inferType N)).getAppFnArgs
+    | throwError "{tac}: expected a network"
+  let cmpC ← mkAppOptM ``StateOrd.cmp #[C, none]
+  let cmpQ ← mkAppOptM ``StateOrd.cmp #[← mkAppM ``Prod #[C, P], none]
+  let pairs ← evalToLiteral (← mkAppM ``Network.explorePairs #[N, cmpQ, mkNatLit fuel])
+  let certs ← evalToLiteral
+    (← mkAppM ``Network.maxCerts #[cmpC, cmpQ, N, U, mkNatLit fuel, mkNatLit 2])
+  let chk ← mkAppM ``Network.maxCheck #[cmpQ, N, U, pairs, certs]
+  unless ← evalBool chk do
+    let diag ← mkAppM ``Network.explainMaximal #[cmpC, cmpQ, N, U, mkNatLit fuel, mkNatLit 2]
+    throwError "{tac}: {← evalString diag}"
+  let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq chk (mkConst ``Bool.true))
+  let pf ← mkAppM ``Network.maximallyAdaptive_of_maxCheck #[h]
+  unless ← isDefEq (← inferType pf) (← goal.getType) do
+    throwError "{tac}: could not match the goal with{indentExpr (← inferType pf)}"
+  goal.assign pf
+  replaceMainGoal [h.mvarId!]
+  evalTactic (← `(tactic| decide +kernel))
+
 /-- Recognise a goal about a concrete network under wormhole switching. -/
 def matchWormhole (tgt : Expr) : Option (Expr × Goal) :=
   match tgt.getAppFnArgs with
@@ -1120,6 +1177,8 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
     decideRouting goal N [route, ← mkAppM ``Network.firstHop #[N]] route p fuel "async_decide"
   else if let some (N, p) := matchWormhole tgt then
     decideWormhole goal N none p fuel "async_decide"
+  else if let some (N, U) := matchMaximal tgt then
+    decideMaximal goal N U fuel "async_decide"
   else
     throwError "async_decide: unsupported goal{indentExpr tgt}\nExpected a property of a \
       concrete `PNet`, `Circuit`, `Stg` (or of an STG implementation) or `Network`, or \
