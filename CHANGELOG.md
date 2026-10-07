@@ -24,6 +24,15 @@
     two virtual channels on the 3 × 3 and 4 × 4 meshes (the north-last mesh on 3 × 3), also
     under wormhole switching. No deadlock-free routing function contains both. Fully adaptive
     minimal routing on both virtual channels deadlocks.
+* **Duato's theorem for congestion-aware selections** (`Network.EscapeSel`,
+  `Network.deadlockFreeWith_of_escape`, `Network.livelockFreeWith_of_ranking`): a selection may
+  decline free adaptive hops as long as it never refuses a free escape hop. `Network.gatedSel`
+  offers the escape hops and the adaptive hops a predicate admits. In the examples,
+  `westFirstGated` uses the extra hops of the west-first mesh only towards lightly loaded
+  routers; it is correct for every size (`westFirstGated_correct`).
+* `scripts/routing_sim.py`: a cycle-level simulation of the mesh routing functions (outside the
+  Lean development). More adaptivity on the escape layer can lower saturation throughput under
+  adversarial traffic; the gated selection avoids that.
 * `Network.deadlockFree_of_wormholeDeadlockFree`: one-flit packets behave like store-and-forward
   packets, so wormhole deadlock freedom implies store-and-forward deadlock freedom.
 * `Network.packet_hops_eq` (exact hop counts when every hop decreases a ranking by one) and

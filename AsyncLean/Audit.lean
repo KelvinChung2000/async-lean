@@ -73,7 +73,9 @@ open LTS
   Network.Correct.inevitablyEmpty Network.Correct.drain Network.DeadlockFree.lts
   Network.deadlockFree_iff_adaptive Network.livelockFree_iff_adaptive
   Network.adaptive_valid Network.freeOnly_valid Network.firstFree_valid
-  Network.StepWith.packetStep Network.legal_of_reachable
+  Network.StepWith.packetStep Network.legal_of_reachable Network.legal_of_reachable_sub
+  Network.deadlockFreeWith_of_escape Network.livelockFreeWith_of_ranking
+  Network.ValidSel.escapeSel Network.gatedSel_escapeSel
   Network.not_deadlockFree_of_refuteB Network.not_livelockFree_of_refuteB
   Network.correct_of_checkCert Network.spec_of_checkCert Network.starvationFree_of_checkCert
   Network.exists_escape_of_static Network.staticDeadlockFree_iff_exists_escape

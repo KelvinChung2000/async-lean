@@ -405,6 +405,17 @@ example (N : Network ℕ ℕ) (h₁ : (westFirstMesh 3).Extends N) (h₂ : (nort
     (hU : N.Within (minimalHops 3)) : ¬ N.DeadlockFree := no_common_improvement N h₁ h₂ hU
 ```
 
+**More adaptive is not always faster.** In a cycle-level simulation
+([`scripts/routing_sim.py`](scripts/routing_sim.py), 8 × 8 mesh, not part of the proofs) the
+west-first mesh with a random choice among free hops matches Duato's mesh under uniform traffic
+below saturation and has half its latency under transpose traffic near saturation. Under
+bit-complement traffic, though, it saturates at about 0.11 packets per node and cycle against
+0.18: the extra hops crowd the escape channels. Duato's theorem only needs the selection never
+to refuse a free *escape* hop (`Network.EscapeSel`, `Network.deadlockFreeWith_of_escape`), so a
+router may use the extra hops only towards lightly loaded routers (`westFirstGated`, proved
+correct for every size by `westFirstGated_correct`). That policy matches Duato's mesh under
+uniform and bit-complement traffic and has a third of its latency under transpose traffic.
+
 So there is no single most adaptive deadlock-free routing function to look for. There are
 several maximal ones, and `MaximallyAdaptive` certifies that a design is one of them. Wormhole
 deadlock freedom implies store-and-forward deadlock freedom
@@ -669,7 +680,8 @@ The network properties are listed in section 7.
   only at the pairs a packet can occupy. It is checked for one concrete network at a time: the
   west-first mesh on 3 × 3 and 4 × 4 (the 4 × 4 search and check take about five minutes), the
   north-last mesh on 3 × 3. Maximality for every mesh size is not proved; correctness of the
-  west-first mesh is.
+  west-first mesh is. Adaptivity is not performance: the simulation results above are
+  measurements, not theorems.
 
 ### Building the documentation
 
