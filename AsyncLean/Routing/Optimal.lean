@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import AsyncLean.Routing.Check
+import AsyncLean.Routing.Wormhole
 
 /-!
 # Maximally adaptive routing
@@ -40,6 +41,8 @@ checkable.
   routing function that is at least as adaptive as every maximal one.
 * `not_maximallyAdaptive_of_extends` : a deadlock-free network that strictly extends `N`
   shows that `N` is not maximally adaptive.
+* `MaximallyAdaptive.wormhole` : maximality carries over to wormhole switching, since wormhole
+  deadlock freedom implies store-and-forward deadlock freedom.
 
 The untrusted search `mkMaxCerts` builds the certificate (`async_decide` proves
 `N.MaximallyAdaptive U` with it), and `explainMaximal` names a hop that can be added when the
@@ -126,6 +129,15 @@ theorem MaximallyAdaptive.not_deadlockFree {U : C → P → List (C × P)} {N N�
   intro hD
   have harr₂ : N₂.arrived c p = false := by rw [← h₂.arrived, h₁.arrived]; exact harr
   exact hqN (hmax N' h₁ hU hD c p hreach harr q (h₂.route c p q harr₂ hq₂))
+
+/-- **Maximality under wormhole switching.**  Wormhole deadlock freedom implies
+store-and-forward deadlock freedom (`deadlockFree_of_wormholeDeadlockFree`), so a maximally
+adaptive network cannot be extended under wormhole switching either. -/
+theorem MaximallyAdaptive.wormhole {U : C → P → List (C × P)} {N : Network C P}
+    (hmax : N.MaximallyAdaptive U) (N' : Network C P) (h : N.Extends N') (hU : N'.Within U)
+    (hW : N'.WormholeDeadlockFree) :
+    ∀ c p, N.PairReachable (c, p) → N.arrived c p = false → ∀ q ∈ N'.route c p, q ∈ N.route c p :=
+  hmax N' h hU (N'.deadlockFree_of_wormholeDeadlockFree hW)
 
 /-- A deadlock-free network within `U` that extends `N` with a new hop, at a pair a packet of
 `N` can occupy, shows that `N` is **not** maximally adaptive. -/
@@ -351,55 +363,100 @@ def closeGreedy (hops : C → P → List (C × P)) (opts : C → List P) :
     | none => cfg
     | some (d, _) => closeGreedy hops opts fuel ((c, d) :: cfg) (pending ++ fresh d)
 
-/-- Route the packets of `items` into place one at a time, each from an injection through free
-channels; returns the actions. -/
+/-- Breadth-first search of single-packet routes from `frontier` through channels not in `occ`:
+`seen` maps every pair reached to the pair it was reached from (`none` for a start). -/
+def reachFrom (M : Network C P) (occ : BStore C) :
+    ℕ → List (C × P) → BStore ((C × P) × Option (C × P)) → BStore ((C × P) × Option (C × P))
+  | 0, _, seen => seen
+  | _, [], seen => seen
+  | fuel + 1, frontier, seen =>
+    let r := frontier.foldl (fun (acc : List (C × P) × BStore ((C × P) × Option (C × P))) q =>
+      if M.arrived q.1 q.2 then acc else
+        (M.route q.1 q.2).foldl (fun acc q' =>
+          if occ.find cmpC q'.1 || (acc.2.lookup cmpQ q').isSome then acc
+          else (q' :: acc.1, acc.2.pushKV cmpQ q' (some q))) acc) ([], seen)
+    reachFrom M occ fuel r.1 r.2
+
+/-- The route found by `reachFrom` to `q`, from its start. -/
+def routeBack (seen : BStore ((C × P) × Option (C × P))) :
+    ℕ → C × P → List (C × P) → List (C × P)
+  | 0, q, acc => q :: acc
+  | fuel + 1, q, acc =>
+    match seen.lookup cmpQ q with
+    | some (some q') => routeBack seen fuel q' (q :: acc)
+    | _ => q :: acc
+
+/-- Route the packets of `items` into place one at a time, each from a free injection through
+free channels, taking the first packet that can be placed; returns the actions. -/
 def placeAll (M : Network C P) (fuel : ℕ) :
-    ℕ → List (C × P) → List C → List (Act C P) → Option (List (Act C P))
+    ℕ → List (C × P) → BStore C → List (Act C P) → Option (List (Act C P))
   | 0, _, _, _ => none
   | _, [], _, acc => some acc
   | n + 1, items, occ, acc =>
-    match items.findSome? (fun it => (M.routeTo cmpQ occ it fuel).map (it, ·)) with
+    let free := M.inject.filter fun q => !occ.find cmpC q.1
+    let search := fun roots : List (C × P) =>
+      reachFrom cmpC cmpQ M occ fuel roots (roots.foldl (fun s q => s.pushKV cmpQ q none) {})
+    -- first from the injections with the packet's own header (headers rarely change), then
+    -- from all of them
+    let found := (items.findSome? fun it =>
+      let seen := search (free.filter (·.2 == it.2))
+      if (seen.lookup cmpQ it).isSome then some (it, seen) else none) <|>
+      (let seen := search free
+       (items.find? fun it => (seen.lookup cmpQ it).isSome).map (·, seen))
+    match found with
     | none => none
-    | some (it, path) => placeAll M fuel n (items.erase it) (it.1 :: occ) (acc ++ runAlong path)
+    | some (it, seen) => placeAll M fuel n (items.erase it) (occ.push cmpC it.1)
+        (acc ++ runAlong (routeBack cmpQ seen fuel it []))
 
 /-- A run filling the configuration `cfg` under the routing of `M`. -/
 def fillAll (M : Network C P) (fuel : ℕ) (cfg : List (C × P)) : Option (List (Act C P)) :=
-  match placeAll cmpQ M fuel (cfg.length + 1) cfg [] [] with
+  match placeAll cmpC cmpQ M fuel (cfg.length + 1) cfg {} [] with
   | some as => some as
-  | none => placeAll cmpQ M fuel (cfg.length + 1) cfg.reverse [] []
+  | none => placeAll cmpC cmpQ M fuel (cfg.length + 1) cfg.reverse {} []
 
 /-- A reachable configuration of `M` that contains `x`, in which every packet is blocked under
-`hops`, and a run reaching it. -/
-def blockedAt (M : Network C P) (hops : C → P → List (C × P)) (live : List (C × P))
+`hops`, and a run reaching it.  `kept` is `stuckPairs` of the live pairs: the pairs that can
+take part in such a configuration. -/
+def blockedAt (M : Network C P) (hops : C → P → List (C × P)) (kept : List (C × P))
     (fuel : ℕ) (x : C × P) : Option (List (C × P) × List (Act C P)) :=
-  let kept := stuckPairs cmpC hops (live.length + 1) live
   if !kept.contains x then none else
   let opts := fun c => (kept.filter (·.1 == c)).map Prod.snd
   let cfg := closeGreedy hops opts (kept.length + 1) [x] ((hops x.1 x.2).map Prod.fst)
-  (fillAll cmpQ M fuel cfg).map (cfg, ·)
+  (fillAll cmpC cmpQ M fuel cfg).map (cfg, ·)
+
+/-- The hops of `R` at the pairs `ps`, as a table. -/
+def tabulate (R : C → P → List (C × P)) (ps : List (C × P)) : BStore ((C × P) × List (C × P)) :=
+  ps.foldl (fun t x => t.pushKV cmpQ x (R x.1 x.2)) {}
 
 /-- Search a refutation tree for the routing functions between `lo` and `hi`.  `old` holds the
 pairs of `N` itself: a refutation must use one of the new pairs. -/
 def solveTree (N : Network C P) (old : BStore (C × P)) (fuel : ℕ) :
     ℕ → (C → P → List (C × P)) → (C → P → List (C × P)) → Option (RefTree C P)
   | depth, lo, hi =>
-    let M := N.withRoute lo
-    let live := ((M.explorePairs cmpQ fuel).toListAcc []).filter fun x => !N.arrived x.1 x.2
+    let live := (((N.withRoute lo).explorePairs cmpQ fuel).toListAcc []).filter fun x =>
+      !N.arrived x.1 x.2
+    -- both routing functions, tabulated on the pairs that occur
+    let tLo := tabulate cmpQ lo live
+    let tHi := tabulate cmpQ hi live
+    let loT : C → P → List (C × P) := fun c p => (tLo.lookup cmpQ (c, p)).getD []
+    let hiT : C → P → List (C × P) := fun c p => (tHi.lookup cmpQ (c, p)).getD []
+    let M := N.withRoute loT
     let news := live.filter fun x => !old.find cmpQ x
-    match news.findSome? (blockedAt cmpC cmpQ M hi live fuel) with
+    let keptHi := stuckPairs cmpC hiT (live.length + 1) live
+    match news.findSome? (blockedAt cmpC cmpQ M hiT keptHi fuel) with
     | some (_, as) => some (.leaf as)
     | none =>
       match depth with
       | 0 => none
-      | d + 1 => news.findSome? fun x =>
-        match blockedAt cmpC cmpQ M lo live fuel x with
+      | d + 1 =>
+        let keptLo := stuckPairs cmpC loT (live.length + 1) live
+        news.findSome? fun x =>
+        match blockedAt cmpC cmpQ M loT keptLo fuel x with
         | none => none
         | some (cfg, _) =>
           let free := cfg.flatMap fun e =>
-            ((hi e.1 e.2).filter fun q => !cfg.any (·.1 == q.1)).map (e, ·)
-          match free.head? with
-          | none => none
-          | some ((c, p), q) => do
+            ((hiT e.1 e.2).filter fun q => !cfg.any (·.1 == q.1)).map (e, ·)
+          (free.take 3).findSome? fun ((c, p), q) => do
             let yes ← solveTree N old fuel d (addHop lo c p q) hi
             let no ← solveTree N old fuel d lo (delHop hi c p q)
             pure (.split c p q yes no)

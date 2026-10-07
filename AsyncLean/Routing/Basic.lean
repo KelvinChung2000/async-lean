@@ -62,8 +62,11 @@ work-conserving selection function at once.
   injections ends with the network empty: every packet is delivered.
 * `deadlockFree_iff_adaptive`, `livelockFree_iff_adaptive` — it suffices to consider the
   most nondeterministic selection `adaptive`; the results then hold for every policy.
-* `wf_of_acyclic`, `wf_of_rank` — acyclicity of a dependency graph on finitely many channels,
-  or a numbering of the channels, gives the well-foundedness the theorems ask for.
+* `packet_hops_eq` — when every hop decreases the ranking by exactly one (the distance, for
+  minimal routing), every packet takes exactly that many hops.
+* `wf_of_acyclic`, `wf_of_rank`, `wf_of_lexRank` — acyclicity of a dependency graph on finitely
+  many channels, or a (lexicographic) numbering of the channels, gives the well-foundedness the
+  theorems ask for.
 * `staticDeadlockFree_iff_exists_escape`, `deadlockFree_iff_exists_escape` — Duato's condition
   is also **necessary**: when finitely many channels carry legal packets, every configuration
   of legal packets can move iff some connected routing subfunction has an acyclic dependency
@@ -409,6 +412,14 @@ theorem wf_of_rank {r : C → C → Prop} (rk : C → ℕ) (h : ∀ c c', r c c'
     WellFounded (flip r) :=
   Subrelation.wf (fun {x y} hxy => h y x hxy) (InvImage.wf rk wellFounded_lt)
 
+omit [DecidableEq C] in
+/-- A lexicographic numbering of the channels (a pair of numbers) that decreases along every
+dependency makes the dependency graph well-founded. -/
+theorem wf_of_lexRank {r : C → C → Prop} (rk : C → ℕ × ℕ)
+    (h : ∀ c c', r c c' → Prod.Lex (· < ·) (· < ·) (rk c') (rk c)) : WellFounded (flip r) :=
+  Subrelation.wf (fun {x y} hxy => h y x hxy)
+    (InvImage.wf rk (Prod.lex ⟨_, wellFounded_lt⟩ ⟨_, wellFounded_lt⟩).wf)
+
 /-! ### Duato's condition is also necessary
 
 Fix a closed set `legal` of pairs.  *Static* deadlock freedom asks that every non-empty
@@ -685,6 +696,24 @@ theorem packet_hops_le {legal : C → P → Prop} (hcl : N.Closed legal) (rk : C
     (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p → rk q.1 q.2 < rk c p)
     {q q' : C × P} {ls : List Unit} (hq : legal q.1 q.2) (h : N.packetLTS.Path q ls q') :
     rk q'.1 q'.2 + ls.length ≤ rk q.1 q.2 := by
+  revert hq
+  induction h with
+  | nil => intro; simp
+  | cons hst _ ih =>
+    intro hq
+    have h1 := ih (hcl.route _ _ _ hq hst.1 hst.2)
+    have h2 := hrk _ _ _ hq hst.1 hst.2
+    simp only [List.length_cons]
+    omega
+
+/-- **Exact hop count**: if every permitted hop decreases `rk` by exactly one, a route of `n`
+hops from `q` ends in a pair of rank `rk q - n`.  With `rk` the distance to the destination
+(minimal routing), every packet takes exactly as many hops as the distance: a shortest path. -/
+theorem packet_hops_eq {legal : C → P → Prop} (hcl : N.Closed legal) (rk : C → P → ℕ)
+    (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p →
+      rk q.1 q.2 + 1 = rk c p)
+    {q q' : C × P} {ls : List Unit} (hq : legal q.1 q.2) (h : N.packetLTS.Path q ls q') :
+    rk q'.1 q'.2 + ls.length = rk q.1 q.2 := by
   revert hq
   induction h with
   | nil => intro; simp
