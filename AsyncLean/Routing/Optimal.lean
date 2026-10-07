@@ -469,13 +469,15 @@ def extraHops (N : Network C P) (U : C → P → List (C × P)) (fuel : ℕ) :
       ((U x.1 x.2).filter fun q => !(N.route x.1 x.2).contains q).map (x, ·)
 
 /-- The certificate for `maxCheck`: a refutation tree for every extra hop, or the first extra
-hop for which none was found. -/
+hop for which none was found.  The case splits of each tree are searched up to depth `depth`,
+then, for the hops that need it, up to depth `depth + 2`. -/
 def mkMaxCerts (N : Network C P) (U : C → P → List (C × P)) (fuel : ℕ) (depth : ℕ := 2) :
     Except ((C × P) × (C × P)) (List ((C × P) × (C × P) × RefTree C P)) :=
   let old : BStore (C × P) :=
     ((N.explorePairs cmpQ fuel).toListAcc []).foldl (fun s x => s.push cmpQ x) {}
   (N.extraHops cmpQ U fuel).mapM fun (x, q) =>
-    match solveTree cmpC cmpQ N old fuel depth (addHop N.route x.1 x.2 q) U with
+    match [depth, depth + 1, depth + 2].findSome? fun d =>
+        solveTree cmpC cmpQ N old fuel d (addHop N.route x.1 x.2 q) U with
     | some t => .ok (x, q, t)
     | none => .error (x, q)
 

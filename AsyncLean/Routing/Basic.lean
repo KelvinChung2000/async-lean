@@ -53,6 +53,9 @@ work-conserving selection function at once.
   channels*) is connected and its channel dependency graph is acyclic, the fully adaptive
   network is deadlock free, even though the dependency graph of the full routing function
   may have cycles.
+* `deadlockFreeWith_of_escape`, `livelockFreeWith_of_ranking` — the same for selection
+  functions that may decline adaptive hops (`EscapeSel`: they never refuse a free escape hop),
+  such as the congestion-aware `gatedSel`.
 * `deadlockFree_of_cdg` — **Dally and Seitz's theorem**: an acyclic channel dependency
   graph rules out deadlock.
 * `livelockFree_of_ranking`, `packetLivelockFree_of_ranking` — a ranking function that
@@ -193,6 +196,15 @@ structure ValidSel (sel : Selection C P) : Prop where
   conserving : ∀ f c p, f c = some p → (∃ q ∈ N.route c p, f q.1 = none) →
     ∃ q ∈ sel f c p, f q.1 = none
 
+/-- **Duato's condition on a selection function** for the escape subfunction `R₁`: it only
+offers permitted hops, and whenever an escape hop is free it offers a free hop.  Unlike
+`ValidSel`, it may decline free adaptive hops, for example when the routers ahead are congested.
+Duato's theorem only needs this (`deadlockFreeWith_of_escape`). -/
+structure EscapeSel (R₁ : C → P → List (C × P)) (sel : Selection C P) : Prop where
+  sub : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p
+  conserving : ∀ f c p, f c = some p → (∃ q ∈ R₁ c p, f q.1 = none) →
+    ∃ q ∈ sel f c p, f q.1 = none
+
 /-- Some packet of `f` can move. -/
 def Movable (sel : Selection C P) (f : Config C P) : Prop :=
   ∃ a f', a.IsMove ∧ (N.ltsWith sel).step f a f'
@@ -264,10 +276,10 @@ theorem exists_of_ne_empty {f : Config C P} (h : f ≠ empty) : ∃ c p, f c = s
     | none => rfl
     | some p => exact absurd hfc (hc c p))
 
-/-- The legal pairs are an invariant of every valid selection. -/
+/-- The legal pairs are an invariant of every selection that only offers permitted hops. -/
 theorem legal_step {legal : C → P → Prop} (hcl : N.Closed legal) {sel : Selection C P}
-    (hsel : N.ValidSel sel) {f f' : Config C P} {a : Act C P} (hf : Legal legal f)
-    (h : N.StepWith sel f a f') : Legal legal f' := by
+    (hsel : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p) {f f' : Config C P} {a : Act C P}
+    (hf : Legal legal f) (h : N.StepWith sel f a f') : Legal legal f' := by
   intro x px hx
   cases h with
   | @inject c p hinj _ =>
@@ -283,7 +295,7 @@ theorem legal_step {legal : C → P → Prop} (hcl : N.Closed legal) {sel : Sele
     · subst hxc'
       simp only [Function.update_self, Option.some.injEq] at hx
       cases hx
-      exact hcl.route c p _ (hf c p hp) harr (hsel.sub _ _ _ _ hq)
+      exact hcl.route c p _ (hf c p hp) harr (hsel _ _ _ _ hq)
     · rw [Function.update_of_ne hxc'] at hx
       by_cases hxc : x = c
       · subst hxc; simp at hx
@@ -295,11 +307,16 @@ theorem legal_step {legal : C → P → Prop} (hcl : N.Closed legal) {sel : Sele
     · rw [Function.update_of_ne hxc] at hx
       exact hf x px hx
 
+theorem legal_of_reachable_sub {legal : C → P → Prop} (hcl : N.Closed legal)
+    {sel : Selection C P} (hsel : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p) {f : Config C P}
+    (h : (N.ltsWith sel).Reachable empty f) : Legal legal f :=
+  h.invariant (fun _ _ h => by simp [empty] at h)
+    (fun _ _ _ hf hst => N.legal_step hcl hsel hf hst)
+
 theorem legal_of_reachable {legal : C → P → Prop} (hcl : N.Closed legal) {sel : Selection C P}
     (hsel : N.ValidSel sel) {f : Config C P} (h : (N.ltsWith sel).Reachable empty f) :
     Legal legal f :=
-  h.invariant (fun _ _ h => by simp [empty] at h)
-    (fun _ _ _ hf hst => N.legal_step hcl hsel hf hst)
+  N.legal_of_reachable_sub hcl hsel.sub h
 
 /-- Every hop of the network is a routing step of the packet that moves. -/
 theorem StepWith.packetStep {sel : Selection C P} (hsel : N.ValidSel sel)
@@ -352,9 +369,9 @@ theorem livelockFree_iff_adaptive : N.LivelockFree ↔ N.LivelockFreeWith N.adap
 well-founded, every configuration holding a packet can move.  By well-founded induction
 along the dependencies: the packet in `c` is ejected, or its escape channel is free, or the
 packet holding its escape channel can move. -/
-theorem movable_of_escape {legal : C → P → Prop} {sel : Selection C P} (hsel : N.ValidSel sel)
-    (R₁ : C → P → List (C × P))
-    (hsub : ∀ c p q, legal c p → N.arrived c p = false → q ∈ R₁ c p → q ∈ N.route c p)
+theorem movable_of_escape {legal : C → P → Prop} {sel : Selection C P} {R₁ : C → P → List (C × P)}
+    (hsel : ∀ f c p, legal c p → N.arrived c p = false → f c = some p →
+      (∃ q ∈ R₁ c p, f q.1 = none) → ∃ q ∈ sel f c p, f q.1 = none)
     (hconn : ∀ c p, legal c p → N.arrived c p = false → R₁ c p ≠ [])
     (hwf : WellFounded (flip (N.Dep legal R₁))) {f : Config C P} (hf : Legal legal f) :
     ∀ c p, f c = some p → N.Movable sel f := by
@@ -368,8 +385,7 @@ theorem movable_of_escape {legal : C → P → Prop} {sel : Selection C P} (hsel
     obtain ⟨⟨c', p'⟩, hq⟩ := List.exists_mem_of_ne_nil _ (hconn c p hl harr)
     cases hc' : f c' with
     | none =>
-      obtain ⟨⟨c'', p''⟩, hq', hfree⟩ :=
-        hsel.conserving f c p hp ⟨(c', p'), hsub c p _ hl harr hq, hc'⟩
+      obtain ⟨⟨c'', p''⟩, hq', hfree⟩ := hsel f c p hl harr hp ⟨(c', p'), hq, hc'⟩
       exact ⟨.hop c c'' p'', _, rfl, StepWith.hop hp harr hq' hfree⟩
     | some p'' => exact ih c' ⟨p, p', hl, harr, hq⟩ p'' hc'
 
@@ -385,7 +401,42 @@ theorem deadlockFree_of_escape {legal : C → P → Prop} (hcl : N.Closed legal)
     (hwf : WellFounded (flip (N.Dep legal R₁))) : N.DeadlockFree := by
   intro sel hsel f hf hne
   obtain ⟨c, p, hp⟩ := exists_of_ne_empty hne
-  exact N.movable_of_escape hsel R₁ hsub hconn hwf (N.legal_of_reachable hcl hsel hf) c p hp
+  exact N.movable_of_escape (fun f c p hl ha hp ⟨q, hq, hfree⟩ =>
+      hsel.conserving f c p hp ⟨q, hsub c p q hl ha hq, hfree⟩) hconn hwf
+    (N.legal_of_reachable hcl hsel hf) c p hp
+
+/-- **Duato's theorem for selections that may decline adaptive hops**: the network is deadlock
+free under every selection that only offers permitted hops and never refuses a free escape
+hop (`EscapeSel`), not only under work-conserving ones. -/
+theorem deadlockFreeWith_of_escape {legal : C → P → Prop} (hcl : N.Closed legal)
+    (R₁ : C → P → List (C × P))
+    (hconn : ∀ c p, legal c p → N.arrived c p = false → R₁ c p ≠ [])
+    (hwf : WellFounded (flip (N.Dep legal R₁))) {sel : Selection C P} (hsel : N.EscapeSel R₁ sel) :
+    N.DeadlockFreeWith sel := by
+  intro f hf hne
+  obtain ⟨c, p, hp⟩ := exists_of_ne_empty hne
+  exact N.movable_of_escape (fun f c p _ _ => hsel.conserving f c p) hconn hwf
+    (N.legal_of_reachable_sub hcl hsel.sub hf) c p hp
+
+omit [DecidableEq C] in
+/-- A work-conserving selection never refuses a free escape hop. -/
+theorem ValidSel.escapeSel {sel : Selection C P} (hsel : N.ValidSel sel)
+    {R₁ : C → P → List (C × P)} (hR : ∀ c p q, q ∈ R₁ c p → q ∈ N.route c p) :
+    N.EscapeSel R₁ sel :=
+  ⟨hsel.sub, fun f c p hp ⟨q, hq, hfree⟩ => hsel.conserving f c p hp ⟨q, hR c p q hq, hfree⟩⟩
+
+/-- A congestion-aware selection: the free escape hops, and those other free permitted hops that
+`allow` admits (for example, only hops towards lightly loaded routers). -/
+def gatedSel [DecidableEq P] (R₁ : C → P → List (C × P))
+    (allow : Config C P → C → P → C × P → Bool) : Selection C P :=
+  fun f c p => (N.route c p).filter fun q => (f q.1).isNone && (decide (q ∈ R₁ c p) || allow f c p q)
+
+theorem gatedSel_escapeSel [DecidableEq P] {R₁ : C → P → List (C × P)}
+    (hR : ∀ c p q, q ∈ R₁ c p → q ∈ N.route c p) (allow : Config C P → C → P → C × P → Bool) :
+    N.EscapeSel R₁ (N.gatedSel R₁ allow) where
+  sub _ _ _ _ h := (List.mem_filter.1 h).1
+  conserving f c p _ := fun ⟨q, hq, hfree⟩ =>
+    ⟨q, List.mem_filter.2 ⟨hR c p q hq, by simp [hfree, hq]⟩, hfree⟩
 
 /-- **Dally and Seitz's theorem**: a connected routing function whose channel dependency graph
 is well-founded (acyclic) is deadlock free. -/
@@ -554,7 +605,8 @@ theorem staticDeadlockFree_iff_exists_escape {legal : C → P → Prop}
   refine ⟨N.exists_escape_of_static hfin, ?_⟩
   rintro ⟨R₁, hsub, hconn, hwf⟩ f hf hne
   obtain ⟨c, p, hp⟩ := exists_of_ne_empty hne
-  exact N.movable_of_escape N.adaptive_valid R₁ hsub hconn hwf hf c p hp
+  exact N.movable_of_escape (fun f c p hl ha hp ⟨q, hq, hfree⟩ =>
+    N.adaptive_valid.conserving f c p hp ⟨q, hsub c p q hl ha hq, hfree⟩) hconn hwf hf c p hp
 
 /-- **Duato's theorem as an equivalence**: if every configuration of legal packets is
 reachable, the network is deadlock free (under every selection function) iff some connected
@@ -634,14 +686,15 @@ theorem sum_update_add (s : Finset C) (g : C → Option P → ℕ) (f : Config C
 
 /-- **Livelock freedom by a ranking function.**  If, on a closed set of pairs that uses
 finitely many channels, every permitted hop strictly decreases the rank `rk` of the packet,
-then under every selection function there is no infinite run without injections.  For
+then under every selection function that only offers permitted hops there is no infinite run
+without injections.  For
 minimal routing take the distance to the destination; for bounded misrouting take the
 distance plus a multiple of the remaining misrouting budget. -/
-theorem livelockFree_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal)
+theorem livelockFreeWith_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal)
     (hfin : {c | ∃ p, legal c p}.Finite) (rk : C → P → ℕ)
-    (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p → rk q.1 q.2 < rk c p) :
-    N.LivelockFree := by
-  intro sel hsel
+    (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p → rk q.1 q.2 < rk c p)
+    {sel : Selection C P} (hsel : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p) :
+    N.LivelockFreeWith sel := by
   have hs : ∀ c p, legal c p → c ∈ hfin.toFinset := fun c p h => hfin.mem_toFinset.2 ⟨p, h⟩
   refine LTS.LivelockFree.of_ranking (Legal legal) (fun _ _ h => by simp [empty] at h)
     (fun _ _ _ hf hst => N.legal_step hcl hsel hf hst)
@@ -651,11 +704,11 @@ theorem livelockFree_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal
   cases hst with
   | inject => simp [Act.IsMove] at ha
   | @hop c c' p p' hp harr hq hfree =>
-    have hl' : legal c' p' := hcl.route c p (c', p') (hf c p hp) harr (hsel.sub _ _ _ _ hq)
+    have hl' : legal c' p' := hcl.route c p (c', p') (hf c p hp) harr (hsel _ _ _ _ hq)
     have hne : c' ≠ c := by rintro rfl; simp [hp] at hfree
     have h1 := sum_update_add _ (wt rk) f (hs c p (hf c p hp)) none
     have h2 := sum_update_add _ (wt rk) (Function.update f c none) (hs c' p' hl') (some p')
-    have hlt := hrk c p (c', p') (hf c p hp) harr (hsel.sub _ _ _ _ hq)
+    have hlt := hrk c p (c', p') (hf c p hp) harr (hsel _ _ _ _ hq)
     rw [Function.update_of_ne hne, hfree] at h2
     rw [hp, wt_some, wt_none] at h1
     rw [wt_none, wt_some] at h2
@@ -670,6 +723,14 @@ theorem livelockFree_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal
     show ∑ x ∈ hfin.toFinset, wt rk x (Function.update f c none x) <
       ∑ x ∈ hfin.toFinset, wt rk x (f x)
     omega
+
+/-- **Livelock freedom by a ranking function**, under every selection function that only
+offers permitted hops. -/
+theorem livelockFree_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal)
+    (hfin : {c | ∃ p, legal c p}.Finite) (rk : C → P → ℕ)
+    (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p → rk q.1 q.2 < rk c p) :
+    N.LivelockFree :=
+  fun _ hsel => N.livelockFreeWith_of_ranking hcl hfin rk hrk hsel.sub
 
 /-- `livelockFree_of_ranking` for a network with finitely many channels. -/
 theorem livelockFree_of_ranking' [Finite C] {legal : C → P → Prop} (hcl : N.Closed legal)

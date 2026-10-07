@@ -563,6 +563,48 @@ theorem westFirstMesh_hops {k s d : ℕ} (hs : s < k * k) (hd : d < k * k) {q : 
   simp only [wfDist, head_inj] at this
   omega
 
+/-! #### Congestion-aware selection
+
+More adaptivity on the escape layer is not always faster: under heavy, adversarial traffic,
+packets taking the extra hops of virtual channel 0 crowd the escape channels.  (In a cycle-level
+simulation, `scripts/routing_sim.py`, an 8 × 8 west-first mesh with a random choice among the
+free hops saturates at about 0.11 packets per node and cycle under bit-complement traffic,
+against 0.18 for Duato's mesh.)  Duato's theorem does not need the selection to take every free
+hop, only never to refuse a free escape hop (`Network.EscapeSel`).  So a router may use the extra
+hops only when the router ahead is lightly loaded (`westFirstGated`) and stay deadlock and
+livelock free; in the simulation this matches Duato's mesh under uniform and bit-complement
+traffic and has a third of its latency under transpose traffic near saturation. -/
+
+/-- **Any selection that never refuses a free XY escape hop** keeps the west-first mesh of every
+size deadlock and livelock free. -/
+theorem westFirstMesh_correctWith (k : ℕ) {sel : Selection ℕ ℕ}
+    (hsel : (westFirstMesh k).EscapeSel (xyEscape k) sel) :
+    (westFirstMesh k).DeadlockFreeWith sel ∧ (westFirstMesh k).LivelockFreeWith sel :=
+  ⟨(westFirstMesh k).deadlockFreeWith_of_escape (wf_closed k) (xyEscape k) wf_esc_conn (wf_wf k)
+      hsel,
+    (westFirstMesh k).livelockFreeWith_of_ranking (wf_closed k) (wf_chans_finite k) (wfDist k)
+      (fun _ _ _ hl ha hq => by have := wf_dist hl ha hq; omega) hsel.sub⟩
+
+/-- The number of free channels leaving node `v` (on both virtual channels). -/
+def freeOut (f : Config ℕ ℕ) (v : ℕ) : ℕ :=
+  ((List.range 4).flatMap fun dr => [ch v dr 0, ch v dr 1]).countP fun c => (f c).isNone
+
+/-- The congestion-aware west-first mesh: virtual channel 1 and the XY escape hop are always
+offered; the extra hops of virtual channel 0 only towards a router with at least `g` of its 8
+outgoing channels free. -/
+def westFirstGated (k g : ℕ) : Selection ℕ ℕ :=
+  (westFirstMesh k).gatedSel (xyEscape k) fun f _ _ q =>
+    q.1 % 2 == 1 || decide (g ≤ freeOut f (head k q.1))
+
+theorem westFirstGated_correct (k g : ℕ) :
+    (westFirstMesh k).DeadlockFreeWith (westFirstGated k g) ∧
+      (westFirstMesh k).LivelockFreeWith (westFirstGated k g) :=
+  westFirstMesh_correctWith k ((westFirstMesh k).gatedSel_escapeSel
+    (fun c d q hq => by
+      simp only [xyEscape, List.mem_singleton] at hq
+      subst hq
+      simp [westFirstMesh, turnDuatoMesh]) _)
+
 /-! ### Other routing functions -/
 
 /-- Fully adaptive minimal routing on both virtual channels deadlocks: eight packets, two in each
@@ -663,7 +705,8 @@ theorem no_common_improvement_wormhole (N : Network ℕ ℕ) (h₁ : (westFirstM
   fun hW => no_common_improvement N h₁ h₂ hU (N.deadlockFree_of_wormholeDeadlockFree hW)
 
 #assert_standard_axioms minimalMesh_deadlocks westFirstMesh_correct westFirstMesh_starvationFree
-  westFirstMesh_wormholeCorrect westFirstMesh_hops northLastMesh_correct duatoMesh_extends
+  westFirstMesh_wormholeCorrect westFirstMesh_hops westFirstMesh_correctWith
+  westFirstGated_correct northLastMesh_correct duatoMesh_extends
   turnDuatoMesh_within duatoMesh_lt_westFirstMesh duatoMesh_not_maximal westFirstMesh_maximal
   westFirstMesh_maximal_4 westFirstMesh_maximal_wormhole northLastMesh_maximal
   westFirst_northLast_incomparable no_common_improvement no_common_improvement_wormhole
