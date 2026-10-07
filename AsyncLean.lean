@@ -25,6 +25,7 @@ import AsyncLean.Checker.Affine
 import AsyncLean.Checker.Bitmap
 import AsyncLean.Checker.AffineK
 import AsyncLean.Checker.BitmapPetri
+import AsyncLean.Checker.BitmapCircuit
 import AsyncLean.Checker.BitmapGen
 import AsyncLean.Petri.Stubborn
 import AsyncLean.Checker.FastPOR
@@ -74,6 +75,7 @@ import AsyncLean.Examples.Step
 import AsyncLean.Examples.Unbounded
 import AsyncLean.Examples.Scale
 import AsyncLean.Examples.Symbolic
+import AsyncLean.Examples.Bitmap
 import AsyncLean.Examples.Routing
 import AsyncLean.Examples.RTL
 import AsyncLean.Tutorial

@@ -61,6 +61,24 @@ noncomputable def checkBitmap (L : List LField) (k imask dR dD kD : ℕ) (wR wD 
     (band (N.checkPot wR dR imask) (band (N.checkPot wD dD kD)
       (Bitmap.check (N.katable L) k imask dR dD kD N.trans.length dl lv s₀ c)))))
 
+/-- The first part of `checkBitmap`: the layout, the literals, the potentials, closure and
+deadlock freedom. -/
+noncomputable def checkBitmapA (L : List LField) (k imask dR dD kD : ℕ) (wR wD : List ℕ)
+    (dl ll : Bool) (s₀ : ℕ) (c : Bitmap.Cert) : Bool :=
+  band (N.layoutOkK L) (band (Nat.beq imask (cond ll N.imask 0))
+    (band (Nat.beq s₀ (kencV N.initVec L))
+    (band (N.checkPot wR dR imask) (band (N.checkPot wD dD kD)
+      (Bitmap.checkA (N.katable L) k dl s₀ c)))))
+
+/-- The second part of `checkBitmap`: the rank rounds. -/
+noncomputable def checkBitmapR (L : List LField) (k imask dR : ℕ) (c : Bitmap.Cert) : Bool :=
+  Bitmap.checkR (N.katable L) k imask dR c
+
+/-- The third part of `checkBitmap`: the distance rounds and the hubs. -/
+noncomputable def checkBitmapD (L : List LField) (k dD kD : ℕ) (lv : Bool) (c : Bitmap.Cert) :
+    Bool :=
+  Bitmap.checkD (N.katable L) k dD kD N.trans.length lv c
+
 /-- The potential of a marking. -/
 def pot (w : List ℕ) (M : Marking (Fin N.places)) : ℕ := ∑ p : Fin N.places, w.getD p.val 0 * M p
 
@@ -182,6 +200,20 @@ theorem of_checkBitmap {L : List LField} {k imask dR dD kD s₀ : ℕ} {wR wD : 
     funext t; rw [Bool.cond_true, testBit_imask]
   rw [this] at hl
   exact hl
+
+theorem checkBitmap_of_parts {L : List LField} {k imask dR dD kD s₀ : ℕ} {wR wD : List ℕ}
+    {dl ll lv : Bool} {c : Bitmap.Cert}
+    (hA : N.checkBitmapA L k imask dR dD kD wR wD dl ll s₀ c = true)
+    (hR : N.checkBitmapR L k imask dR c = true) (hD : N.checkBitmapD L k dD kD lv c = true) :
+    N.checkBitmap L k imask dR dD kD wR wD dl ll lv s₀ c = true := by
+  unfold checkBitmapA at hA
+  unfold checkBitmap
+  obtain ⟨h1, hA⟩ := band_eq.1 hA
+  obtain ⟨h2, hA⟩ := band_eq.1 hA
+  obtain ⟨h3, hA⟩ := band_eq.1 hA
+  obtain ⟨h4, hA⟩ := band_eq.1 hA
+  obtain ⟨h5, hA⟩ := band_eq.1 hA
+  rw [h1, h2, h3, h4, h5, Bitmap.check_of_parts hA hR hD]; rfl
 
 /-- **A successful bitmap check proves the design correct.** -/
 theorem correct_of_checkBitmap {L : List LField} {k imask dR dD kD s₀ : ℕ} {wR wD : List ℕ}

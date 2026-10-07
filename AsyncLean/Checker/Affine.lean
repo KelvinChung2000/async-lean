@@ -3,6 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.Checker.Fast
 import AsyncLean.Checker.Petri
+import AsyncLean.Circuit.Basic
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Positivity.Basic
 
@@ -46,13 +47,16 @@ structure Test where
   kind : ℕ
 deriving DecidableEq, Repr, Inhabited
 
-/-- A transition on packed states: when every `guard` test holds, it adds `add` and subtracts
-`sub`; the `ok` tests say that the target is still faithfully encoded. -/
+/-- A transition on packed states: when every `guard` test holds and the Boolean expression
+`bg` holds of the bits of the state, it adds `add` and subtracts `sub`; the `ok` tests say that
+the target is still faithfully encoded.  Nets use only tests (`bg` is `true`); gate-level
+circuits use only `bg` (the excitation of a gate). -/
 structure Tr where
   guard : List Test
   ok : List Test
   add : ℕ
   sub : ℕ
+  bg : BExpr := .const true
 deriving DecidableEq, Repr, Inhabited
 
 /-- The field of `w` bits at bit `sh`. -/
@@ -69,11 +73,18 @@ noncomputable def ttest (x : ℕ) (a : Test) : Bool := cmp a.kind (fld x a.sh a.
 /-- All tests hold. -/
 noncomputable def tall (x : ℕ) (ts : List Test) : Bool := kall ts (ttest x)
 
+/-- The Boolean guard holds of the bits of `x`. -/
+def bgOk (x : ℕ) (e : BExpr) : Bool := e.eval x.testBit
+
+/-- The whole guard of a transition. -/
+noncomputable def gOk (x : ℕ) (e : Tr) : Bool :=
+  Bool.rec (motive := fun _ => Bool) false (bgOk x e.bg) (tall x e.guard)
+
 /-- Successors along the table, numbering transitions from `i`. -/
 noncomputable def asuccAux (x : ℕ) (tb : List Tr) : ℕ → List (ℕ × ℕ × Bool) :=
   List.rec (motive := fun _ => ℕ → List (ℕ × ℕ × Bool)) (fun _ => [])
     (fun e _ rec i => Bool.rec (motive := fun _ => List (ℕ × ℕ × Bool)) (rec (i + 1))
-      ((i, x + e.add - e.sub, tall x e.ok) :: rec (i + 1)) (tall x e.guard)) tb
+      ((i, x + e.add - e.sub, tall x e.ok) :: rec (i + 1)) (gOk x e)) tb
 
 /-- **The successor function of a table**: label, target and `ok` flag. -/
 noncomputable def asucc (tb : List Tr) (x : ℕ) : List (ℕ × ℕ × Bool) := asuccAux x tb 0
@@ -107,24 +118,31 @@ theorem cmp_eq (kind v c : ℕ) :
 theorem tall_iff {x : ℕ} {ts : List Test} : tall x ts = true ↔ ∀ a ∈ ts, ttest x a = true := by
   simp [tall, kall_eq]
 
+theorem gOk_eq (x : ℕ) (e : Tr) : gOk x e = (tall x e.guard && bgOk x e.bg) := by
+  unfold gOk; cases tall x e.guard <;> rfl
+
+theorem gOk_of_true {x : ℕ} {e : Tr} (h : e.bg = .const true) :
+    gOk x e = tall x e.guard := by
+  rw [gOk_eq, h]; simp [bgOk, BExpr.eval]
+
 theorem mem_asuccAux {x : ℕ} {tb : List Tr} {i₀ j m' : ℕ} {b : Bool} :
     (j, m', b) ∈ asuccAux x tb i₀ ↔ ∃ k, ∃ hk : k < tb.length, j = i₀ + k ∧
-      tall x tb[k].guard = true ∧ m' = x + tb[k].add - tb[k].sub ∧ b = tall x tb[k].ok := by
+      gOk x tb[k] = true ∧ m' = x + tb[k].add - tb[k].sub ∧ b = tall x tb[k].ok := by
   induction tb generalizing i₀ with
   | nil => simp [asuccAux]
   | cons e tb ih =>
     change (j, m', b) ∈ Bool.rec (motive := fun _ => List (ℕ × ℕ × Bool))
       (asuccAux x tb (i₀ + 1))
-      ((i₀, x + e.add - e.sub, tall x e.ok) :: asuccAux x tb (i₀ + 1)) (tall x e.guard) ↔ _
+      ((i₀, x + e.add - e.sub, tall x e.ok) :: asuccAux x tb (i₀ + 1)) (gOk x e) ↔ _
     constructor
     · intro h
       have hrest : (j, m', b) ∈ asuccAux x tb (i₀ + 1) → ∃ k, ∃ hk : k < (e :: tb).length,
-          j = i₀ + k ∧ tall x (e :: tb)[k].guard = true ∧
+          j = i₀ + k ∧ gOk x (e :: tb)[k] = true ∧
           m' = x + (e :: tb)[k].add - (e :: tb)[k].sub ∧ b = tall x (e :: tb)[k].ok := by
         intro h'
         obtain ⟨k, hk, rfl, h1, h2, h3⟩ := ih.1 h'
         exact ⟨k + 1, by simpa using hk, by omega, h1, h2, h3⟩
-      cases hen : tall x e.guard
+      cases hen : gOk x e
       · rw [hen] at h; exact hrest h
       · rw [hen] at h
         rcases List.mem_cons.1 h with h | h
@@ -140,12 +158,12 @@ theorem mem_asuccAux {x : ℕ} {tb : List Tr} {i₀ j m' : ℕ} {b : Bool} :
         exact List.mem_cons_self
       | succ k =>
         have := (ih (i₀ := i₀ + 1)).2 ⟨k, by simpa using hk, by omega, h1, h2, h3⟩
-        cases tall x e.guard
+        cases gOk x e
         · exact this
         · exact List.mem_cons_of_mem _ this
 
 theorem mem_asucc {tb : List Tr} {x j m' : ℕ} {b : Bool} :
-    (j, m', b) ∈ asucc tb x ↔ ∃ hj : j < tb.length, tall x tb[j].guard = true ∧
+    (j, m', b) ∈ asucc tb x ↔ ∃ hj : j < tb.length, gOk x tb[j] = true ∧
       m' = x + tb[j].add - tb[j].sub ∧ b = tall x tb[j].ok := by
   rw [asucc, mem_asuccAux]
   constructor
@@ -587,7 +605,7 @@ theorem encodesL {L : List LField} (hL : LayoutSpec N L) :
   refine ⟨fun M hg i m' hm => ?_, fun M t M' hg hst => ?_⟩
   · obtain ⟨hk, hen, rfl, hok⟩ := mem_asucc.1 hm
     rw [hget i hk] at hen hok
-    rw [guard_iff hL hg] at hen
+    rw [gOk_of_true rfl, guard_iff hL hg] at hen
     refine ⟨⟨i, by rwa [hlen] at hk⟩, N.toNet.fire M _, rfl, ⟨hen, rfl⟩, ?_, ?_⟩
     · rw [encL_fire hL hen, hget i hk]
     · exact (ok_good hL hg hen).1 hok.symm
@@ -595,7 +613,7 @@ theorem encodesL {L : List LField} (hL : LayoutSpec N L) :
     have hk : t.val < (N.atable L).length := by rw [hlen]; exact t.isLt
     refine ⟨tall (N.encL L M) (atr L (N.tr t)).ok, mem_asucc.2 ⟨hk, ?_, ?_, ?_⟩,
       fun hok => (ok_good hL hg hen).1 hok⟩
-    · rw [hget _ hk]; exact (guard_iff hL hg t).2 hen
+    · rw [hget _ hk, gOk_of_true rfl]; exact (guard_iff hL hg t).2 hen
     · rw [hget _ hk]; exact encL_fire hL hen
     · rw [hget _ hk]
 

@@ -95,7 +95,7 @@ theorem foldl_step_of_not_mem {v : ℕ → Bool} {i : ℕ} :
   | g :: gs, h => by
     simp only [List.map_cons, List.mem_cons, not_or] at h
     rw [List.foldl_cons, foldl_step_of_not_mem h.2]
-    simp [step, Ne.symm h.1, h.1]
+    simp [step, h.1]
 
 /-- The heart of `unique`: a consistent valuation agrees with the evaluation on the inputs, the
 known signals and the gates still to evaluate. -/

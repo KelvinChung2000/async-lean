@@ -10,6 +10,7 @@ import AsyncLean.Checker.Abstract
 import AsyncLean.Circuit.Step
 import AsyncLean.Examples.Philosophers
 import AsyncLean.Examples.Compositional
+import AsyncLean.Examples.Symbolic
 import AsyncLean.AxiomAudit
 import Mathlib.Data.Fin.VecNotation
 
@@ -226,6 +227,23 @@ def queue : PNet where
 
 theorem queue_correct : queue.Correct := by async_decide
 
+/-! At the cap, an internal transition that removes tokens may leave the abstract marking
+unchanged, so no rank on abstract markings can show livelock freedom.  *Weights on the places*
+see what the cap hides: if an internal transition decreases the weighted token count, it
+cannot fire forever, whatever the abstraction says.  `async_decide` combines such linear
+potentials with the abstract ranks and must-distances lexicographically
+(`PNet.of_checkAbsP`). -/
+
+/-- A buffer (place 1), filled by a producer and drained by an internal transition. -/
+def drained : PNet where
+  places := 2
+  trans := [
+    { name := "produce", pre := [0], post := [0, 1] },
+    { name := "drain", pre := [1], post := [], internal := true }]
+  init := [1, 0]
+
+theorem drained_correct : drained.Correct := by async_decide
+
 /-- The results hold when gates switch simultaneously, too: for a speed-independent circuit,
 the step semantics reaches exactly the same states (`Circuit.correct_iff_stepCorrect`). -/
 theorem forkCircuit_stepCorrect : forkCircuit.StepCorrect :=
@@ -280,6 +298,21 @@ theorem tenPhilosophers_safe : (Examples.philosophers 10 true).Safe := by
 /-- Seven philosophers are deadlock free, live and safe, symbolically. -/
 theorem sevenPhilosophers_correct : (Examples.philosophers 7 true).Correct := by
   async_bdd
+
+/-! Some designs defeat both: every component synchronises with its neighbours, or internal
+transitions sit next to external ones, so stubborn sets stay large, yet the reachable
+markings are many.  When they are *dense* once packed, `async_bitmap` checks them in bulk.  A
+*layout* packs a marking into a number, a component of places (exactly one of them marked)
+taking the bits of its marked place's index; the markings that agree on their high bits form
+one bitmap, a number with a bit per marking; and the kernel fires a transition on a whole
+bitmap with one shift (`PNet.of_checkBitmap`).  Ranks and distances are computed by the
+kernel in rounds, shortened by linear potentials.  `async_decide` uses bitmaps when it
+estimates them cheaper than a reduced state space. -/
+
+/-- Six independent four-phase handshakes, each acknowledged by an internal transition:
+`4^6 = 4 096` markings in one bitmap. -/
+theorem sixHandshakes_correct : (Examples.handshakes 6).Correct := by
+  async_bitmap
 
 /-! ## 9. Networks with dynamic routing
 
@@ -341,6 +374,14 @@ theorem datelineRing4_wormhole : datelineRing4.WormholeCorrect := by async_decid
 misrouting (livelock freedom from a misrouting budget), deflection routing (a livelock) and
 proofs for dateline rings of every size are in `Examples/Routing.lean`.
 
+In hardware the routing decision is made by the router's routing logic.
+`comb_from_verilog` imports it as a combinational netlist (`Comb`), and an `RtlRouter` says
+which input bits it reads for a packet and how its output bits name the next hop.  The kernel
+evaluates the netlist on every packet it handles and compares with `route`
+(`Network.implementedBy`); the theorems about the network then hold for the network routed
+by the netlist (`Network.correct_of_rtl`), and `Comb.unique` makes its outputs independent of
+gate delays.  `Examples/RTL.lean` does this for the XY routing logic of a 4×4 mesh.
+
 ## Where next
 
 * `Examples/Compositional.lean`: `async_minimize` replaces components by minimal quotients so
@@ -349,13 +390,16 @@ proofs for dateline rings of every size are in `Examples/Routing.lean`.
 * `Examples/MullerRing.lean`: a proof for Muller rings of *every* size, using the theory
   directly.
 * `Examples/Routing.lean`: dynamically routed meshes and rings.
+* `Examples/Bitmap.lean`: dense and tightly coupled designs, and an unbounded log, by
+  bit-parallel certificates.
+* `Examples/RTL.lean`: a mesh routed by its Verilog routing logic.
 -/
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live
   spec_ok impl_ok forkCircuit_si forkCircuit_not_qdi forkCircuit_qdi_iso
   forkCircuit_qdi_groups handshake_fair queue_correct forkCircuit_stepCorrect
   fifo30_deadlockFree twelvePhilosophers_deadlockFree fifo30_correct tenPhilosophers_safe
-  sevenPhilosophers_correct ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree
+  sevenPhilosophers_correct sixHandshakes_correct ring4_deadlocks datelineRing4_correct datelineRing4_starvationFree
   datelineRing4_wormhole
 
 end AsyncLean.Tutorial

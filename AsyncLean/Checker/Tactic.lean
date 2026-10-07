@@ -426,17 +426,6 @@ def bcertE (c : PNet.BCert) : Expr :=
 def checkBDDE (N : Expr) (dl ll lv : Bool) (c : PNet.BCert) : Expr :=
   mkAppN (mkConst ``PNet.checkBDD) #[N, boolE dl, boolE ll, boolE lv, bcertE c]
 
-/-- A test of a packed transition table as a literal. -/
-def testE (a : Aff.Test) : Expr :=
-  mkAppN (mkConst ``Aff.Test.mk) #[mkRawNatLit a.sh, mkRawNatLit a.w, mkRawNatLit a.c,
-    mkRawNatLit a.kind]
-
-/-- A packed transition as a literal. -/
-def trE (e : Aff.Tr) : Expr :=
-  let tT := mkConst ``Aff.Test
-  mkAppN (mkConst ``Aff.Tr.mk) #[listE tT (e.guard.map testE), listE tT (e.ok.map testE),
-    mkRawNatLit e.add, mkRawNatLit e.sub]
-
 /-- A layout as a literal. -/
 def layoutE (L : List LField) : Expr :=
   listE (mkConst ``LField) (L.map fun f => mkAppN (mkConst ``LField.mk)
@@ -458,13 +447,19 @@ def bitmapCertE (c : Bitmap.Cert) : Expr := Id.run do
   return pairE (mkApp (mkConst ``BTree [Level.zero]) p2) restT tE
     (pairE (listT hubT) p2 hubs (pairE natT natT (mkRawNatLit c.2.2.1) (mkRawNatLit c.2.2.2)))
 
-/-- The bitmap check `PNet.checkBitmap` for the net `N` (with value `Nv`). -/
-def checkBitmapE (N : Expr) (Nv : PNet) (L : List LField) (k : ℕ) (dl ll lv : Bool)
-    (c : Bitmap.Cert) (pR : List ℕ × ℕ) (pD : List ℕ × ℕ × ℕ) : Expr :=
-  mkAppN (mkConst ``PNet.checkBitmap) #[N, layoutE L, mkRawNatLit k,
-    mkRawNatLit (cond ll Nv.imask 0), mkRawNatLit pR.2, mkRawNatLit pD.2.1, mkRawNatLit pD.2.2,
-    natsE pR.1, natsE pD.1, boolE dl, boolE ll, boolE lv,
-    mkRawNatLit (PNet.encV L Nv.initVec), bitmapCertE c]
+/-- The three parts of the bitmap check `PNet.checkBitmap` for the net `N` (with value `Nv`),
+checked separately by the kernel. -/
+def checkBitmapEs (N : Expr) (Nv : PNet) (L : List LField) (k : ℕ) (dl ll lv : Bool)
+    (c : Bitmap.Cert) (pR : List ℕ × ℕ) (pD : List ℕ × ℕ × ℕ) : List Expr :=
+  let LE := layoutE L
+  let cE := bitmapCertE c
+  let imask := mkRawNatLit (cond ll Nv.imask 0)
+  [mkAppN (mkConst ``PNet.checkBitmapA) #[N, LE, mkRawNatLit k, imask, mkRawNatLit pR.2,
+    mkRawNatLit pD.2.1, mkRawNatLit pD.2.2, natsE pR.1, natsE pD.1, boolE dl, boolE ll,
+    mkRawNatLit (PNet.encV L Nv.initVec), cE],
+   mkAppN (mkConst ``PNet.checkBitmapR) #[N, LE, mkRawNatLit k, imask, mkRawNatLit pR.2, cE],
+   mkAppN (mkConst ``PNet.checkBitmapD) #[N, LE, mkRawNatLit k, mkRawNatLit pD.2.1,
+    mkRawNatLit pD.2.2, boolE lv, cE]]
 
 end FastExpr
 
@@ -741,6 +736,13 @@ def bitmapCost (T k : ℕ) (c : Bitmap.Cert) : Float :=
   let rounds := 1 + c.2.2.1 + c.2.2.2
   rounds.toFloat * T.toFloat * chunks.toFloat * (0.0004 + (2 ^ k / 8 : ℕ).toFloat * 3.0e-8)
 
+/-- Estimated kernel memory, in bytes, of the largest of the three parts of a bitmap check:
+the kernel keeps about three bitmaps per round, transition and chunk. -/
+def bitmapBytes (T k : ℕ) (c : Bitmap.Cert) : Float :=
+  let chunks := c.1.toList.length
+  let rounds := 1 + max c.2.2.1 c.2.2.2
+  rounds.toFloat * T.toFloat * 3.0 * chunks.toFloat * (2 ^ k / 8 : ℕ).toFloat
+
 /-- Prove a property of a bounded `PNet` from a bitmap certificate (`PNet.of_checkBitmap`):
 `p = none` asks for the bound `K`.  Returns `false` (leaving the goal untouched) when no
 certificate is found, or when its estimated cost exceeds `limit` (seconds). -/
@@ -760,27 +762,72 @@ def decideBitmap (goal : MVarId) (N : Expr) (p : Option Goal) (K : ℕ := 1)
     if p.isNone && !net.layoutBound L K then return false
     if let some lim := limit then
       if bitmapCost net.trans.length k c > lim then return false
+      -- leave room in memory: `async_bitmap` itself can be asked for more
+      if bitmapBytes net.trans.length k c > 4.0e9 then return false
     closeWithChecksLit goal N net
-      (fun lit => FastExpr.checkBitmapE lit net L k dl ll lv c pR pD ::
+      (fun lit => FastExpr.checkBitmapEs lit net L k dl ll lv c pR pD ++
         (if p.isNone then [mkApp3 (mkConst ``PNet.layoutBound) lit (FastExpr.layoutE L)
           (mkRawNatLit K)] else []))
-      (fun hs => match p with
-        | none => mkAppM ``PNet.bounded_of_checkBitmap #[hs[0]!, hs[1]!]
-        | some .deadlock => mkAppM ``PNet.deadlockFree_of_checkBitmap #[hs[0]!]
-        | some .live => mkAppM ``PNet.live_of_checkBitmap #[hs[0]!]
-        | some .livelock => mkAppM ``PNet.livelockFree_of_checkBitmap #[hs[0]!]
-        | _ => mkAppM ``PNet.correct_of_checkBitmap #[hs[0]!])
+      (fun hs => do
+        let h ← mkAppM ``PNet.checkBitmap_of_parts #[hs[0]!, hs[1]!, hs[2]!]
+        match p with
+        | none => mkAppM ``PNet.bounded_of_checkBitmap #[h, hs[3]!]
+        | some .deadlock => mkAppM ``PNet.deadlockFree_of_checkBitmap #[h]
+        | some .live => mkAppM ``PNet.live_of_checkBitmap #[h]
+        | some .livelock => mkAppM ``PNet.livelockFree_of_checkBitmap #[h]
+        | _ => mkAppM ``PNet.correct_of_checkBitmap #[h])
+
+/-- Prove a property of a concrete circuit `C₀` from a bitmap certificate
+(`Circuit.of_checkBitmap`).  Returns `false` (leaving the goal untouched) when no certificate is
+found or when its estimated cost exceeds `limit` (seconds). -/
+def decideBitmapC (goal : MVarId) (C₀ : Expr) (p : Goal) (maxChunks : ℕ := 100000)
+    (low : ℕ := 20) (limit : Option Float := none) : TacticM Bool := do
+  let Cv ← evalAs Circuit C₀
+  unless Cv.wf do return false
+  let (dl, ll, lv, thm) := match p with
+    | .deadlock => (true, false, false, ``Circuit.deadlockFree_of_checkBitmap)
+    | .livelock => (false, true, false, ``Circuit.livelockFree_of_checkBitmap)
+    | .live => (false, false, true, ``Circuit.live_of_checkBitmap)
+    | _ => (true, true, true, ``Circuit.correct_of_checkBitmap)
+  if p matches .persistent then return false
+  match Cv.mkBitmapCert dl ll lv maxChunks low with
+  | .error _ => return false
+  | .ok (k, c) =>
+    if let some lim := limit then
+      if bitmapCost (2 * Cv.gates.length) k c > lim then return false
+      if bitmapBytes (2 * Cv.gates.length) k c > 4.0e9 then return false
+    let lit := toExpr Cv
+    let n := mkRawNatLit
+    let imask := n (cond ll Cv.imaskB 0)
+    let cE := FastExpr.bitmapCertE c
+    let checks := [
+      mkAppN (mkConst ``Circuit.checkBitmapA) #[lit, n k, imask, FastExpr.boolE dl,
+        FastExpr.boolE ll, n (Cv.bpack Cv.s₀), cE],
+      mkAppN (mkConst ``Circuit.checkBitmapR) #[lit, n k, imask, cE],
+      mkAppN (mkConst ``Circuit.checkBitmapD) #[lit, n k, FastExpr.boolE lv, cE]]
+    let hs ← checks.mapM fun ch => do mkFreshExprSyntheticOpaqueMVar (← mkEq ch (mkConst ``Bool.true))
+    let pf ← mkAppM thm hs.toArray
+    let pfTy := (← inferType pf).replace fun e => if e == lit then some C₀ else none
+    let gTy ← goal.getType
+    unless ← isDefEq pfTy gTy do return false
+    goal.assign (← mkExpectedTypeHint pf gTy)
+    replaceMainGoal (hs.map (·.mvarId!))
+    evalTactic (← `(tactic| all_goals decide +kernel))
+    return true
 
 /-- `async_bitmap`: prove a property of a concrete bounded `PNet` from a bitmap certificate. -/
 def asyncBitmap (maxChunks low : ℕ) : TacticM Unit := do
   let goal ← getMainGoal
   let tgt ← instantiateMVars (← goal.getType)
-  let ok ← match matchPNet tgt, matchBounded tgt with
-    | some (N, p), _ =>
+  let ok ← match matchPNet tgt, matchBounded tgt, matchCircuit tgt with
+    | some (N, p), _, _ =>
       if p matches .persistent then throwError "async_bitmap: persistence is not supported"
       decideBitmap goal N (some p) 1 maxChunks low
-    | none, some (N, k) => decideBitmap goal N none (← evalAs ℕ k) maxChunks low
-    | none, none => throwError "async_bitmap: unsupported goal{indentExpr tgt}"
+    | none, some (N, k), _ => decideBitmap goal N none (← evalAs ℕ k) maxChunks low
+    | none, none, some (C, p) =>
+      if p matches .persistent then throwError "async_bitmap: persistence is not supported"
+      decideBitmapC goal C p maxChunks low
+    | none, none, none => throwError "async_bitmap: unsupported goal{indentExpr tgt}"
   unless ok do
     throwError "async_bitmap: no bitmap certificate found (the net must be bounded, satisfy \
       the property, and its packed reachable markings fit in the chunk budget)"
@@ -1088,8 +1135,8 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           -- a large reduced state space: bitmaps may be cheaper (about a millisecond of
           -- kernel time per reduced marking)
           let n := t.toList.length
-          if n > 5000 then
-            if ← decideBitmap goal N (some p) 1 8192 20 (some (n.toFloat * 0.001)) then return
+          if n.toFloat * 0.003 > 2.0 then
+            if ← decideBitmap goal N (some p) 1 8192 20 (some (n.toFloat * 0.003)) then return
           let lit := FastExpr.pnetE Nv
           closeWithCheckLitM goal (FastExpr.checkPORE lit Nv w t)
             (fun h => mkAppM ``PNet.deadlockFree_of_checkPOR #[h]) N lit
@@ -1103,6 +1150,9 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
       -- partial-order reduction for livelock freedom and liveness too
       unless p matches .deadlock do
         let Nv ← evalAs PNet N
+        -- a large state space, dense once packed: bitmaps first
+        if Nv.bitmapDense then
+          if ← decideBitmap goal N (some p) 1 8192 20 (some 120.0) then return
         let noInt := Nv.noInternal
         -- without internal transitions, livelock freedom is immediate and the visibility
         -- conditions (which would force full expansion) are not needed
@@ -1115,8 +1165,10 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
             if 2 * (l.filter fun x => x.2.2.2.1 == 0).length < l.length then some l.length
             else none
           | .error _ => none
-        if porcSize.all (· > 5000) then
-          let lim := (porcSize.map fun n => n.toFloat * 0.001).getD 120.0
+        -- a reduced marking costs about 10 ms of kernel time with the cycle proviso and the
+        -- traces of liveness
+        if porcSize.all fun n => n.toFloat * 0.01 > 1.0 then
+          let lim := (porcSize.map fun n => n.toFloat * 0.01).getD 120.0
           if ← decideBitmap goal N (some p) 1 8192 20 (some lim) then return
         if let .ok (w, t, hubs) := porc then
           let l := t.toList
@@ -1201,6 +1253,9 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
       closeWithCheckLit goal chk
         (fun h => app ``Circuit.speedIndependent_of_checkPCertP #[C, lit, h]) p C₀ C
     | _ =>
+      -- many signals: bitmaps, if they are estimated cheap
+      if (← evalAs Circuit C₀).signals ≥ 14 then
+        if ← decideBitmapC goal C₀ p 8192 20 (some 120.0) then return
       let litH := toExpr (← evalAs (ExplicitLTS.HomeCert ℕ) (app ``Circuit.mkCertHomeP #[C, fuelE]))
       let chkH := app ``Circuit.checkCertHomeP #[C, litH]
       if ← evalBool chkH then

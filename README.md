@@ -93,6 +93,7 @@ depends on `sorry`, `native_decide` or a user-declared axiom:
 | a signal transition graph (Petrify / Workcraft `.g`) and maybe its gates | `Stg` (section 5) | `spec.model.Correct`, `.CSC`, `.Consistent`, `.OutputPersistent`, `.Conformant gates` |
 | a closed gate-level netlist (C-elements, Boolean gates) | `Circuit` (section 6) | `C.Correct`, `C.SpeedIndependent`, `C.QDI` |
 | routers, channels and a routing function | `Network` (section 7) | `N.Correct`, `N.StarvationFree`, `N.WormholeCorrect` |
+| a router's routing logic as a Verilog netlist | `Comb` and `RtlRouter` (section 7) | `N.implementedBy r`, then `(N.withRtl r).Correct` |
 | any other finite system with a computable successor function | `ExplicitLTS` | `E.toLTS.DeadlockFree s₀`, `E.toLTS.LivelockFree internal s₀` |
 
 All of them are given a semantics as a labelled transition system, so the same properties
@@ -257,6 +258,9 @@ theorem cRing_qdi : cRing.QDI := by async_decide
   `2` reading signal `0`). `QDI` with no argument means no isochronic forks.
 * `Circuit.speedIndependent_of_qdi` proves that QDI implies speed independence.
 * `circuit_from_verilog ring "designs/ring.v"` reads a closed netlist.
+* For a circuit with many signals, `async_bitmap` checks `Correct` on bitmaps of states, each
+  rise and fall of a gate evaluated on a whole bitmap by bitwise operations
+  (`Circuit.of_checkBitmap`); `async_decide` does so on its own from 14 signals.
 * Gates may also switch simultaneously: for a speed-independent circuit the step semantics
   reaches exactly Muller's interleaving states, so correctness is the same in both
   (`Circuit.correct_iff_stepCorrect`). Without speed independence it is not:
@@ -365,13 +369,46 @@ example : (duatoMesh 3).WormholeDeadlockFree := by
   async_routing (escape := fun c => c % 2 == 0)
 ```
 
+### From the routing logic in Verilog
+
+The theorems above are about `route`, a Lean function. To make them about the hardware, import
+the router's routing logic as a combinational netlist and say how the network uses it:
+
+```lean
+comb_from_verilog xyRoute "designs/xy_route.v"  -- input [3:0] u, d; output [1:0] o
+
+def xyRouter : RtlRouter where
+  comb := xyRoute
+  nc := 160                                     -- channels handled are below 160
+  np := 16                                      -- destinations below 16
+  dom c _ := decide (head 4 c < 16)             -- the pairs the router handles
+  enc c d := bits4 (head 4 c) ++ bits4 d        -- the input bits: node, destination
+  dec c d o := [(ch (head 4 c) ((o.getD 0 false).toNat + 2 * (o.getD 1 false).toNat) 0, d)]
+
+theorem xyMesh_implemented : (xyMesh 4).implementedBy xyRouter = true := by decide +kernel
+theorem xyMesh_covered : (xyMesh 4).coveredBy xyRouter = true := by decide +kernel
+theorem xyMesh_rtl_correct : ((xyMesh 4).withRtl xyRouter).Correct :=
+  correct_of_rtl xyMesh_implemented xyMesh_correct
+```
+
+* `implementedBy` evaluates the netlist on every handled pair (2 560 here) and compares the
+  decoded hops with `route`. Then `N.withRtl r = N` (`withRtl_eq`): the network whose routing
+  decisions are the netlist's outputs satisfies every theorem proved about `N`.
+* `coveredBy` checks that every packet the network can carry is handled
+  (`legal_of_coveredBy`), so the network never relies on routing outside the netlist.
+* `Comb.unique`: every settled state of the gates agrees with the netlist's evaluation,
+  whatever the gate delays; `Comb.val_consistent`: the evaluation is a settled state.
+* Verilog buses `[msb:lsb]` and bit selects `u[2]` are accepted; the bits of a bus are listed
+  from `lsb` up. See `Examples/RTL.lean`.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
 |---|---|---|
-| `async_decide` | explores the reachable states (for nets, a reduced state space; for networks, the routing function), builds a certificate, and has the kernel check it; for nets it falls back on the state equation, symbolic certificates or the counter abstraction | the design is concrete: the default choice |
+| `async_decide` | explores the reachable states (for nets, a reduced state space or bitmaps, whichever it estimates cheaper; for networks, the routing function), builds a certificate, and has the kernel check it; for nets it falls back on the state equation, symbolic certificates or the counter abstraction with linear potentials | the design is concrete: the default choice |
 | `async_decide (fuel := n)` | the same, with a larger bound on explored states (default 100 000) | the error says the state space exceeds the fuel |
 | `async_decide (cap := k)` | the counter abstraction with cap `k` | an unbounded net whose abstraction is too coarse |
+| `async_bitmap` | packs the markings by a layout (circuit states are bit vectors already), groups them into bitmaps, and has the kernel fire each transition — each rise and fall of a gate — on a whole bitmap at once; ranks and distances are computed by the kernel in rounds, shortened by linear potentials | dense state spaces of tightly coupled designs (handshakes, barriers; circuits whose reachable states fill much of their bit vectors): `Correct`, deadlock freedom, livelock freedom, liveness, `Bounded k` |
 | `async_bdd` | decision diagrams of an inductive invariant and of witness transitions, checked by the kernel without enumerating markings | large safe nets: `Correct` or safety with up to `2⁸⁰` markings |
 | `async_structural` | place invariants, linear ranking functions, state-equation (Farkas) and Commoner certificates; no state exploration | safeness and boundedness, deadlock freedom, livelock freedom for every initial marking, liveness of marked graphs and free-choice nets; huge state spaces |
 | `async_minimize` / `async_minimize right` | replaces one component of a parallel composition by its minimal quotient, certified | a composition is too large; then finish with `async_decide` |
@@ -412,6 +449,19 @@ theorem twoFifos_ok : <deadlock freedom ∧ livelock freedom of the composition>
   each transition. When there are none, the measure is lexicographic: each witness (internal
   transition) decreases a potential, or keeps it and decreases a diagram of distances
   (ranks), which then counts only those steps (`Examples/Symbolic.lean`).
+* **Bit-parallel certificates.** A *layout* packs a marking into a number: a component of
+  places of which exactly one is marked takes the bits of its marked place's index, a place
+  that no transition consumes from takes none (`PNet.encodesL`). The markings that agree on
+  their high bits form a *chunk*, one number with a bit per marking. Firing a transition adds
+  and subtracts constants, so on a whole chunk it is one shift, after two more shifts check
+  that no marking borrows from or carries into the high bits (`Bitmap.fire_chunk`). The
+  kernel checks closure and deadlock freedom chunk by chunk, and computes the states that
+  reach a hub and the states without internal runs in rounds; linear potentials (weights on
+  the places, found by linear programming) cut the rounds to one or two on pipelines
+  (`PNet.of_checkBitmap`). A check costs about 30 ns of kernel time per byte of bitmap,
+  transition and round — a few nanoseconds per marking — so it suits state spaces that are
+  dense once packed; `async_decide` estimates the cost and prefers a reduced state space when
+  that is cheaper.
 * **Fast kernel checking.** Markings are packed into one number, a field of bits per place,
   and the kernel's inner loops are written with recursors over natural numbers
   (`Checker/Fast.lean`, `PNet.checkFast`); a check costs a few milliseconds per state.
@@ -503,7 +553,8 @@ channels is impossible, the network really can be blocked.
 | Symptom | What to do |
 |---|---|
 | `…exceeds the fuel` / `no counterexample found within N states` | raise it: `async_decide (fuel := 1000000)`, or switch to `async_structural`, `async_minimize` or the theory |
-| the kernel check is slow | explicit checking costs a few milliseconds per reachable (or reduced) state; for a large safe net try `async_bdd`, and for deadlock freedom `async_structural`. Add `set_option maxHeartbeats 0 in` before the theorem if Lean times out |
+| the kernel check is slow | explicit checking costs a few milliseconds per reachable (or reduced) state; for a state space that is dense once packed try `async_bitmap`, for a large safe net `async_bdd`, and for deadlock freedom `async_structural`. Add `set_option maxHeartbeats 0 in` before the theorem if Lean times out |
+| `async_bitmap` runs out of memory | the kernel keeps every bitmap it computes; use `async_bitmap (low := 16)` for smaller chunks, or prove deadlock freedom and livelock freedom separately |
 | `the goal must be stated for the design's own initial state and internal predicate` | state the goal with `N.M₀` and `N.Internal` (or `C.s₀`, `C.Internal`), or use `N.Correct`; for other initial states use the theory |
 | `unsupported goal` | the tactic recognises the goals listed in sections 4–7; unfold your own definitions first, or split a conjunction with `⟨by async_decide, by async_decide⟩` |
 | `POTENTIAL DEADLOCK` for a network | list the escape hop first in `route`, or name escape channels with `async_routing (escape := …)` |
@@ -547,7 +598,9 @@ The network properties are listed in section 7.
   `Net`, `StgModel` and `Circuit` semantics. Network theorems are stated directly about the
   abstract `Network` semantics.
 * **Importers are outside the trusted base too.** An imported design is an ordinary Lean
-  definition; the theorems are about that definition.
+  definition; the theorems are about that definition. For routing logic, `Network.implementedBy`
+  connects the imported netlist to the routing function, and `Comb.unique` makes the netlist's
+  outputs independent of gate delays.
 
 ### Library map
 
@@ -570,23 +623,28 @@ The network properties are listed in section 7.
 | `Circuit/Basic.lean` | gate netlists (`BExpr`, C-elements), Muller semantics, speed independence |
 | `Circuit/Wires.lean`, `Circuit/QDI.lean` | wire delays, isochronic forks, QDI, proof that QDI implies speed independence |
 | `Circuit/Packed.lean` | bit-packed circuit states for fast checking |
+| `Circuit/Comb.lean` | combinational netlists as functions: evaluation, well-formedness, uniqueness of settled states |
 | `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's theorem (sufficient and necessary), Dally–Seitz, livelock by ranking, drain theorem, refutations |
 | `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
+| `Routing/RTL.lean` | routing functions implemented by netlists: `RtlRouter`, `implementedBy`, `coveredBy`, transfer of correctness |
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
 | `Checker/Abstract.lean` | checking through finite over-approximations; the counter abstraction of unbounded nets |
 | `Checker/Diagnose.lean`, `Minimize.lean` | untrusted counterexample search, certificate and quotient computation |
+| `Checker/Affine.lean`, `AffineK.lean` | layouts: markings packed by components and counters, a linear encoding (`PNet.encodesL`), kernel-friendly structural checks |
+| `Checker/Bitmap.lean`, `BitmapPetri.lean`, `BitmapGen.lean` | bit-parallel certificates: the trusted checker and its soundness, its instance for nets with linear potentials, the untrusted generator |
+| `Checker/AbstractPot.lean` | counter abstractions with linear potentials (lexicographic ranks and must-distances) |
 | `Checker/Fast.lean`, `FastPetri.lean` | the fast kernel checker on numeric states, and its instance for nets packed into bit fields |
 | `Checker/FastPOR.lean`, `FastPORLive.lean` | kernel checks of reduced state spaces |
 | `Checker/BDD.lean`, `BDDGen.lean` | symbolic certificates: decision diagrams checked by joint walks; their untrusted computation |
-| `Checker/Tactic.lean` | the `async_decide`, `async_bdd`, `async_routing` and `async_minimize` tactics |
+| `Checker/Tactic.lean` | the `async_decide`, `async_bitmap`, `async_bdd`, `async_routing` and `async_minimize` tactics |
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
-| `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
+| `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog`, `comb_from_verilog`; `#export_pnml` writes a net for other model checkers |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, bitmaps, routing, routing logic from RTL |
 
 ### Scope and limits
 
@@ -600,12 +658,20 @@ The network properties are listed in section 7.
   decidable only with non-elementary worst-case cost. `async_structural` checks the
   siphon–trap property from a branching certificate and falls back on model checking when the
   certificate would be too large. The counter abstraction of unbounded nets is sound but
-  incomplete, refined by raising the cap.
+  incomplete, refined by raising the cap; linear potentials recover what the cap hides when
+  tokens are drained (`PNet.of_checkAbsP`), and a place that no transition consumes from
+  (an unbounded log or sink) needs no abstraction at all with `async_bitmap`. No method is
+  complete for every unbounded net in practice.
 * Reduction helps most when concurrency is loosely coupled. When the stubborn sets must be
   large (tightly synchronised designs, or many internal transitions next to external ones),
-  the reduced state space approaches the full one; for safe nets `async_decide` then turns to
-  symbolic certificates. These cost about a millisecond of kernel time per pair of diagram
-  nodes walked (a few hundred to a few thousand pairs on the families of section 8), and
+  the reduced state space approaches the full one; `async_decide` then turns to bitmaps when
+  the packed markings are dense, and for safe nets to symbolic certificates. Bitmaps cost
+  memory as well as time: the kernel keeps every bitmap it computes, about
+  `rounds × transitions × 3` bitmaps (12 GB for the `4^12` markings of twelve handshakes with
+  `Correct`, 2–3 GB below a million markings). Their cost grows with the number of packed
+  positions, not of markings, so they do not suit sparse state spaces (dining philosophers,
+  whose fork places repeat what the philosophers' states say). Symbolic certificates cost
+  about a millisecond of kernel time per pair of diagram nodes walked (a few hundred to a few thousand pairs on the families of section 8), and
   their untrusted search takes a few seconds at most. Liveness and livelock freedom are
   cheapest when linear potentials exist; the diagrams of a lexicographic measure stay
   polynomial on the handshakes of `Examples/Symbolic.lean`, but grow with the number of
@@ -616,6 +682,9 @@ The network properties are listed in section 7.
   Starvation freedom assumes a strongly fair scheduler and is proved for store-and-forward
   switching. Duato's condition is proved necessary and sufficient for store-and-forward
   switching; for wormhole switching the sufficient direction is proved.
+* The link to RTL covers routing *logic*: a combinational netlist read as a function. The
+  buffers, arbiters and flow control of a router are modelled by the `Network` semantics, not
+  imported from RTL.
 
 ### Building the documentation
 

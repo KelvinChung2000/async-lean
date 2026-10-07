@@ -73,7 +73,7 @@ noncomputable def kflat {α β : Type} (f : α → List β) (L : List α) : List
 /-- `atr`, by the recursors. -/
 noncomputable def katr (L : List LField) (t : PTrans) : Tr :=
   ⟨kflat (kfguard t.pre) L, kflat (kfok t.pre t.post) L, kencV (fun p => kcount p t.post) L,
-    kencV (fun p => kcount p t.pre) L⟩
+    kencV (fun p => kcount p t.pre) L, .const true⟩
 
 /-- **The table of a net**, by the recursors. -/
 noncomputable def katable (N : PNet) (L : List LField) : List Tr :=
@@ -290,7 +290,7 @@ theorem layoutSpec_of_layoutOkK {N : PNet} {L : List LField} (h : N.layoutOkK L 
     fun f hfL hc => ((hfs f hfL).2.2 hc).1, fun f hfL hc => ((hfs f hfL).2.2 hc).2.1,
     fun f hfL hc => ((hfs f hfL).2.2 hc).2.2, fun t ht p hp => ?_⟩
   have := hc t ht
-  simp only [kall_eq, List.all_eq_true, kany_eq, List.any_eq_true] at this
+  simp only [kany_eq, List.any_eq_true] at this
   obtain ⟨f, hfL, hm⟩ := this p hp
   exact ⟨f, hfL, kmem_iff.1 hm⟩
 

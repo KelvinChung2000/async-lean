@@ -3,6 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.Checker.BitmapPetri
 import AsyncLean.Checker.BDDGen
+import AsyncLean.Checker.BitmapCircuit
 
 /-!
 # Untrusted generation of bitmap certificates
@@ -39,12 +40,15 @@ def ttestC (x : ℕ) (a : Test) : Bool := cmpC a.kind (fldC x a.sh a.w) a.c
 
 def tallC (x : ℕ) (ts : List Test) : Bool := ts.all (ttestC x)
 
+/-- The whole guard of a transition (compiled `Aff.gOk`). -/
+def gOkC (x : ℕ) (e : Tr) : Bool := tallC x e.guard && e.bg.eval x.testBit
+
 /-- Successors of a packed state (compiled `Aff.asucc`). -/
 def asuccC (tb : Array Tr) (x : ℕ) : Array (ℕ × ℕ × Bool) := Id.run do
   let mut out := #[]
   for i in [0:tb.size] do
     let e := tb[i]!
-    if tallC x e.guard then out := out.push (i, x + e.add - e.sub, tallC x e.ok)
+    if gOkC x e then out := out.push (i, x + e.add - e.sub, tallC x e.ok)
   return out
 
 def fullC (k : ℕ) : ℕ := (1 <<< (1 <<< k)) - 1
@@ -94,9 +98,18 @@ def shiftByC (S addL subL : ℕ) : ℕ := if subL ≤ addL then S <<< (addL - su
 def unshiftByC (X addL subL : ℕ) : ℕ :=
   if subL ≤ addL then X >>> (addL - subL) else X <<< (subL - addL)
 
+/-- The mask of a Boolean guard in the chunk `h` (compiled `Bitmap.bmaskE`). -/
+def bmaskEC (cx : Ctx) (h : ℕ) : BExpr → ℕ
+  | .var i => if i < cx.k then cx.bms[i]! else if h.testBit (i - cx.k) then cx.full else 0
+  | .const b => if b then cx.full else 0
+  | .not e => cx.full ^^^ bmaskEC cx h e
+  | .and a b => bmaskEC cx h a &&& bmaskEC cx h b
+  | .or a b => bmaskEC cx h a ||| bmaskEC cx h b
+  | .xor a b => bmaskEC cx h a ^^^ bmaskEC cx h b
+
 /-- A transition, prepared for chunks of `k` low bits. -/
 structure TInfo where
-  gL : ℕ
+  gL₀ : ℕ
   oL : ℕ
   guard : List Test
   ok : List Test
@@ -105,11 +118,18 @@ structure TInfo where
   subH : ℕ
   subL : ℕ
   internal : Bool
+  bg : BExpr
+  bgTrue : Bool
+  k : ℕ
+  cx : Ctx
+
+/-- The guard mask of a transition in the chunk `h` (compiled `Bitmap.gLB`). -/
+def TInfo.gLAt (t : TInfo) (h : ℕ) : ℕ := if t.bgTrue then t.gL₀ else t.gL₀ &&& bmaskEC t.cx h t.bg
 
 def tinfo (cx : Ctx) (e : Tr) (internal : Bool) : TInfo :=
   let m := 2 ^ cx.k - 1
   ⟨gLC cx e.guard, gLC cx e.ok, e.guard, e.ok, e.add >>> cx.k, e.add &&& m, e.sub >>> cx.k,
-    e.sub &&& m, internal⟩
+    e.sub &&& m, internal, e.bg, e.bg matches .const true, cx.k, cx⟩
 
 abbrev BSet := Std.HashMap ℕ ℕ
 
@@ -166,7 +186,7 @@ def forward (cx : Ctx) (ti : Array TInfo) (init : BSet) (within : Option BSet)
       for t in ti do
         if F == 0 then continue
         if !gHC k h t.guard then continue
-        let S := F &&& t.gL
+        let S := F &&& t.gLAt h
         if S == 0 then continue
         if !(gHC k h t.ok && (S &&& t.oL == S)) then return .error "overflow"
         if h + t.addH < t.subH then return .error "range"
@@ -205,7 +225,7 @@ def backward (cx : Ctx) (ti : Array TInfo) (A B₀ : BSet) :
         if a == 0 then continue
         if !gHC k h t.guard then continue
         if h + t.addH - t.subH != h' then continue
-        let P := t.gL &&& unshiftByC F t.addL t.subL &&& a
+        let P := t.gLAt h &&& unshiftByC F t.addL t.subL &&& a
         let old := B.get h
         let new := P ^^^ (P &&& old)
         if new != 0 then
@@ -234,7 +254,7 @@ def rankRounds (cx : Ctx) (ti : Array TInfo) (A : BSet) : Option ℕ := Id.run d
         let h' := h + t.addH - t.subH
         let open' := (A.get h') ^^^ ((A.get h') &&& done.get h')
         if open' == 0 then continue
-        bad := bad ||| (t.gL &&& unshiftByC open' t.addL t.subL)
+        bad := bad ||| (t.gLAt h &&& unshiftByC open' t.addL t.subL)
       let N := a ^^^ (a &&& bad)
       if N != 0 then added := added.insert h N
     if added.isEmpty then return none
@@ -303,7 +323,7 @@ def enabledIn (cx : Ctx) (ts : Array TInfo) (A : BSet) : BSet := Id.run do
   for (h, a) in A do
     let mut en := 0
     for t in ts do
-      if gHC cx.k h t.guard then en := en ||| t.gL
+      if gHC cx.k h t.guard then en := en ||| t.gLAt h
     let x := a &&& en
     if x != 0 then out := out.insert h x
   return out
@@ -332,7 +352,7 @@ def mkCert (tb : Array Tr) (internal : ℕ → Bool) (k₀ k L : ℕ) (dl ll lv 
     for (h, a) in A do
       let mut en := 0
       for t in ti do
-        if gHC k h t.guard then en := en ||| t.gL
+        if gHC k h t.guard then en := en ||| t.gLAt h
       let dead := a ^^^ (a &&& en)
       if dead != 0 then
         throw s!"deadlock at the packed state {h * 2 ^ k + lsb dead}"
@@ -538,7 +558,7 @@ def rankCands (ll : Bool) : List (List ℕ × ℕ) := Id.run do
 /-- Candidate distance potentials, given the hubs (packed under `L`): weights decreasing the
 transitions disabled at every hub. -/
 def distCands (tb : Array Aff.Tr) (hubs : List ℕ) : List (List ℕ × ℕ × ℕ) := Id.run do
-  let atHub := fun (i : ℕ) => hubs.any fun h => BitmapGen.tallC h (tb[i]!).guard
+  let atHub := fun (i : ℕ) => hubs.any fun h => BitmapGen.gOkC h tb[i]!
   let gs := (List.range N.trans.length).filter fun i => !atHub i
   if gs.isEmpty then return []
   let mut out : List (List ℕ × ℕ × ℕ) := []
@@ -547,6 +567,20 @@ def distCands (tb : Array Aff.Tr) (hubs : List ℕ) : List (List ℕ × ℕ × �
       let (d, k) := N.potMasks w
       if d != 0 then out := out ++ [(w, d, k)]
   return out
+
+/-- A cheap probe (untrusted): the state space is large (a sample of `fuel` markings does not
+exhaust it) and dense once packed — the sampled markings share their high bits with at least
+`8` others on average. -/
+def bitmapDense (fuel : ℕ := 3000) : Bool := Id.run do
+  let smp := N.sample fuel
+  if smp.size < fuel then return false
+  let L := repack (N.findLayout 0 false) false
+  if !N.layoutOk L then return false
+  let k₀ := min (layoutBits L) (chooseK L 12)
+  let mut highs : Std.HashSet ℕ := {}
+  for m in smp do
+    highs := highs.insert (encV L (fun p => m.getD p 0) >>> k₀)
+  return smp.size ≥ 8 * highs.size
 
 /-- **A bitmap certificate for a net** (untrusted): the layout, the number of low bits, the
 certificate, and the potentials of ranks and distances. -/
@@ -581,5 +615,21 @@ def mkBitmapCert (dl ll lv allPlaces : Bool) (maxChunks : ℕ := 100000) (target
   throw last
 
 end PNet
+
+namespace Circuit
+
+variable (C : Circuit)
+
+/-- **A bitmap certificate for a circuit** (untrusted): the number of low bits and the
+certificate.  Signals are single bits, so any number of low bits fits. -/
+def mkBitmapCert (dl ll lv : Bool) (maxChunks : ℕ := 100000) (target : ℕ := 20) :
+    Except String (ℕ × Bitmap.Cert) := do
+  let k := min C.signals target
+  let k₀ := min k 12
+  let (c, _, _, _) ← BitmapGen.mkCert C.btable.toArray (fun i => (C.gateD (i / 2)).internal) k₀ k
+    (2 * C.gates.length) dl ll lv (C.bpack C.s₀) [([], 0)] (fun _ => []) maxChunks
+  return (k, c)
+
+end Circuit
 
 end AsyncLean

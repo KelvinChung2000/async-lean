@@ -117,6 +117,28 @@ noncomputable def gL (k : ℕ) (ts : List Test) : ℕ :=
   List.rec (motive := fun _ => ℕ) (full k)
     (fun a _ r => Bool.rec (motive := fun _ => ℕ) r (Nat.land r (tmask k a)) (isLow k a)) ts
 
+/-- The mask of a Boolean guard in the chunk `h`: the variables of the high bits are
+constants there. -/
+noncomputable def bmaskE (k h : ℕ) (e : BExpr) : ℕ :=
+  BExpr.rec (motive := fun _ => ℕ)
+    (fun i => Bool.rec (motive := fun _ => ℕ) (bm k i)
+      (Bool.rec (motive := fun _ => ℕ) 0 (full k) (ktest h (Nat.sub i k))) (Nat.ble k i))
+    (fun b => Bool.rec (motive := fun _ => ℕ) 0 (full k) b)
+    (fun _ r => Nat.xor (full k) r)
+    (fun _ _ ra rb => Nat.land ra rb)
+    (fun _ _ ra rb => Nat.lor ra rb)
+    (fun _ _ ra rb => Nat.xor ra rb) e
+
+/-- The expression is the constant `true`. -/
+noncomputable def isTrueE (e : BExpr) : Bool :=
+  BExpr.rec (motive := fun _ => Bool) (fun _ => false) (fun b => b) (fun _ _ => false)
+    (fun _ _ _ _ => false) (fun _ _ _ _ => false) (fun _ _ _ _ => false) e
+
+/-- The mask of the low tests and of the Boolean guard of `e`, in the chunk `h`. -/
+noncomputable def gLB (k h : ℕ) (e : Tr) : ℕ :=
+  Bool.rec (motive := fun _ => ℕ) (Nat.land (gL k e.guard) (bmaskE k h e.bg)) (gL k e.guard)
+    (isTrueE e.bg)
+
 /-- Fire, in every state of `S` at once: shift by `addL - subL`. -/
 noncomputable def shiftBy (S addL subL : ℕ) : ℕ :=
   Bool.rec (motive := fun _ => ℕ) (Nat.shiftRight S (Nat.sub subL addL))
@@ -161,14 +183,14 @@ noncomputable def chkS (k : ℕ) (t : BTree (ℕ × ℕ)) (h : ℕ) (e : Tr) (S 
 /-- The checks of transition `e` at the chunk `h` with bitmap `a`. -/
 noncomputable def chkOne (k : ℕ) (t : BTree (ℕ × ℕ)) (h a : ℕ) (e : Tr) : Bool :=
   Bool.rec (motive := fun _ => Bool) true
-    (Bool.rec (motive := fun _ => Bool) (chkS k t h e (Nat.land a (gL k e.guard)))
-      true (Nat.beq (Nat.land a (gL k e.guard)) 0))
+    (Bool.rec (motive := fun _ => Bool) (chkS k t h e (Nat.land a (gLB k h e)))
+      true (Nat.beq (Nat.land a (gLB k h e)) 0))
     (gH k h e.guard)
 
 /-- The positions of the chunk `h` enabling some transition. -/
 noncomputable def enAny (k : ℕ) (tb : List Tr) (h : ℕ) : ℕ :=
   List.rec (motive := fun _ => ℕ) 0
-    (fun e _ acc => Bool.rec (motive := fun _ => ℕ) acc (Nat.lor acc (gL k e.guard))
+    (fun e _ acc => Bool.rec (motive := fun _ => ℕ) acc (Nat.lor acc (gLB k h e))
       (gH k h e.guard)) tb
 
 /-- The checks at one chunk: closure under every transition, and deadlock freedom. -/
@@ -181,7 +203,7 @@ noncomputable def chkChunk (tb : List Tr) (k : ℕ) (t : BTree (ℕ × ℕ)) (dl
 noncomputable def preOf (k : ℕ) (D : BTree (ℕ × ℕ)) (h : ℕ) (e : Tr) : ℕ :=
   Bool.rec (motive := fun _ => ℕ) 0
     (Bool.rec (motive := fun _ => ℕ) 0
-      (Nat.land (gL k e.guard) (unshiftBy (look (tgt k h e) D) (lo k e.add) (lo k e.sub)))
+      (Nat.land (gLB k h e) (unshiftBy (look (tgt k h e) D) (lo k e.add) (lo k e.sub)))
       (Nat.ble (hi k e.sub) (Nat.add h (hi k e.add))))
     (gH k h e.guard)
 
@@ -196,7 +218,7 @@ noncomputable def prog (k kD : ℕ) (D : BTree (ℕ × ℕ)) (tb : List Tr) (h :
 noncomputable def decEn (k dD : ℕ) (tb : List Tr) (h : ℕ) : ℕ → ℕ :=
   List.rec (motive := fun _ => ℕ → ℕ) (fun _ => 0)
     (fun e _ rec i => Bool.rec (motive := fun _ => ℕ) (rec (Nat.succ i))
-      (Bool.rec (motive := fun _ => ℕ) (rec (Nat.succ i)) (Nat.lor (rec (Nat.succ i)) (gL k e.guard))
+      (Bool.rec (motive := fun _ => ℕ) (rec (Nat.succ i)) (Nat.lor (rec (Nat.succ i)) (gLB k h e))
         (gH k h e.guard)) (ktest dD i)) tb
 
 /-- The positions of the hubs in the chunk `h`. -/
@@ -222,7 +244,7 @@ noncomputable def distIter (k dD kD : ℕ) (t : BTree (ℕ × ℕ)) (tb : List T
 noncomputable def badOf (k : ℕ) (t R : BTree (ℕ × ℕ)) (h : ℕ) (e : Tr) : ℕ :=
   Bool.rec (motive := fun _ => ℕ) 0
     (Bool.rec (motive := fun _ => ℕ) 0
-      (Nat.land (gL k e.guard) (unshiftBy (Nat.xor (look (tgt k h e) t)
+      (Nat.land (gLB k h e) (unshiftBy (Nat.xor (look (tgt k h e) t)
         (Nat.land (look (tgt k h e) t) (look (tgt k h e) R))) (lo k e.add) (lo k e.sub)))
       (Nat.ble (hi k e.sub) (Nat.add h (hi k e.add))))
     (gH k h e.guard)
@@ -260,6 +282,23 @@ noncomputable def check (tb : List Tr) (k imask dR dD kD L : ℕ) (dl lv : Bool)
         (band (ktall c.1 fun x => sub x.2 (look x.1 (distIter k dD kD c.1 tb c.2.1 c.2.2.2)))
           (kall c.2.1 fun h => band (Nat.beq h.2.length L) (chkTraces (asucc tb) h.1 h.2 0)))
         lv))))
+
+/-- The first part of `check`: the tests split, the initial state is in the set, and every
+chunk is closed (and deadlock free). -/
+noncomputable def checkA (tb : List Tr) (k : ℕ) (dl : Bool) (s₀ : ℕ) (c : Cert) : Bool :=
+  band (kall tb fun e => band (splitOk k e.guard) (splitOk k e.ok))
+    (band (ktest (look (hi k s₀) c.1) (lo k s₀)) (ktall c.1 (chkChunk tb k c.1 dl)))
+
+/-- The second part of `check`: the rank rounds cover the set. -/
+noncomputable def checkR (tb : List Tr) (k imask dR : ℕ) (c : Cert) : Bool :=
+  ktall c.1 fun x => sub x.2 (look x.1 (rankIter k imask dR c.1 tb c.2.2.1))
+
+/-- The third part of `check`: the distance rounds cover the set, and the hubs' traces. -/
+noncomputable def checkD (tb : List Tr) (k dD kD L : ℕ) (lv : Bool) (c : Cert) : Bool :=
+  Bool.rec (motive := fun _ => Bool) true
+    (band (ktall c.1 fun x => sub x.2 (look x.1 (distIter k dD kD c.1 tb c.2.1 c.2.2.2)))
+      (kall c.2.1 fun h => band (Nat.beq h.2.length L) (chkTraces (asucc tb) h.1 h.2 0)))
+    lv
 
 /-! ### Bit-level facts -/
 
@@ -554,6 +593,63 @@ theorem tall_split {k : ℕ} {ts : List Test} (h : splitOk k ts = true) (x : ℕ
     generalize (gL k ts).testBit (x % 2 ^ k) = b4
     cases b1 <;> cases b2 <;> cases b3 <;> cases b4 <;> rfl
 
+theorem testBit_bmaskE {k h l : ℕ} (hl : l < 2 ^ k) :
+    ∀ e : BExpr, (bmaskE k h e).testBit l = e.eval (h * 2 ^ k + l).testBit
+  | .var i => by
+    change (Bool.rec (motive := fun _ => ℕ) (bm k i)
+      (Bool.rec (motive := fun _ => ℕ) 0 (full k) (ktest h (Nat.sub i k))) (Nat.ble k i)).testBit l
+      = (h * 2 ^ k + l).testBit i
+    rw [Nat.mul_comm, Nat.testBit_two_pow_mul_add h hl]
+    cases hb : Nat.ble k i
+    · have hik : i < k := ble_f hb
+      change (bm k i).testBit l = _
+      rw [testBit_bm]; simp [hl, hik]
+    · have hik : k ≤ i := ble_t hb
+      have : ¬ i < k := by omega
+      simp only [this, ↓reduceIte]
+      rw [ktest_eq]
+      change (Bool.rec (motive := fun _ => ℕ) 0 (full k) (h.testBit (i - k))).testBit l = _
+      cases h.testBit (i - k)
+      · simp
+      · change (full k).testBit l = true; rw [testBit_full]; simp [hl]
+  | .const b => by
+    cases b
+    · change (0 : ℕ).testBit l = false; simp
+    · change (full k).testBit l = true; rw [testBit_full]; simp [hl]
+  | .not e => by
+    change (full k ^^^ bmaskE k h e).testBit l = !(e.eval _)
+    rw [Nat.testBit_xor, testBit_full, testBit_bmaskE hl e]; simp [hl]
+  | .and a b => by
+    change (bmaskE k h a &&& bmaskE k h b).testBit l = (a.eval _ && b.eval _)
+    rw [Nat.testBit_and, testBit_bmaskE hl a, testBit_bmaskE hl b]
+  | .or a b => by
+    change (bmaskE k h a ||| bmaskE k h b).testBit l = (a.eval _ || b.eval _)
+    rw [Nat.testBit_or, testBit_bmaskE hl a, testBit_bmaskE hl b]
+  | .xor a b => by
+    change (bmaskE k h a ^^^ bmaskE k h b).testBit l = Bool.xor (a.eval _) (b.eval _)
+    rw [Nat.testBit_xor, testBit_bmaskE hl a, testBit_bmaskE hl b]
+
+theorem isTrueE_spec {e : BExpr} (h : isTrueE e = true) : e = .const true := by
+  cases e with
+  | const b => cases b <;> first | rfl | cases h
+  | _ => cases h
+
+/-- The whole guard of a transition is its high tests and its mask. -/
+theorem gOk_split {k : ℕ} {e : Tr} (h : splitOk k e.guard = true) (x : ℕ) :
+    gOk x e = (gH k (x / 2 ^ k) e.guard && (gLB k (x / 2 ^ k) e).testBit (x % 2 ^ k)) := by
+  have hl : x % 2 ^ k < 2 ^ k := Nat.mod_lt _ (by positivity)
+  have hx : x = x / 2 ^ k * 2 ^ k + x % 2 ^ k := (Nat.div_add_mod' x _).symm
+  rw [gOk_eq, tall_split h x]
+  unfold gLB
+  cases ht : isTrueE e.bg
+  · change _ = (_ && (gL k e.guard &&& bmaskE k (x / 2 ^ k) e.bg).testBit (x % 2 ^ k))
+    rw [Nat.testBit_and, testBit_bmaskE hl, ← hx]
+    unfold bgOk
+    cases gH k (x / 2 ^ k) e.guard <;> cases (gL k e.guard).testBit (x % 2 ^ k) <;> rfl
+  · change _ = (_ && (gL k e.guard).testBit (x % 2 ^ k))
+    rw [isTrueE_spec ht]
+    simp [bgOk, BExpr.eval]
+
 /-- **Firing in a chunk.**  If no position of `S` borrows or carries, the state `x` of the chunk
 `h` at a position `l` of `S` fires to the chunk `h + addH - subH`, at the position of `l` in
 the shifted bitmap. -/
@@ -629,6 +725,20 @@ section Sound
 
 variable {tb : List Tr} {k imask L : ℕ} {dl lv : Bool} {t : BTree (ℕ × ℕ)}
 
+/-- The three parts make the whole check: the kernel can check them separately, each with its
+own cache, which bounds the memory by the largest part. -/
+theorem check_of_parts {tb : List Tr} {k imask dR dD kD L : ℕ} {dl lv : Bool} {s₀ : ℕ}
+    {c : Cert} (hA : checkA tb k dl s₀ c = true) (hR : checkR tb k imask dR c = true)
+    (hD : checkD tb k dD kD L lv c = true) : check tb k imask dR dD kD L dl lv s₀ c = true := by
+  unfold checkA at hA
+  unfold checkR at hR
+  unfold checkD at hD
+  unfold check
+  obtain ⟨h1, hA⟩ := band_eq.1 hA
+  obtain ⟨h2, h3⟩ := band_eq.1 hA
+  rw [h1, h2, h3, hR, hD]; rfl
+
+
 theorem kfind_tmap (f : ℕ → ℕ → ℕ) (h : ℕ) :
     ∀ t : BTree (ℕ × ℕ), kfind h (tmap f t) = (kfind h t).map (f h)
   | .leaf => rfl
@@ -665,20 +775,20 @@ theorem chunk_ok (hall : ∀ y ∈ t.toList, chkChunk tb k t dl y = true) {h a :
   hall _ (mem_of_kfind hf)
 
 theorem enAny_spec {h l : ℕ} : ∀ {tb : List Tr}, (enAny k tb h).testBit l = true →
-    ∃ j, ∃ hj : j < tb.length, gH k h tb[j].guard = true ∧ (gL k tb[j].guard).testBit l = true
+    ∃ j, ∃ hj : j < tb.length, gH k h tb[j].guard = true ∧ (gLB k h tb[j]).testBit l = true
   | [], hb => by change (0 : ℕ).testBit l = true at hb; simp at hb
   | e :: tb, hb => by
     change (Bool.rec (motive := fun _ => ℕ) (enAny k tb h) (Nat.lor (enAny k tb h)
-      (gL k e.guard)) (gH k h e.guard)).testBit l = true at hb
+      (gLB k h e)) (gH k h e.guard)).testBit l = true at hb
     have hrest : (enAny k tb h).testBit l = true → ∃ j, ∃ hj : j < (e :: tb).length,
-        gH k h (e :: tb)[j].guard = true ∧ (gL k (e :: tb)[j].guard).testBit l = true := by
+        gH k h (e :: tb)[j].guard = true ∧ (gLB k h (e :: tb)[j]).testBit l = true := by
       intro h'
       obtain ⟨j, hj, h1, h2⟩ := enAny_spec h'
       exact ⟨j + 1, by simpa using hj, h1, h2⟩
     cases hg : gH k h e.guard
     · rw [hg] at hb; exact hrest hb
     · rw [hg] at hb
-      change (enAny k tb h ||| gL k e.guard).testBit l = true at hb
+      change (enAny k tb h ||| gLB k h e).testBit l = true at hb
       rw [Nat.testBit_or, Bool.or_eq_true] at hb
       rcases hb with hb | hb
       · exact hrest hb
@@ -687,7 +797,7 @@ theorem enAny_spec {h l : ℕ} : ∀ {tb : List Tr}, (enAny k tb h).testBit l = 
 theorem prog_spec {D : BTree (ℕ × ℕ)} {kD h l : ℕ} : ∀ {tb : List Tr} {i₀ : ℕ},
     (prog k kD D tb h i₀).testBit l = true →
     ∃ j, ∃ hj : j < tb.length, ktest kD (i₀ + j) = true ∧ gH k h tb[j].guard = true ∧
-      (gL k tb[j].guard).testBit l = true ∧
+      (gLB k h tb[j]).testBit l = true ∧
       (unshiftBy (look (tgt k h tb[j]) D) (lo k tb[j].add) (lo k tb[j].sub)).testBit l = true
   | [], _, hb => by change (0 : ℕ).testBit l = true at hb; simp at hb
   | e :: tb, i₀, hb => by
@@ -696,7 +806,7 @@ theorem prog_spec {D : BTree (ℕ × ℕ)} {kD h l : ℕ} : ∀ {tb : List Tr} {
       = true at hb
     have hrest : (prog k kD D tb h (Nat.succ i₀)).testBit l = true → ∃ j,
         ∃ hj : j < (e :: tb).length, ktest kD (i₀ + j) = true ∧ gH k h (e :: tb)[j].guard = true ∧
-        (gL k (e :: tb)[j].guard).testBit l = true ∧
+        (gLB k h (e :: tb)[j]).testBit l = true ∧
         (unshiftBy (look (tgt k h (e :: tb)[j]) D) (lo k (e :: tb)[j].add)
           (lo k (e :: tb)[j].sub)).testBit l = true := by
       intro h'
@@ -716,23 +826,23 @@ theorem prog_spec {D : BTree (ℕ × ℕ)} {kD h l : ℕ} : ∀ {tb : List Tr} {
       cases hb' : Nat.ble (hi k e.sub) (Nat.add h (hi k e.add))
       · rw [hb'] at hb; change (0 : ℕ).testBit l = true at hb; simp at hb
       rw [hb'] at hb
-      change (gL k e.guard &&& _).testBit l = true at hb
+      change (gLB k h e &&& _).testBit l = true at hb
       rw [Nat.testBit_and, Bool.and_eq_true] at hb
       exact ⟨0, by simp, by simpa using hk, hg, hb.1, hb.2⟩
 
 theorem decEn_spec {dD h l : ℕ} : ∀ {tb : List Tr} {i₀ : ℕ},
     (decEn k dD tb h i₀).testBit l = true →
     ∃ j, ∃ hj : j < tb.length, ktest dD (i₀ + j) = true ∧ gH k h tb[j].guard = true ∧
-      (gL k tb[j].guard).testBit l = true
+      (gLB k h tb[j]).testBit l = true
   | [], _, hb => by change (0 : ℕ).testBit l = true at hb; simp at hb
   | e :: tb, i₀, hb => by
     change (Bool.rec (motive := fun _ => ℕ) (decEn k dD tb h (Nat.succ i₀))
       (Bool.rec (motive := fun _ => ℕ) (decEn k dD tb h (Nat.succ i₀))
-        (Nat.lor (decEn k dD tb h (Nat.succ i₀)) (gL k e.guard)) (gH k h e.guard))
+        (Nat.lor (decEn k dD tb h (Nat.succ i₀)) (gLB k h e)) (gH k h e.guard))
       (ktest dD i₀)).testBit l = true at hb
     have hrest : (decEn k dD tb h (Nat.succ i₀)).testBit l = true → ∃ j,
         ∃ hj : j < (e :: tb).length, ktest dD (i₀ + j) = true ∧ gH k h (e :: tb)[j].guard = true ∧
-        (gL k (e :: tb)[j].guard).testBit l = true := by
+        (gLB k h (e :: tb)[j]).testBit l = true := by
       intro h'
       obtain ⟨j, hj, h0, h1, h2⟩ := decEn_spec h'
       exact ⟨j + 1, by simpa using hj, by rw [show i₀ + (j + 1) = Nat.succ i₀ + j by omega]; exact h0, h1, h2⟩
@@ -742,7 +852,7 @@ theorem decEn_spec {dD h l : ℕ} : ∀ {tb : List Tr} {i₀ : ℕ},
     cases hg : gH k h e.guard
     · rw [hg] at hb; exact hrest hb
     rw [hg] at hb
-    change (decEn k dD tb h (Nat.succ i₀) ||| gL k e.guard).testBit l = true at hb
+    change (decEn k dD tb h (Nat.succ i₀) ||| gLB k h e).testBit l = true at hb
     rw [Nat.testBit_or, Bool.or_eq_true] at hb
     rcases hb with hb | hb
     · exact hrest hb
@@ -805,7 +915,7 @@ theorem step_spec (hs : ∀ e ∈ tb, splitOk k e.guard = true ∧ splitOk k e.o
     {i y : ℕ} {b : Bool} (hm : (i, y, b) ∈ asucc tb x) :
     ∃ hil : i < tb.length, b = true ∧ (look (y / 2 ^ k) t).testBit (y % 2 ^ k) = true ∧
       y / 2 ^ k = tgt k (x / 2 ^ k) tb[i] ∧
-      gH k (x / 2 ^ k) tb[i].guard = true ∧ (gL k tb[i].guard).testBit (x % 2 ^ k) = true ∧
+      gH k (x / 2 ^ k) tb[i].guard = true ∧ (gLB k (x / 2 ^ k) tb[i]).testBit (x % 2 ^ k) = true ∧
       Nat.ble (hi k tb[i].sub) (Nat.add (x / 2 ^ k) (hi k tb[i].add)) = true ∧
       ∀ X, (unshiftBy X (lo k tb[i].add) (lo k tb[i].sub)).testBit (x % 2 ^ k) =
         X.testBit (y % 2 ^ k) := by
@@ -820,19 +930,19 @@ theorem step_spec (hs : ∀ e ∈ tb, splitOk k e.guard = true ∧ splitOk k e.o
   obtain ⟨-, hc⟩ := band_eq.1 hc
   simp only [kall_eq, List.all_eq_true] at hc
   have h1 := hc e (List.getElem_mem hil)
-  rw [tall_split hse.1] at hg
+  rw [gOk_split hse.1] at hg
   obtain ⟨hgH, hgL⟩ := Bool.and_eq_true_iff.1 hg
   unfold chkOne at h1
   rw [hgH] at h1
-  have hS : (Nat.land a (gL k e.guard)).testBit l = true := by
-    change (a &&& gL k e.guard).testBit l = true
+  have hS : (Nat.land a (gLB k h e)).testBit l = true := by
+    change (a &&& gLB k h e).testBit l = true
     rw [Nat.testBit_and, hx, hgL]; rfl
-  have hS0 : Nat.beq (Nat.land a (gL k e.guard)) 0 = false := by
-    cases h0 : Nat.beq (Nat.land a (gL k e.guard)) 0
+  have hS0 : Nat.beq (Nat.land a (gLB k h e)) 0 = false := by
+    cases h0 : Nat.beq (Nat.land a (gLB k h e)) 0
     · rfl
     · rw [Nat.eq_of_beq_eq_true h0] at hS; simp at hS
   rw [hS0] at h1
-  change chkS k t h e (Nat.land a (gL k e.guard)) = true at h1
+  change chkS k t h e (Nat.land a (gLB k h e)) = true at h1
   unfold chkS at h1
   obtain ⟨hok1, h1⟩ := band_eq.1 h1
   obtain ⟨hok2, h1⟩ := band_eq.1 h1
@@ -906,8 +1016,8 @@ theorem of_check {σ ι : Type*} {A : LTS σ ι} {Good : σ → Prop} {enc : σ 
     obtain ⟨hd, -⟩ := band_eq.1 hc
     rw [hdl] at hd
     obtain ⟨j, hj, h1, h2⟩ := enAny_spec (sub_spec hd hx)
-    have hgd : tall (enc M) tb[j].guard = true := by
-      rw [tall_split (hs _ (List.getElem_mem hj)).1, h1, h2]; rfl
+    have hgd : gOk (enc M) tb[j] = true := by
+      rw [gOk_split (hs _ (List.getElem_mem hj)).1, h1, h2]; rfl
     have hm : (j, enc M + tb[j].add - tb[j].sub, tall (enc M) tb[j].ok) ∈ asucc tb (enc M) :=
       mem_asucc.2 ⟨hj, hgd, rfl, rfl⟩
     obtain ⟨_, hok, -⟩ := step_spec hs hall hf hx hm
@@ -967,7 +1077,7 @@ theorem of_check {σ ι : Type*} {A : LTS σ ι} {Good : σ → Prop} {enc : σ 
               (l := enc M % 2 ^ k) (by
                 unfold badOf
                 rw [hgH, hble]
-                change (gL k tb[lab l].guard &&& _).testBit _ = true
+                change (gLB k _ tb[lab l] &&& _).testBit _ = true
                 rw [Nat.testBit_and, hgL, Bool.true_and, hun, ← hyd]
                 change ((look _ t) ^^^ ((look _ t) &&& (look _ (rI n)))).testBit _ = true
                 rw [Nat.testBit_xor, Nat.testBit_and, hy, hin]
@@ -988,14 +1098,14 @@ theorem of_check {σ ι : Type*} {A : LTS σ ι} {Good : σ → Prop} {enc : σ 
     -- one step by a transition of the table
     have onestep : ∀ M a j (hj : j < tb.length), Good M → kfind (enc M / 2 ^ k) t = some a →
         a.testBit (enc M % 2 ^ k) = true → gH k (enc M / 2 ^ k) tb[j].guard = true →
-        (gL k tb[j].guard).testBit (enc M % 2 ^ k) = true →
+        (gLB k (enc M / 2 ^ k) tb[j]).testBit (enc M % 2 ^ k) = true →
         ∃ l M', lab l = j ∧ A.step M l M' ∧ Inv M' ∧
           enc M' / 2 ^ k = tgt k (enc M / 2 ^ k) tb[j] ∧
           ∀ X, (unshiftBy X (lo k tb[j].add) (lo k tb[j].sub)).testBit (enc M % 2 ^ k) =
             X.testBit (enc M' % 2 ^ k) := by
       intro M a j hj hg hf hx h1 h2
-      have hgd : tall (enc M) tb[j].guard = true := by
-        rw [tall_split (hs _ (List.getElem_mem hj)).1, h1, h2]; rfl
+      have hgd : gOk (enc M) tb[j] = true := by
+        rw [gOk_split (hs _ (List.getElem_mem hj)).1, h1, h2]; rfl
       have hm : (j, enc M + tb[j].add - tb[j].sub, tall (enc M) tb[j].ok) ∈ asucc tb (enc M) :=
         mem_asucc.2 ⟨hj, hgd, rfl, rfl⟩
       obtain ⟨_, hok, hy, hyd, -, -, -, hun⟩ := step_spec hs hall hf hx hm

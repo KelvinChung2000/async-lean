@@ -26,6 +26,9 @@ import AsyncLean.Checker.BDD
 import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.RTL
+import AsyncLean.Checker.BitmapPetri
+import AsyncLean.Checker.AbstractPot
 import AsyncLean.AxiomAudit
 
 /-!
@@ -191,5 +194,16 @@ open LTS
   Circuit.correct_of_checkCert Circuit.speedIndependent_of_checkCert
   Circuit.not_deadlockFree_of_refute Circuit.not_livelockFree_of_refute
   Circuit.not_speedIndependent_of_refute
+
+-- Bit-parallel certificates, layouts and potentials
+#assert_standard_axioms
+  PNet.encodesL PNet.layoutSpec_of_layoutOkK PNet.katable_eq Bitmap.of_check
+  PNet.of_checkBitmap PNet.correct_of_checkBitmap PNet.bounded_of_checkBitmap PNet.pot_step
+  ExplicitLTS.of_checkACertP PNet.of_checkAbsP PNet.correct_of_checkAbsP
+
+-- Combinational netlists and routing logic
+#assert_standard_axioms
+  Comb.unique Comb.val_consistent Network.withRtl_eq Network.correct_of_rtl
+  Network.hops_of_settled Network.legal_of_coveredBy
 
 end AsyncLean
