@@ -22,7 +22,10 @@ The escape argument still goes through when the refusing channels are never the 
   leads into `src`.
 * `Network.StarvationFreeWith`, `Network.starvationFreeWith_of_source` — with a ranking function
   and finitely many legal pairs, every packet of every strongly fair run is delivered, the
-  packets waiting at the sources included.
+  packets held in their injection channels included.  Strong fairness is demanding: in a finite
+  deadlock- and livelock-free network it makes a run revisit every reachable configuration, the
+  empty one included, so this says nothing about a network kept saturated (and nothing about a
+  source's queue before its injection channel, which the model does not have).
 * `Network.tieredSel` — a selection given by a list of tiers: a packet is offered the free
   permitted hops admitted by the first tier that admits one (for example: the preferred hop, then
   the escape hop, then the adaptive ones).  `tieredSel_conserving`: it offers a free hop whenever
@@ -108,7 +111,8 @@ def StarvationFreeWith (sel : Selection C P) : Prop :=
 
 /-- **No packet starves under a throttling selection**: with finitely many legal pairs, Duato's
 condition with throttled sources and a ranking function that decreases on every hop, every
-packet of every strongly fair run is delivered — a packet held back at its source too. -/
+packet of every strongly fair run is delivered — a packet held back in its injection channel
+too (see the module docstring for how much strong fairness asks). -/
 theorem starvationFreeWith_of_source {legal : C → P → Prop} (hcl : N.Closed legal)
     (hfin : {q : C × P | legal q.1 q.2}.Finite) (R₁ : C → P → List (C × P)) {src : C → Prop}
     (hconn : ∀ c p, legal c p → N.arrived c p = false → R₁ c p ≠ [])

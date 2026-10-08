@@ -302,7 +302,7 @@ permitted channel is free.
 | Goal | Meaning |
 |---|---|
 | `N.Correct` | `N.DeadlockFree ∧ N.LivelockFree`: whenever the network holds a packet some packet can move, and there is no infinite run without new injections |
-| `N.StarvationFree` | along every strongly fair run, every packet is eventually delivered, even if injection never stops |
+| `N.StarvationFree` | along every strongly fair run, every packet is eventually delivered. Strong fairness is demanding here: with finitely many configurations it makes a run of a deadlock- and livelock-free network revisit every reachable configuration, the empty one included, so this is no guarantee for a network kept saturated |
 | `N.WormholeCorrect` | deadlock and livelock freedom under **wormhole switching** (a packet spans several channels), for packets of every length; also `N.WormholeDeadlockFree`, `N.WormholeLivelockFree` |
 
 ### Ask, prove, refute
@@ -463,7 +463,7 @@ one it *does* take. `tieredMesh` (`Examples/MeshTiered.lean`) offers each packet
 of the first tier that has one: its dimension-order hop (XY on virtual channel 0, YX on virtual
 channel 1, so flows in different orders share no channel), then the escape hop, then any hop on
 virtual channel 1. It also throttles the sources: a packet leaves its injection channel only
-towards a router with at least `g` of its 8 outgoing channels free. Throttling refuses free
+towards a router with at least `g` of its 8 outgoing channels free (channels leaving the mesh count as free). Throttling refuses free
 escape hops, so Duato's condition for selections fails; `Network.deadlockFreeWith_of_source`
 (`Routing/Source.lean`) proves Duato's theorem for selections that may hold packets back at
 their sources as long as a source lets its packet go once the rest of the network is empty.
@@ -496,8 +496,7 @@ uniform: 0.14 at an offered 0.3). On 4 × 4 meshes, which saturate late, the thr
 pattern: taking the extra hops of the west-first mesh helps transpose traffic and makes hotspot
 traffic collapse, and bit-complement traffic favours keeping every packet on its XY path.
 
-**What is left, and why.** `scripts/routing_experiments.py` tries further selections, all within
-the proved family (8 × 8 mesh, peak over a load sweep, mean of 2 seeds):
+**What is left, and why.** `scripts/routing_experiments.py` tries further selections (8 × 8 mesh, peak over a load sweep, mean of 2 seeds):
 
 | 8 × 8 mesh | uniform | transpose | shuffle | bit reversal | hotspot | bit complement |
 |---|---|---|---|---|---|---|
@@ -509,11 +508,15 @@ the proved family (8 × 8 mesh, peak over a load sweep, mean of 2 seeds):
 | controller switching modes | 0.506 | 0.410 | 0.531 | 0.357 | 0.378 | 0.282 |
 | two-phase XY (via a random node) | 0.448 | 0.330 | 0.449 | 0.260 | 0.327 | 0.235 |
 
-Seeing the whole network does not help (the global-view row matches `tieredMesh`), so the gaps
+Only the global-view row and the west-first row are selections the theorems above cover (they
+read nothing but the configuration); learning sources, the mode-switching controller, two-phase
+XY, patience and distance rules keep per-packet or global state, which a `Selection` cannot
+read. Each of them always admits the free escape hop, so the same argument should apply, but
+that is not proved. Seeing the whole network does not help (the global-view row matches `tieredMesh`), so the gaps
 are not for lack of information. Under bit-complement traffic every packet crosses both
 bisections; XY on both virtual channels pushes about 0.6 packets per cycle through each
 bisection channel, which is what a saturated chain of one-packet channels carries in this model
-(0.50 to 0.57), so it is at the limit and can be matched but not beaten, and every deviation
+(0.50 to 0.57), so in this model it is at the limit (a simulation measurement and a bisection argument, not a theorem) and can be matched but not beaten, and every deviation
 from XY loses there. Transpose traffic needs the deviations and no throttling. Rules that trade
 between the two (waiting before deviating, choosing the mode by distance, a controller
 switching modes) move along that trade-off without reaching both ends.

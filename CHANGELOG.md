@@ -19,16 +19,20 @@
   contains the throttled escape tier `Mesh.escTier`, for every size (`duatoTiers_correct`,
   `westFirstTiers_correct`, `northLastTiers_correct`); `tieredMesh` is one instance.
   * `Routing/Reduce.lean`: `Network.wf_dep_of_reduction`, acyclic channel dependencies transfer
-    along any map of channels that sends dependencies to chains of dependencies.
+    along any map of channels that sends dependencies to chains of dependencies (a tool; nothing
+    uses it yet).
   * `scripts/routing_experiments.py`: a global-view selection, sources learning their mode, a
-    controller switching modes, two-phase XY, patience and distance rules. None beats every
+    controller switching modes, two-phase XY, patience and distance rules (only the global-view
+    and west-first selections are covered by the theorems; the others keep per-packet or global
+    state). None beats every
     existing scheme on every pattern; under bit-complement traffic XY on both virtual channels is
     at the bisection limit of the model.
 
 * **A selection that performs, proved safe** (`Examples/MeshTiered.lean`). `tieredMesh` offers a
   packet its dimension-order hop (XY on virtual channel 0, YX on virtual channel 1), then the
   escape hop, then virtual channel 1, and throttles the sources: a packet leaves its injection
-  channel only towards a router with at least `g` of its 8 outgoing channels free. Duato's mesh,
+  channel only towards a router with at least `g` of its 8 outgoing channels free (channels leaving
+  the mesh count as free). Duato's mesh,
   the west-first and the north-last mesh are deadlock, livelock and starvation free under it for
   every size and every `g ≤ 8` (`duatoTiered_correct`, `westFirstTiered_correct`,
   `northLastTiered_correct`). In simulation it has the best worst case over six traffic
