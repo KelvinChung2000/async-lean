@@ -49,6 +49,7 @@ import AsyncLean.Routing.Check
 import AsyncLean.Routing.Wormhole
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Routing.Optimal
+import AsyncLean.Routing.Embed
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
@@ -69,4 +70,5 @@ import AsyncLean.Examples.Scale
 import AsyncLean.Examples.Symbolic
 import AsyncLean.Examples.Routing
 import AsyncLean.Examples.OptimalRouting
+import AsyncLean.Examples.MeshMaximal
 import AsyncLean.Tutorial
