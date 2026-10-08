@@ -32,6 +32,7 @@ import AsyncLean.Routing.RTL
 import AsyncLean.Checker.BitmapPetri
 import AsyncLean.Checker.AbstractPot
 import AsyncLean.Routing.Optimal
+import AsyncLean.Routing.Embed
 import AsyncLean.AxiomAudit
 
 /-!
@@ -100,6 +101,7 @@ open LTS
 #assert_standard_axioms
   Network.not_deadlockFree_of_refuteBetweenB Network.not_deadlockFree_of_checkTree
   Network.maximallyAdaptive_of_maxCheck Network.MaximallyAdaptive.not_deadlockFree
+  Network.path_of_runGoodB Network.not_deadlockFree_of_runGoodB
   Network.not_maximallyAdaptive_of_extends Network.Path.of_extends Network.Extends.trans
   Network.MaximallyAdaptive.wormhole Network.deadlockFree_of_wormholeDeadlockFree
 

@@ -27,12 +27,12 @@ packet takes a shortest path, and the question is which sets of these hops are d
   source to its destination (`westFirstMesh_hops`).  The proofs give the legal pairs, an order
   of the channels that decreases along every escape dependency (`wfRank`) and the distance to
   the destination in closed form.
-* The west-first mesh is **maximally adaptive** on the 3 × 3 and the 4 × 4 mesh
-  (`westFirstMesh_maximal`, `westFirstMesh_maximal_4`), and so is the north-last mesh on the
-  3 × 3 mesh (`northLastMesh_maximal`): adding *any* set of productive hops, at a pair their
-  packets can occupy, introduces a deadlock, under store-and-forward and under wormhole
-  switching (`westFirstMesh_maximal_wormhole`).  No improvement in adaptivity is possible
-  without giving up deadlock freedom.
+* The west-first mesh is **maximally adaptive** on the 3 × 3 mesh (`westFirstMesh_maximal`),
+  and so is the north-last mesh (`northLastMesh_maximal`): adding *any* set of productive hops,
+  at a pair their packets can occupy, introduces a deadlock, under store-and-forward and under
+  wormhole switching (`westFirstMesh_maximal_wormhole`).  No improvement in adaptivity is
+  possible without giving up deadlock freedom.  `AsyncLean.Examples.MeshMaximal` proves both
+  for **every size**, from finitely many kernel-checked deadlocks in a 3 × 3 window.
 * They are incomparable, and **no deadlock-free routing function is at least as adaptive as
   both** (`no_common_improvement`, `no_common_improvement_wormhole`).  So there is no "most
   adaptive" deadlock-free minimal routing to look for: there are several maximal ones, and the
@@ -663,11 +663,6 @@ that permits all its hops permits no other. -/
 theorem westFirstMesh_maximal : (westFirstMesh 3).MaximallyAdaptive (minimalHops 3) := by
   async_decide
 
-/-- The same on the 4 × 4 mesh: each of the 180 productive hops the west-first mesh does not
-permit introduces a deadlock, whatever else is added. -/
-theorem westFirstMesh_maximal_4 : (westFirstMesh 4).MaximallyAdaptive (minimalHops 4) := by
-  async_decide
-
 /-- **Maximal under wormhole switching too**: a minimal routing function that permits every hop
 of the west-first mesh and one more deadlocks under wormhole switching as well. -/
 theorem westFirstMesh_maximal_wormhole (N : Network ℕ ℕ) (h : (westFirstMesh 3).Extends N)
@@ -708,7 +703,7 @@ theorem no_common_improvement_wormhole (N : Network ℕ ℕ) (h₁ : (westFirstM
   westFirstMesh_wormholeCorrect westFirstMesh_hops westFirstMesh_correctWith
   westFirstGated_correct northLastMesh_correct duatoMesh_extends
   turnDuatoMesh_within duatoMesh_lt_westFirstMesh duatoMesh_not_maximal westFirstMesh_maximal
-  westFirstMesh_maximal_4 westFirstMesh_maximal_wormhole northLastMesh_maximal
+  westFirstMesh_maximal_wormhole northLastMesh_maximal
   westFirst_northLast_incomparable no_common_improvement no_common_improvement_wormhole
 
 end AsyncLean.Examples
