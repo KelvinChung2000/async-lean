@@ -408,6 +408,64 @@ theorem of_check {A : LTS σ ι} {Good : σ → Prop} {enc : σ → ℕ} {lab : 
 
 end Sound
 
+/-! ### Checking in parts
+
+`check` is one kernel evaluation over the whole tree.  It splits into the checks of the
+initial state and the hubs (`checkHead`) and the checks at the states in key ranges
+(`checkPart`), each its own kernel goal: the kernel's memory then grows with a part, not with
+the whole state space. -/
+
+/-- `n ∈ [lo, hi)`, where `hi = 0` stands for no upper bound. -/
+noncomputable def inR (lo hi n : ℕ) : Bool :=
+  Bool.rec (motive := fun _ => Bool) false
+    (Bool.rec (motive := fun _ => Bool) (Nat.blt n hi) true (Nat.beq hi 0)) (Nat.ble lo n)
+
+/-- The checks of `check` other than those at the states. -/
+noncomputable def checkHead (F : ℕ → List (ℕ × ℕ × Bool)) (L : ℕ) (lv : Bool) (s₀ : ℕ)
+    (c : Cert) : Bool :=
+  (kfind s₀ c.1).isSome && (!lv || kall c.2 fun h => Nat.beq h.2.length L && chkTraces F h.1 h.2 0)
+
+/-- The checks of `check` at the states in `[lo, hi)`. -/
+noncomputable def checkPart (F : ℕ → List (ℕ × ℕ × Bool)) (imask : ℕ) (dl lv : Bool) (c : Cert)
+    (lo hi : ℕ) : Bool :=
+  ktall c.1 fun x => Bool.rec (motive := fun _ => Bool) true (chkNode F c.1 c.2 imask dl lv x)
+    (inR lo hi x.1)
+
+theorem inR_spec {lo hi n : ℕ} : inR lo hi n = true ↔ lo ≤ n ∧ (hi = 0 ∨ n < hi) := by
+  unfold inR
+  cases h₁ : Nat.ble lo n <;> cases h₂ : Nat.beq hi 0 <;>
+    simp_all [Nat.ble_eq, Nat.beq_eq, Nat.blt_eq]
+
+theorem checkPart_split {F : ℕ → List (ℕ × ℕ × Bool)} {imask : ℕ} {dl lv : Bool} {c : Cert}
+    {lo hi : ℕ} (m : ℕ) (hm : Nat.beq m 0 = false) (h₁ : checkPart F imask dl lv c lo m = true)
+    (h₂ : checkPart F imask dl lv c m hi = true) : checkPart F imask dl lv c lo hi = true := by
+  have hm : m ≠ 0 := by simpa using hm
+  unfold checkPart at *
+  rw [ktall_iff] at *
+  intro x hx
+  have e₁ := h₁ x hx
+  have e₂ := h₂ x hx
+  cases hr : inR lo hi x.1
+  · rfl
+  · rw [inR_spec] at hr
+    by_cases hlt : x.1 < m
+    · have : inR lo m x.1 = true := inR_spec.2 ⟨hr.1, Or.inr hlt⟩
+      rwa [this] at e₁
+    · have : inR m hi x.1 = true := inR_spec.2 ⟨by omega, hr.2⟩
+      rwa [this] at e₂
+
+theorem check_of_parts {F : ℕ → List (ℕ × ℕ × Bool)} {imask L : ℕ} {dl lv : Bool} {s₀ : ℕ}
+    {c : Cert} (hh : checkHead F L lv s₀ c = true) (hp : checkPart F imask dl lv c 0 0 = true) :
+    check F imask L dl lv s₀ c = true := by
+  unfold checkHead at hh
+  unfold checkPart at hp
+  unfold check
+  rw [ktall_iff] at hp
+  simp only [Bool.and_eq_true] at hh ⊢
+  refine ⟨⟨hh.1, ktall_iff.2 fun x hx => ?_⟩, hh.2⟩
+  have := hp x hx
+  rwa [inR_spec.2 ⟨Nat.zero_le _, Or.inl rfl⟩] at this
+
 end Fast
 
 end AsyncLean

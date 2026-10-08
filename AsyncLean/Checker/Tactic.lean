@@ -666,6 +666,49 @@ def closeWithChecksLit (goal : MVarId) (N : Expr) (net : PNet) (checks : Expr �
   evalTactic (← `(tactic| all_goals decide +kernel))
   return true
 
+/-- Close `goal` by the fast check `PNet.checkFast` split into `K` parts
+(`PNet.checkFast_of_parts`): the certificate becomes an auxiliary definition, the states are cut
+into `K` key ranges of equal size, and each range is its own kernel goal. -/
+def closeFastParts (goal : MVarId) (N : Expr) (Nv : PNet) (w : ℕ) (c : Fast.Cert)
+    (dl ll lv : Bool) (thm : Name) (K : ℕ) : TacticM Bool := do
+  let nm ← mkAuxDeclName `_fastCert
+  addDecl (.defnDecl { name := nm, levelParams := [], type := mkConst ``Fast.Cert,
+    value := FastExpr.certE c, hints := .opaque, safety := .safe })
+  let cE := mkConst nm
+  let B := 2 ^ w
+  let tb := FastExpr.listE (mkConst ``PNet.FEntry) ((Nv.ftable w).map FastExpr.fentryE)
+  let (wE, BE, fmE) := (mkRawNatLit w, mkRawNatLit B, mkRawNatLit (B - 1))
+  let kE := mkRawNatLit (cond ll Nv.imask 0)
+  let s₀E := mkRawNatLit (PNet.encW w Nv.init)
+  let F := mkAppN (mkConst ``PNet.fsucc) #[fmE, BE, tb]
+  -- range boundaries: keys at equal steps through the sorted states (`0` is no bound above)
+  let keys := (c.1.toList.map (·.1)).toArray.qsort (· < ·)
+  let bs := ((List.range K).filterMap fun i =>
+    if i == 0 then none else keys[i * keys.size / K]?).filter (· != 0) |>.eraseDups
+  let ranges := (0 :: bs).zip (bs ++ [0])
+  let part (lo hi : ℕ) := mkAppN (mkConst ``Fast.checkPart)
+    #[F, kE, FastExpr.boolE dl, FastExpr.boolE lv, cE, mkRawNatLit lo, mkRawNatLit hi]
+  let hfalse := mkApp2 (mkConst ``Eq.refl [1]) (mkConst ``Bool) (mkConst ``Bool.false)
+  closeWithChecksLit goal N Nv
+    (fun lit => mkAppN (mkConst ``PNet.checkFastPre) #[lit, wE, BE, fmE, tb, kE,
+        FastExpr.boolE ll, s₀E] ::
+      mkAppN (mkConst ``Fast.checkHead) #[F, mkRawNatLit Nv.trans.length, FastExpr.boolE lv,
+        s₀E, cE] ::
+      ranges.map fun (lo, hi) => part lo hi)
+    fun hs => do
+      let hp := hs.drop 2 |>.toArray
+      -- glue the parts `[i, j)` by halves
+      let rec glue (i j : ℕ) (fuel : ℕ) : MetaM Expr := do
+        match fuel with
+        | 0 => throwError "closeFastParts: out of fuel"
+        | fuel + 1 =>
+          if j ≤ i + 1 then return hp[i]!
+          let m := (i + j) / 2
+          mkAppM ``Fast.checkPart_split
+            #[mkRawNatLit (ranges[m]!).1, hfalse, ← glue i m fuel, ← glue m j fuel]
+      let h ← mkAppM ``PNet.checkFast_of_parts #[hs[0]!, hs[1]!, ← glue 0 hp.size (hp.size + 1)]
+      mkAppM thm #[h]
+
 /-- Prove deadlock freedom of the `PNet` `N` from the state equation, without exploring its
 state space (`PNet.deadlockFree_of_checks`), with bounds from place invariants.  Returns
 `false` (leaving the goal untouched) when no certificate is found. -/
@@ -1563,3 +1606,38 @@ elab_rules : tactic
       (Tactic.minimize r.isSome (n.map (·.getNat) |>.getD 100000))
 
 end AsyncLean
+
+namespace AsyncLean.Tactic
+
+open Lean Elab Tactic Meta
+
+/-- `async_fast (parts := k)` proves a property of a concrete `PNet` by the fast explicit check
+only (`PNet.checkFast`), as one kernel goal, or with `parts := k` (`k ≥ 1`) split into `k`
+kernel goals (`PNet.checkFast_of_parts`). -/
+syntax (name := asyncFastStx) "async_fast" (" (" &"parts" " := " num ")")? : tactic
+
+elab_rules : tactic
+  | `(tactic| async_fast $[(parts := $k)]?) => do
+    let goal ← getMainGoal
+    let tgt ← instantiateMVars (← goal.getType)
+    let some (N, p) := matchPNet tgt | throwError "async_fast: unsupported goal{indentExpr tgt}"
+    let (dl, ll, lv, thm) := match p with
+      | .deadlock => (true, false, false, ``PNet.deadlockFree_of_checkFast)
+      | .livelock => (false, true, false, ``PNet.livelockFree_of_checkFast)
+      | .live => (false, false, true, ``PNet.live_of_checkFast)
+      | _ => (true, true, true, ``PNet.correct_of_checkFast)
+    let Nv ← evalAs PNet N
+    let .ok (w, c) := Nv.mkFastCert dl ll lv 10000000 | throwError "async_fast: no certificate"
+    withTheReader Core.Context (fun ctx => { ctx with
+        maxRecDepth := max ctx.maxRecDepth 1000000
+        options := maxRecDepth.set ctx.options (max ctx.maxRecDepth 1000000) }) do
+      match k with
+      | none =>
+        let lit := FastExpr.pnetE Nv
+        closeWithCheckLitM goal (FastExpr.checkFastE lit Nv w c dl ll lv)
+          (fun h => mkAppM thm #[h]) N lit
+      | some k =>
+        unless ← closeFastParts goal N Nv w c dl ll lv thm k.getNat do
+          throwError "async_fast: the goal does not match"
+
+end AsyncLean.Tactic
