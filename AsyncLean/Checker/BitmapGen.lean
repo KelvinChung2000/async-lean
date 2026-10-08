@@ -174,12 +174,13 @@ def BSet.count (s : BSet) : ℕ := s.fold (fun n _ b => n + (Nat.toDigits 2 b).c
 
 /-- **Forward reachability**: the states reachable from `init`, staying inside `within` if
 given.  Fails on an overflow (an `ok` test failing) or a borrow/carry across the chunk
-boundary, or beyond `maxChunks` chunks. -/
+boundary, or beyond `maxChunks` chunks of `2 ^ (k + shift)` states. -/
 def forward (cx : Ctx) (ti : Array TInfo) (init : BSet) (within : Option BSet)
-    (maxChunks : ℕ) : Except String BSet := Id.run do
+    (maxChunks : ℕ) (shift : ℕ := 0) : Except String BSet := Id.run do
   let k := cx.k
   let mut all := init
   let mut frontier := init
+  let mut big : Std.HashSet ℕ := init.fold (fun s h _ => s.insert (h >>> shift)) {}
   while !frontier.isEmpty do
     let mut next : BSet := {}
     for (h, F) in frontier do
@@ -199,10 +200,11 @@ def forward (cx : Ctx) (ti : Array TInfo) (init : BSet) (within : Option BSet)
         let old := all.get h'
         let new := J ^^^ (J &&& old)
         if new != 0 then
+          if old == 0 then big := big.insert (h' >>> shift)
           all := all.insert h' (old ||| new)
           next := next.insert h' (next.get h' ||| new)
+      if big.size > maxChunks then return .error "too many chunks"
     frontier := next
-    if all.size > maxChunks then return .error "too many chunks"
   return .ok all
 
 /-- **Backward reachability** inside `A` from `B₀`; with `layers`, the cumulative layers of
@@ -344,6 +346,7 @@ def mkCert (tb : Array Tr) (internal : ℕ → Bool) (k₀ k L : ℕ) (dl ll lv 
   -- explore with small chunks: a sparse set exceeds the budget quickly
   let cx₀ := Ctx.mk' k₀
   let A₀ ← forward cx₀ (tb.map fun e => tinfo cx₀ e false) (BSet.single k₀ s₀) none maxChunks
+    (k - k₀)
   let cx := Ctx.mk' k
   let ti := (tb.mapIdx fun i e => tinfo cx e (ll && internal i))
   let A := A₀.regroup k₀ k

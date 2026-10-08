@@ -736,6 +736,11 @@ def bitmapCost (T k : ℕ) (c : Bitmap.Cert) : Float :=
   let rounds := 1 + c.2.2.1 + c.2.2.2
   rounds.toFloat * T.toFloat * chunks.toFloat * (0.0004 + (2 ^ k / 8 : ℕ).toFloat * 3.0e-8)
 
+/-- The most chunks of `2 ^ k` markings whose single round over `T` transitions fits in
+`limit` seconds (`bitmapCost`): a cheaper certificate has no more chunks. -/
+def bitmapChunkBound (T k : ℕ) (limit : Float) : ℕ :=
+  (limit / (T.toFloat * (0.0004 + (2 ^ k / 8 : ℕ).toFloat * 3.0e-8))).ceil.toUInt64.toNat + 1
+
 /-- Estimated kernel memory, in bytes, of the largest of the three parts of a bitmap check:
 the kernel keeps about three bitmaps per round, transition and chunk. -/
 def bitmapBytes (T k : ℕ) (c : Bitmap.Cert) : Float :=
@@ -750,6 +755,10 @@ def decideBitmap (goal : MVarId) (N : Expr) (p : Option Goal) (K : ℕ := 1)
     (maxChunks : ℕ := 100000) (low : ℕ := 20) (limit : Option Float := none) : TacticM Bool := do
   let net ← evalAs PNet N
   unless net.wf do return false
+  -- do not search for more chunks than the cost limit could accept
+  let maxChunks := match limit with
+    | some lim => min maxChunks (bitmapChunkBound net.trans.length low lim)
+    | none => maxChunks
   let (dl, ll, lv) := match p with
     | none => (false, false, false)
     | some .deadlock => (true, false, false)
@@ -790,6 +799,9 @@ def decideBitmapC (goal : MVarId) (C₀ : Expr) (p : Goal) (maxChunks : ℕ := 1
     | .live => (false, false, true, ``Circuit.live_of_checkBitmap)
     | _ => (true, true, true, ``Circuit.correct_of_checkBitmap)
   if p matches .persistent then return false
+  let maxChunks := match limit with
+    | some lim => min maxChunks (bitmapChunkBound (2 * Cv.gates.length) low lim)
+    | none => maxChunks
   match Cv.mkBitmapCert dl ll lv maxChunks low with
   | .error _ => return false
   | .ok (k, c) =>
