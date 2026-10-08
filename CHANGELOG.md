@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+* **Checkpoints bound the memory of bitmap checks** (`Bitmap.segR`, `Bitmap.segD`,
+  `Bitmap.checkR_of_fin`, `Bitmap.checkD_of_fin`). The kernel keeps every bitmap it computes
+  within a declaration; rank and distance rounds are now cut at checkpoints that come with the
+  certificate, each segment checked in its own declaration to end exactly at the next one.
+  Twelve four-phase handshakes (`4^12` markings): `async_bitmap` 76 s at a peak of 3.4 GB
+  (was 128 s and about 11 GB), and `async_decide` proves them in 79 s (was out of memory).
+  Ten handshakes: `async_decide` 11 s (was 24 s). `async_bitmap (seg := n)` sets the segment.
+* **Starvation freedom under wormhole switching** (`Routing/WormholeFairness.lean`).
+  `Network.WormholeStarvationFree`: along every strongly fair run, every packet, of any
+  length, is delivered under every selection function. Proved from correctness, a ranking
+  function and finitely many legal pairs (`Network.wormholeStarvationFree_of_ranking`): no
+  channel is ever held twice, so finitely many configurations are reachable
+  (`Network.wreachable_finite`). `async_decide` proves it from the wormhole certificate
+  (`Network.wormholeStarvationFree_of_wcheckCert`); examples: every dateline ring, the Duato
+  mesh.
+* **Duato's condition is not necessary under wormhole switching**
+  (`Examples/DuatoWormhole.lean`, `duato_not_necessary_wormhole`): a four-channel network is
+  deadlock free for packets of every length, yet no escape channels have an acyclic extended
+  dependency graph. The flits of a packet follow its route (`Network.WChain`), which gives a
+  sufficient condition by blocking sets (`Network.wormholeDeadlockFree_of_holds`, checked by
+  `Network.wholdCheck`); `async_decide` falls back on it for small networks.
+
 * **Bit-parallel certificates** (`Checker/Bitmap.lean`, `Checker/BitmapPetri.lean`). Sets of
   packed markings are bitmaps — one number with a bit per marking — grouped into chunks by
   their high bits, and the kernel fires a transition on a whole chunk with one shift, after

@@ -175,6 +175,13 @@ theorem datelineRing_wormholeCorrect (n : ℕ) : (datelineRing n).WormholeCorrec
   ⟨(datelineRing n).wormholeDeadlockFree_of_cdg (dl_closed n) (dl_conn n) (dl_wf n),
     (datelineRing n).wormholeLivelockFree_of_ranking (dl_closed n) (dlRank n) (dl_rank n)⟩
 
+/-- **No packet of any dateline ring starves under wormhole switching**, for packets of every
+length, along every strongly fair run. -/
+theorem datelineRing_wormholeStarvationFree (n : ℕ) :
+    (datelineRing n).WormholeStarvationFree :=
+  Network.wormholeStarvationFree_of_ranking (dl_closed n) (dl_finite n)
+    (datelineRing_wormholeCorrect n) (dlRank n) (dl_rank n)
+
 /-! ### Meshes -/
 
 namespace Mesh
@@ -312,6 +319,11 @@ theorem xyMesh_wormholeCorrect : (xyMesh 4).WormholeCorrect := by async_decide
 escape channels. -/
 theorem duatoMesh_wormholeCorrect : (duatoMesh 4).WormholeCorrect := by async_decide
 
+/-- Starvation freedom under wormhole switching: along every strongly fair run, every packet
+(of any length) is delivered, even while injection goes on. -/
+theorem duatoMesh_wormholeStarvationFree : (duatoMesh 4).WormholeStarvationFree := by
+  async_decide
+
 /-- The same, naming the escape channels: the virtual-channel-0 channels have even numbers. -/
 example : (duatoMesh 3).WormholeDeadlockFree := by
   async_routing (escape := fun c => c % 2 == 0)
@@ -354,6 +366,7 @@ theorem duatoMesh_never_stuck {sel : Selection ℕ ℕ} (hsel : (duatoMesh 4).Va
   xyMesh_correct adaptiveMesh_deadlocks duatoMesh_correct misrouteMesh_correct
   deflectionMesh_livelocks duatoMesh_starvationFree xyMesh_wormholeCorrect
   duatoMesh_wormholeCorrect ring_wormhole_deadlocks deflectionMesh_wormhole_livelocks
+  datelineRing_wormholeStarvationFree duatoMesh_wormholeStarvationFree
   duatoMesh_drains duatoMesh_never_stuck
 
 end AsyncLean.Examples

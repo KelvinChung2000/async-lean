@@ -92,7 +92,7 @@ depends on `sorry`, `native_decide` or a user-declared axiom:
 | a protocol, arbiter or controller as places and transitions | `PNet` (section 4) | `N.Correct`, `N.Safe`, `N.Bounded k` |
 | a signal transition graph (Petrify / Workcraft `.g`) and maybe its gates | `Stg` (section 5) | `spec.model.Correct`, `.CSC`, `.Consistent`, `.OutputPersistent`, `.Conformant gates` |
 | a closed gate-level netlist (C-elements, Boolean gates) | `Circuit` (section 6) | `C.Correct`, `C.SpeedIndependent`, `C.QDI` |
-| routers, channels and a routing function | `Network` (section 7) | `N.Correct`, `N.StarvationFree`, `N.WormholeCorrect` |
+| routers, channels and a routing function | `Network` (section 7) | `N.Correct`, `N.StarvationFree`, `N.WormholeCorrect`, `N.WormholeStarvationFree` |
 | a router's routing logic as a Verilog netlist | `Comb` and `RtlRouter` (section 7) | `N.implementedBy r`, then `(N.withRtl r).Correct` |
 | any other finite system with a computable successor function | `ExplicitLTS` | `E.toLTS.DeadlockFree s₀`, `E.toLTS.LivelockFree internal s₀` |
 
@@ -308,6 +308,7 @@ permitted channel is free.
 | `N.Correct` | `N.DeadlockFree ∧ N.LivelockFree`: whenever the network holds a packet some packet can move, and there is no infinite run without new injections |
 | `N.StarvationFree` | along every strongly fair run, every packet is eventually delivered, even if injection never stops |
 | `N.WormholeCorrect` | deadlock and livelock freedom under **wormhole switching** (a packet spans several channels), for packets of every length; also `N.WormholeDeadlockFree`, `N.WormholeLivelockFree` |
+| `N.WormholeStarvationFree` | under wormhole switching, along every strongly fair run, every packet (of any length) is eventually delivered |
 
 ### Ask, prove, refute
 
@@ -318,6 +319,7 @@ permitted channel is free.
 theorem myRing_ok   : myRing.Correct         := by async_decide
 theorem myRing_fair : myRing.StarvationFree  := by async_decide
 theorem myRing_wh   : myRing.WormholeCorrect := by async_decide
+theorem myRing_whf  : myRing.WormholeStarvationFree := by async_decide
 ```
 
 No configuration of the network is explored. The tactic checks the routing function locally:
@@ -570,6 +572,15 @@ finitely many channels carry packets, every configuration of legal packets can m
 connected escape subfunction has an acyclic dependency graph. So when a proof by escape
 channels is impossible, the network really can be blocked.
 
+Under wormhole switching it is **not** necessary (`Examples/DuatoWormhole.lean`,
+`duato_not_necessary_wormhole`): a four-channel network is deadlock free for packets of every
+length although every choice of escape channels leaves a cycle in Duato's extended dependency
+graph, because the only channel closing the cycle is held by packets at their destination
+alone. The flits of a packet follow its route (`Network.WChain`), so blocked heads can only
+hold channels reachable backwards from them; `Network.wormholeDeadlockFree_of_holds` turns
+this into a sufficient condition that sees such networks, and `async_decide` falls back on it
+(exhaustively, for networks of at most 12 legal pairs) when no escape channels work.
+
 ## 11. Troubleshooting
 
 | Symptom | What to do |
@@ -649,6 +660,7 @@ The network properties are listed in section 7.
 | `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's theorem (sufficient and necessary), Dally–Seitz, livelock by ranking, drain theorem, refutations |
 | `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
+| `Routing/WormholeFairness.lean`, `WormholeHold.lean` | starvation freedom under wormhole switching; blocking sets, a deadlock condition beyond Duato's |
 | `Routing/RTL.lean` | routing functions implemented by netlists: `RtlRouter`, `implementedBy`, `coveredBy`, transfer of correctness |
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
@@ -701,9 +713,11 @@ The network properties are listed in section 7.
 * Networks are modelled with store-and-forward / virtual cut-through switching (one channel
   per packet) or wormhole switching (a packet spans up to `tail p + 1` channels, with one-flit
   channel buffers). Routing livelock freedom is "no infinite run without injections".
-  Starvation freedom assumes a strongly fair scheduler and is proved for store-and-forward
+  Starvation freedom assumes a strongly fair scheduler, for store-and-forward and wormhole
   switching. Duato's condition is proved necessary and sufficient for store-and-forward
-  switching; for wormhole switching the sufficient direction is proved.
+  switching; for wormhole switching it is sufficient and, by a counterexample, not
+  necessary. The blocking-set condition that replaces it is checked by enumerating sets of
+  heads, so it scales only to small networks.
 * The link to RTL covers routing *logic*: a combinational netlist read as a function. The
   buffers, arbiters and flow control of a router are modelled by the `Network` semantics, not
   imported from RTL.

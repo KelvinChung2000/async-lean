@@ -18,7 +18,7 @@ import AsyncLean.Checker.BitmapGen
 import AsyncLean.Checker.AbstractPot
 import AsyncLean.Auto.StateEq
 import AsyncLean.Import.Basic
-import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.WormholeHold
 
 /-!
 # The `async_decide` tactic
@@ -1033,6 +1033,8 @@ def matchWormhole (tgt : Expr) : Option (Expr × Goal) :=
   | (``Network.WormholeCorrect, #[_, _, N]) => some (N, .correct)
   | (``Network.WormholeDeadlockFree, #[_, _, N]) => some (N, .deadlock)
   | (``Network.WormholeLivelockFree, #[_, _, N]) => some (N, .livelock)
+  -- starvation freedom is the liveness of packets: every packet is eventually delivered
+  | (``Network.WormholeStarvationFree, #[_, _, N]) => some (N, .live)
   | _ => none
 
 /-- Prove a wormhole goal by `Network.wormholeCorrect_of_wcheckCert`, with the escape
@@ -1057,17 +1059,31 @@ def decideWormhole (goal : MVarId) (N : Expr) (esc? : Option Expr) (p : Goal) (f
     let chk ← mkAppM ``Network.wcheckCert #[N, cmpC, cmpQ, E, pairs, ranks, lo]
     if ← evalBool chk then
       let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq chk (mkConst ``Bool.true))
-      let pf ← mkAppM ``Network.wormholeCorrect_of_wcheckCert #[h]
       let pf ← match p with
-        | .deadlock => mkAppM ``And.left #[pf]
-        | .livelock => mkAppM ``And.right #[pf]
-        | _ => pure pf
+        | .deadlock => mkAppM ``And.left #[← mkAppM ``Network.wormholeCorrect_of_wcheckCert #[h]]
+        | .livelock => mkAppM ``And.right #[← mkAppM ``Network.wormholeCorrect_of_wcheckCert #[h]]
+        | .live => mkAppM ``Network.wormholeStarvationFree_of_wcheckCert #[h]
+        | _ => mkAppM ``Network.wormholeCorrect_of_wcheckCert #[h]
       unless ← isDefEq (← inferType pf) (← goal.getType) do
         throwError "{tac}: could not match the goal with{indentExpr (← inferType pf)}"
       goal.assign pf
       replaceMainGoal [h.mvarId!]
       evalTactic (← `(tactic| decide +kernel))
       return
+  -- Duato's condition is only sufficient under wormhole switching: on small networks, try the
+  -- blocking sets of `Network.wormholeDeadlockFree_of_wholdCert` (exponential in the pairs)
+  if p matches .deadlock then
+    let n ← evalAs ℕ (← mkAppM ``List.length #[← mkAppM ``BTree.toList #[pairs]])
+    if n ≤ 12 then
+      let chk ← mkAppM ``Network.wholdCert #[N, cmpQ, pairs]
+      if ← evalBool chk then
+        let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq chk (mkConst ``Bool.true))
+        let pf ← mkAppM ``Network.wormholeDeadlockFree_of_wholdCert #[N, h]
+        if ← isDefEq (← inferType pf) (← goal.getType) then
+          goal.assign pf
+          replaceMainGoal [h.mvarId!]
+          evalTactic (← `(tactic| decide +kernel))
+          return
   let diag ← mkAppM ``Network.wdiagnose #[N, cmpC, cmpQ, esc?.getD all, mkNatLit fuel]
   throwError "{tac}: {← evalString diag}"
 

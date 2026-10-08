@@ -26,6 +26,8 @@ import AsyncLean.Checker.BDD
 import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.WormholeFairness
+import AsyncLean.Routing.WormholeHold
 import AsyncLean.Routing.RTL
 import AsyncLean.Checker.BitmapPetri
 import AsyncLean.Checker.AbstractPot
@@ -85,6 +87,10 @@ open LTS
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
   Network.wormholeCorrect_of_wcheckCert
+  Network.wreachable_finite Network.wdelivered_of_ranking Network.wormholeStarvationFree_of_ranking
+  Network.wormholeStarvationFree_of_escape_ranking Network.wormholeStarvationFree_of_wcheckCert
+  Network.wormholeDeadlockFree_of_holds Network.wormholeDeadlockFree_of_wholdCheck
+  Network.wormholeDeadlockFree_of_wholdCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms

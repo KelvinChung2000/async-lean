@@ -56,6 +56,8 @@ import AsyncLean.Routing.Fairness
 import AsyncLean.Routing.Check
 import AsyncLean.Routing.Wormhole
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.WormholeFairness
+import AsyncLean.Routing.WormholeHold
 import AsyncLean.Routing.RTL
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
@@ -77,5 +79,6 @@ import AsyncLean.Examples.Scale
 import AsyncLean.Examples.Symbolic
 import AsyncLean.Examples.Bitmap
 import AsyncLean.Examples.Routing
+import AsyncLean.Examples.DuatoWormhole
 import AsyncLean.Examples.RTL
 import AsyncLean.Tutorial
