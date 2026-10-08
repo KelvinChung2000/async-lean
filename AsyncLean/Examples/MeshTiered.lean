@@ -22,7 +22,8 @@ free permitted hops of the first tier that admits one:
 3. any productive hop on **virtual channel 1**;
 
 and a packet in its injection channel leaves only towards a router with at least `g` of its 8
-outgoing channels free (**source throttling**), so the network drains before it fills up.
+outgoing channels free (**source throttling**; channels leaving the mesh count as free), so the
+network drains before it fills up.
 
 It only takes hops of Duato's mesh.  The extra hops of the maximally adaptive meshes do not
 pay off here: a fourth tier taking them (straight on) made transpose and shuffle traffic faster on
@@ -44,7 +45,8 @@ packet go once the rest of the network is empty.  So, for every mesh size and ev
 
 * `duatoTiered_correct k g` : Duato's mesh under the tiered selection is deadlock free, livelock
   free and starvation free (every packet of every strongly fair run is delivered, those held back
-  at their sources too).
+  in their injection channels too; strong fairness makes such a run revisit the empty network,
+  so this is not a statement about sustained saturation).
 * `westFirstTiered_correct k g`, `northLastTiered_correct k g` : the same on the maximally
   adaptive meshes.
 * `duatoTiers_correct`, `westFirstTiers_correct`, `northLastTiers_correct` : the same for
