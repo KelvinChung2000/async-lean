@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* `scripts/routing_graph_sim.py`: the cycle-level simulator for arbitrary graphs (same mechanics
+  as `routing_sim.py`, spanning-tree or XY escape, bounded returns) and the wire-budget designs
+  `CA_112`, `D_128`, `DF_156`; README "Beyond the mesh": at equal radix and wire, no topology
+  tried beats the mesh significantly with packets, though the fluid model allows up to +33 %.
+
 * **Bounded returns from the escape layer** (`Routing/GraphBudget.lean`,
   `Examples/GraphBudget.lean`). The absorbing escape of `Routing/Graph.lean` costs throughput,
   and unbounded returns can livelock. A packet header now carries a return budget `B`: from an

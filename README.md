@@ -522,6 +522,42 @@ from XY loses there. Transpose traffic needs the deviations and no throttling. R
 between the two (waiting before deviating, choosing the mode by distance, a controller
 switching modes) move along that trade-off without reaching both ends.
 
+### Beyond the mesh
+
+`Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
+virtual channel 1 takes any shortest-path hop, virtual channel 0 routes along a spanning tree
+(`GraphData.correct`, `exists_correct`; the torus of every size and the Petersen graph as
+instances). With an absorbing escape a packet that enters virtual channel 0 stays there; in
+simulation that costs up to 45 % of the throughput, and unbounded returns to virtual channel 1
+can livelock (a packet took 95 hops on a 14-hop route). `Routing/GraphBudget.lean` lets a
+packet return `B` times, counted in its header, and is safe for every graph and every `B`
+(`budget_correct`). Two returns keep 96 to 100 % of the unbounded throughput, with at most 26
+hops.
+
+Is the mesh the right topology? At the same router radix (4 ports) and two virtual channels,
+`scripts/routing_graph_sim.py` (peak throughput, mean of 2 seeds; spanning-tree escape rooted
+in the centre, `B = 2`, tiered selection, `g = 4`) and the exact LP of the fluid model give:
+
+| 8 × 8, 64 routers | wire | LP uniform | uniform | transpose | shuffle | bit reversal | hotspot | bit complement | random permutation |
+|---|---|---|---|---|---|---|---|---|---|
+| mesh, XY escape | 112 | 0.984 | 0.495 | 0.394 | 0.578 | 0.365 | 0.381 | **0.257** | 0.433 |
+| mesh, tree escape | 112 | 0.984 | 0.450 | 0.391 | 0.580 | 0.374 | 0.378 | 0.184 | 0.418 |
+| `CA_112`: mesh wire moved to the middle cuts | 112 | 1.148 | 0.449 | 0.344 | 0.650 | 0.384 | 0.407 | 0.190 | 0.399 |
+| `D_128`: mesh + 8 express links of length 2 | 128 | 1.313 | 0.517 | 0.397 | 0.643 | 0.427 | 0.411 | 0.215 | 0.469 |
+| `DF_156`: `D_128` + 4 folded rows/columns | 156 | 1.575 | **0.550** | **0.461** | **0.698** | **0.443** | **0.456** | 0.212 | **0.463** |
+
+Uniform traffic loads the seven vertical cuts of the mesh in the ratio 7:12:15:16:15:12:7 while
+the mesh gives each the same 8 links; summing over the cuts, no radix-4 graph with the mesh's
+wire beats it by more than 33 % in the fluid model, and `CA_112`, which moves wire to the middle,
+gets half of that (+17 %). With packets, the gain at equal wire disappears: `CA_112` matches
+the mesh under uniform traffic (with the same kind of escape), wins under shuffle traffic and
+loses under transpose traffic. Extra wire buys throughput roughly in proportion: `D_128`
+(+14 % wire) gains 2 to 19 % except under bit-complement traffic; the torus and random 4-regular
+graphs (twice and six times the wire) gain 40 to 90 % with packets, and 1.0 and 0.47 times the
+mesh's fluid throughput per unit of wire. Under uniform traffic packets reach 50 % of the fluid
+optimum on the mesh but only 35 to 40 % on the new designs: their extra capacity sits in a few
+links that one-packet channels and a spanning-tree escape cannot keep busy.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
