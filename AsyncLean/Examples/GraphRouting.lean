@@ -10,7 +10,12 @@ import AsyncLean.AxiomAudit
 `AsyncLean.Routing.Graph` makes minimal adaptive routing safe on every finite connected graph,
 with tree routing along a spanning tree as the escape layer.  Two instances:
 
-* `torus k` : the `(k + 1) × (k + 1)` torus (a mesh with wraparound links), with the distance
+Starvation freedom is under strong fairness, which makes a run revisit the empty network (see
+`AsyncLean.Routing.Graph`).
+
+* `torus k` : the `(k + 1) × (k + 1)` torus (square tori only; the `1 × 1` and `2 × 2` cases have
+  repeated neighbours or self-loops, harmlessly; that the wraparound `dist` is the graph distance
+  is checked only for small sizes, and safety does not depend on it) (a mesh with wraparound links), with the distance
   with wraparound for the adaptive layer and a comb spanning tree (up each column to row 0, then
   west along row 0 to the corner).  `torus_correct k` : **for every size**, it is deadlock free
   and livelock free under every valid selection function and starvation free under strongly

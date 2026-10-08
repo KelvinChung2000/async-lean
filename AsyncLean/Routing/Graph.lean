@@ -54,7 +54,11 @@ For every `G : GraphData V`:
 
 * `GraphData.correct` : `G.net` is deadlock free and livelock free under every valid
   selection function (`Network.Correct`), and starvation free under strongly fair scheduling
-  (`Network.StarvationFree`).
+  (`Network.StarvationFree`).  Strong fairness is demanding: with finitely many configurations
+  it makes a run revisit every reachable configuration, the empty network included, so the
+  starvation statement says nothing about a network kept saturated.  The adaptive layer is
+  minimal when `dist` is the graph distance (`GraphData.adaptive_ne_nil`); safety holds for
+  any `dist`.
 * `GraphData.correct_of_escapeSel` : the same under every selection that never refuses a
   free escape hop (`Network.EscapeSel`), which may decline adaptive hops.
 * `GraphData.correct_of_sourceSel` : the same under every selection that may in addition
@@ -481,7 +485,8 @@ theorem chans_finite : {c | ∃ d, G.legal c d}.Finite :=
 /-! ### Correctness -/
 
 /-- **Adaptive routing on every graph is correct**: deadlock free and livelock free under every
-valid selection function, and starvation free under strongly fair scheduling. -/
+valid selection function, and starvation free under strongly fair scheduling (which, see the
+module docstring, makes a run revisit the empty network). -/
 theorem correct : G.net.Correct ∧ G.net.StarvationFree :=
   ⟨⟨G.net.deadlockFree_of_escape G.closed G.escape G.esc_sub G.esc_conn G.esc_wf,
     G.net.livelockFree_of_ranking G.closed G.chans_finite G.rank G.rank_lt⟩,

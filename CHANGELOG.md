@@ -6,7 +6,8 @@
   undirected graph (`GraphData`: vertex list, symmetric neighbour lists, a distance estimate and
   a rooted spanning tree, which `GraphData.ofConnected` builds for any connected graph), minimal
   adaptive routing on virtual channel 1 with an absorbing tree-routing escape on virtual channel
-  0 is deadlock, livelock and starvation free (`GraphData.correct`), also under every selection
+  0 is deadlock, livelock and starvation free (`GraphData.correct`; starvation freedom under strong
+  fairness, which makes a run revisit the empty network), also under every selection
   satisfying `EscapeSel` or `SourceSel` (`correct_of_escapeSel`, `correct_of_sourceSel`);
   `GraphData.exists_correct` states it for every connected graph. Instances
   (`Examples/GraphRouting.lean`): the torus of every size (`torus_correct`) and the Petersen
