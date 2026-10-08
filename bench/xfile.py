@@ -28,8 +28,10 @@ elab "fast_setup " k:num : command => liftTermElabM do
   let .ok (w, c) := Nv.mkFastCert true true true 10000000 | throwError "no certificate"
   let K := k.getNat
   let B := 2 ^ w
-  let add (n : Name) (ty v : Expr) : MetaM Unit := addDecl (.defnDecl {{ name := n,
-    levelParams := [], type := ty, value := v, hints := .opaque, safety := .safe }})
+  let add (n : Name) (ty v : Expr) : MetaM Unit := do
+    let dv : DefinitionVal :=
+      {{ name := n, levelParams := [], type := ty, value := v, hints := .opaque, safety := .safe }}
+    addDecl (.defnDecl dv)
   let natT := mkConst ``Nat
   add `cert (mkConst ``Fast.Cert) (FastExpr.certE c)
   add `tbl (FastExpr.listT (mkConst ``PNet.FEntry))
