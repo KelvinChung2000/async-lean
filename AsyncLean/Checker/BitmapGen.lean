@@ -612,9 +612,13 @@ def mkBitmapCert (dl ll lv allPlaces : Bool) (maxChunks : ℕ := 100000) (target
       | .error e =>
         if e == "overflow" || e == "range" || e == "too many chunks" then last := e
         else throw e
+        -- over budget: the other order rarely saves enough to pay for a second search
+        if e == "too many chunks" then break
       -- one order is enough when everything fits in one chunk
       if layoutBits L ≤ k then break
     if let some (L, k, c, pR, pD, _) := best then return (L, k, c, pR, pD)
+    -- more places in the layout only add chunks
+    if last == "too many chunks" then break
   throw last
 
 end PNet

@@ -1162,9 +1162,6 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
       -- partial-order reduction for livelock freedom and liveness too
       unless p matches .deadlock do
         let Nv ← evalAs PNet N
-        -- a large state space, dense once packed: bitmaps first
-        if Nv.bitmapDense then
-          if ← decideBitmap goal N (some p) 1 8192 20 (some 120.0) then return
         let noInt := Nv.noInternal
         -- without internal transitions, livelock freedom is immediate and the visibility
         -- conditions (which would force full expansion) are not needed
@@ -1179,7 +1176,7 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           | .error _ => none
         -- a reduced marking costs about 10 ms of kernel time with the cycle proviso and the
         -- traces of liveness
-        if porcSize.all fun n => n.toFloat * 0.01 > 1.0 then
+        if porcSize.all (fun n => n.toFloat * 0.01 > 1.0) && Nv.bitmapDense then
           let lim := (porcSize.map fun n => n.toFloat * 0.01).getD 120.0
           if ← decideBitmap goal N (some p) 1 8192 20 (some lim) then return
         if let .ok (w, t, hubs) := porc then
