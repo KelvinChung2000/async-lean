@@ -487,22 +487,25 @@ Measured end to end (search and kernel check), each goal in its own file, on one
 
 Tightly coupled designs, `Correct`, against the `async_decide` of the previous release
 (`bench/suite.sh`; end to end, including about 6 s of loading the library; FAIL is out of
-memory, — not run):
+memory):
 
 | Goal | markings | previous `async_decide` | `async_decide` | `async_bitmap` |
 |---|---|---|---|---|
-| 8 handshakes | 4⁸ | 27 s | 29 s | 7.3 s |
-| 10 handshakes | 4¹⁰ | 127 s | 27 s | 12 s |
-| 12 handshakes | 4¹² | FAIL | — | 128 s |
-| barrier of 10 | 3¹⁰ | 49 s | 17 s | 12 s |
-| barrier of 12 | 3¹² | 335 s | 140 s | 114 s |
-| 30-stage FIFO | | 10 s | 11 s | > 600 s |
-| 10 philosophers | | 6.8 s | 7.3 s | 24 s |
+| 8 handshakes | 4⁸ | 27 s | 9.5 s | 7.3 s |
+| 10 handshakes | 4¹⁰ | 127 s | 24 s | 12 s |
+| 12 handshakes | 4¹² | FAIL | FAIL | 128 s |
+| barrier of 10 | 3¹⁰ | 49 s | 14 s | 12 s |
+| barrier of 12 | 3¹² | 335 s | 132 s | 114 s |
+| 30-stage FIFO | | 10 s | 9.1 s | > 600 s |
+| 10 philosophers | | 6.8 s | 6.2 s | 24 s |
 | 12 philosophers, deadlock free | | 8.5 s | 7.4 s | 136 s |
 
 Bitmaps pay off when the packed markings are dense; on loosely coupled or sparse designs
 (FIFOs, philosophers) partial-order reduction or the state equation stays far cheaper, and
-`async_decide` keeps choosing them.
+`async_decide` keeps choosing them: it tries bitmaps only when the reduced state space has
+more than 2000 markings and a sample of the markings is dense once packed. It also refuses
+bitmaps whose kernel check it estimates above 4 GB of memory — twelve handshakes need about
+11 GB — so that goal needs `async_bitmap`.
 
 ## 9. Using a result in a larger proof
 

@@ -12,8 +12,10 @@
   `PNet.bounded_of_checkBitmap`). New tactic `async_bitmap`; `async_decide` uses it when it
   estimates it cheaper than a reduced state space. On tightly coupled designs whose reduced
   state space stays large it is an order of magnitude faster: ten four-phase handshakes
-  (`4^10` markings) are `Correct` in 12 s instead of 127 s end to end, and twelve (`4^12`),
-  out of reach before, in about two minutes.
+  (`4^10` markings) are `Correct` in 12 s instead of 127 s end to end (24 s with
+  `async_decide`), and twelve (`4^12`), out of reach before, in about two minutes.
+  `async_decide` tries bitmaps only beyond 2000 reduced markings, on dense nets, and within
+  4 GB of estimated kernel memory, and is no slower than before on the other benchmarks.
 * **Bitmaps for gate-level circuits** (`Checker/BitmapCircuit.lean`). A circuit state is a bit
   vector; the rise and the fall of every gate are transitions whose guard is a Boolean
   expression, evaluated on a whole chunk by bitwise operations (`Bitmap.bmaskE`), and
