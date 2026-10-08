@@ -26,6 +26,11 @@ import AsyncLean.Checker.BDD
 import AsyncLean.Auto.StateEq
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
+import AsyncLean.Routing.WormholeFairness
+import AsyncLean.Routing.WormholeHold
+import AsyncLean.Routing.RTL
+import AsyncLean.Checker.BitmapPetri
+import AsyncLean.Checker.AbstractPot
 import AsyncLean.AxiomAudit
 
 /-!
@@ -82,6 +87,10 @@ open LTS
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
   Network.wormholeCorrect_of_wcheckCert
+  Network.wreachable_finite Network.wdelivered_of_ranking Network.wormholeStarvationFree_of_ranking
+  Network.wormholeStarvationFree_of_escape_ranking Network.wormholeStarvationFree_of_wcheckCert
+  Network.wormholeDeadlockFree_of_holds Network.wormholeDeadlockFree_of_wholdCheck
+  Network.wormholeDeadlockFree_of_wholdCert
 
 -- Wire delays: QDI implies speed independence
 #assert_standard_axioms
@@ -191,5 +200,16 @@ open LTS
   Circuit.correct_of_checkCert Circuit.speedIndependent_of_checkCert
   Circuit.not_deadlockFree_of_refute Circuit.not_livelockFree_of_refute
   Circuit.not_speedIndependent_of_refute
+
+-- Bit-parallel certificates, layouts and potentials
+#assert_standard_axioms
+  PNet.encodesL PNet.layoutSpec_of_layoutOkK PNet.katable_eq Bitmap.of_check
+  PNet.of_checkBitmap PNet.correct_of_checkBitmap PNet.bounded_of_checkBitmap PNet.pot_step
+  ExplicitLTS.of_checkACertP PNet.of_checkAbsP PNet.correct_of_checkAbsP
+
+-- Combinational netlists and routing logic
+#assert_standard_axioms
+  Comb.unique Comb.val_consistent Network.withRtl_eq Network.correct_of_rtl
+  Network.hops_of_settled Network.legal_of_coveredBy
 
 end AsyncLean

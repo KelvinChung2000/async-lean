@@ -173,6 +173,39 @@ def build (doc : List Node) (internal : List String) : Except String PNet := do
 def parse (content : String) (internal : List String) : Except String PNet := do
   build (← Xml.parse content) internal
 
+/-- Escape the predefined entities. -/
+def escape (s : String) : String :=
+  ((((s.replace "&" "&amp;").replace "<" "&lt;").replace ">" "&gt;").replace "\"" "&quot;")
+
+/-- **A net as a PNML document** (place/transition net, one page): places `p0 … pn`,
+transitions `t0 … tm` named after the net's transition names, arcs with their weights.  The
+result can be given to other model checkers (LoLA, TAPAAL, ITS-Tools, …) to compare. -/
+def toPnml (N : PNet) (id : String := "net") : String := Id.run do
+  let mut out := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++
+    "<pnml xmlns=\"http://www.pnml.org/version-2009/grammar/pnml\">\n" ++
+    s!"<net id=\"{escape id}\" type=\"http://www.pnml.org/version-2009/grammar/ptnet\">\n" ++
+    s!"<name><text>{escape id}</text></name>\n<page id=\"page0\">\n"
+  for p in [0:N.places] do
+    let m := N.init.getD p 0
+    out := out ++ s!"<place id=\"p{p}\"><name><text>p{p}</text></name>" ++
+      (if m > 0 then s!"<initialMarking><text>{m}</text></initialMarking>" else "") ++
+      "</place>\n"
+  let mut a := 0
+  let mut i := 0
+  for t in N.trans do
+    let nm := if t.name.isEmpty then s!"t{i}" else s!"{t.name}_{i}"
+    out := out ++ s!"<transition id=\"t{i}\"><name><text>{escape nm}</text></name></transition>\n"
+    for p in t.pre.eraseDups do
+      out := out ++ s!"<arc id=\"a{a}\" source=\"p{p}\" target=\"t{i}\">" ++
+        s!"<inscription><text>{t.pre.count p}</text></inscription></arc>\n"
+      a := a + 1
+    for p in t.post.eraseDups do
+      out := out ++ s!"<arc id=\"a{a}\" source=\"t{i}\" target=\"p{p}\">" ++
+        s!"<inscription><text>{t.post.count p}</text></inscription></arc>\n"
+      a := a + 1
+    i := i + 1
+  return out ++ "</page>\n</net>\n</pnml>\n"
+
 end Import.Pnml
 
 open Lean Elab Command
@@ -191,5 +224,21 @@ elab_rules : command
       let doc := s!"Petri net imported from `{path.getString}`."
       defineDesign id.getId (mkConst ``PNet) (toExpr net) doc
     | .error e => throwError "pnet_from_pnml: {e}"
+
+unsafe def evalPNetImpl (e : Lean.Expr) : TermElabM PNet := Lean.Meta.evalExpr PNet (mkConst ``PNet) e
+
+/-- Evaluate a term of type `PNet`. -/
+@[implemented_by evalPNetImpl]
+opaque evalPNet (e : Lean.Expr) : TermElabM PNet
+
+/-- `#export_pnml N "file.pnml"` writes the net `N` as a PNML document (path relative to the
+current directory), to compare with other model checkers. -/
+elab "#export_pnml " t:term:max path:str : command => do
+  let net ← liftTermElabM do
+    let e ← Term.elabTermEnsuringType t (mkConst ``PNet)
+    Term.synthesizeSyntheticMVarsNoPostponing
+    evalPNet (← instantiateMVars e)
+  IO.FS.writeFile path.getString (Import.Pnml.toPnml net)
+  logInfo m!"wrote {path.getString}: {net.places} places, {net.trans.length} transitions"
 
 end AsyncLean

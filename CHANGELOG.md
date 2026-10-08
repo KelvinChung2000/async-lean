@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+* **Checkpoints bound the memory of bitmap checks** (`Bitmap.segR`, `Bitmap.segD`,
+  `Bitmap.checkR_of_fin`, `Bitmap.checkD_of_fin`). The kernel keeps every bitmap it computes
+  within a declaration; rank and distance rounds are now cut at checkpoints that come with the
+  certificate, each segment checked in its own declaration to end exactly at the next one.
+  Twelve four-phase handshakes (`4^12` markings): `async_bitmap` 76 s at a peak of 3.4 GB
+  (was 128 s and about 11 GB), and `async_decide` proves them in 79 s (was out of memory).
+  Ten handshakes: `async_decide` 11 s (was 24 s). `async_bitmap (seg := n)` sets the segment.
+* **Starvation freedom under wormhole switching** (`Routing/WormholeFairness.lean`).
+  `Network.WormholeStarvationFree`: along every strongly fair run, every packet, of any
+  length, is delivered under every selection function. Proved from correctness, a ranking
+  function and finitely many legal pairs (`Network.wormholeStarvationFree_of_ranking`): no
+  channel is ever held twice, so finitely many configurations are reachable
+  (`Network.wreachable_finite`). `async_decide` proves it from the wormhole certificate
+  (`Network.wormholeStarvationFree_of_wcheckCert`); examples: every dateline ring, the Duato
+  mesh.
+* **Duato's condition is not necessary under wormhole switching**
+  (`Examples/DuatoWormhole.lean`, `duato_not_necessary_wormhole`): a four-channel network is
+  deadlock free for packets of every length, yet no escape channels have an acyclic extended
+  dependency graph. The flits of a packet follow its route (`Network.WChain`), which gives a
+  sufficient condition by blocking sets (`Network.wormholeDeadlockFree_of_holds`, checked by
+  `Network.wholdCheck`); `async_decide` falls back on it for small networks.
+
+* **Bit-parallel certificates** (`Checker/Bitmap.lean`, `Checker/BitmapPetri.lean`). Sets of
+  packed markings are bitmaps — one number with a bit per marking — grouped into chunks by
+  their high bits, and the kernel fires a transition on a whole chunk with one shift, after
+  checking with two more shifts that no marking borrows from or carries into the high bits
+  (`Bitmap.fire_chunk`). Closure, deadlock freedom, and rounds of ranks (livelock freedom)
+  and of distances to hubs (liveness) are computed by the kernel, lexicographically with
+  linear potentials found by linear programming (`Bitmap.of_check`, `PNet.of_checkBitmap`,
+  `PNet.bounded_of_checkBitmap`). New tactic `async_bitmap`; `async_decide` uses it when it
+  estimates it cheaper than a reduced state space. On tightly coupled designs whose reduced
+  state space stays large it is an order of magnitude faster: ten four-phase handshakes
+  (`4^10` markings) are `Correct` in 12 s instead of 127 s end to end (24 s with
+  `async_decide`), and twelve (`4^12`), out of reach before, in about two minutes.
+  `async_decide` tries bitmaps only beyond 2000 reduced markings, on dense nets, and within
+  4 GB of estimated kernel memory, and is no slower than before on the other benchmarks.
+* **Bitmaps for gate-level circuits** (`Checker/BitmapCircuit.lean`). A circuit state is a bit
+  vector; the rise and the fall of every gate are transitions whose guard is a Boolean
+  expression, evaluated on a whole chunk by bitwise operations (`Bitmap.bmaskE`), and
+  `Circuit.of_checkBitmap` transfers the result from rises and falls to gates. `async_bitmap`
+  proves `Correct`, deadlock freedom, livelock freedom and liveness of circuits;
+  `async_decide` tries it for circuits of 14 signals or more.
+* **Layouts** (`Checker/Affine.lean`, `Checker/AffineK.lean`). A marking is packed by fields:
+  a component of places of which exactly one is marked takes the bits of its marked place's
+  index, a counter place its count, and a place that no transition consumes from no bits at
+  all. The packing is linear in the marking, so firing adds and subtracts constants, and
+  enabledness is a conjunction of tests on fields (`PNet.encodesL`). The structural check
+  (`PNet.layoutOkK`) and the transition table (`PNet.katable`) are written with recursors, for
+  the kernel, and proved equal to their list-library definitions.
+* **Linear potentials for unbounded nets** (`Checker/AbstractPot.lean`). The counter
+  abstraction combines weights on the places with its ranks and must-distances
+  lexicographically (`PNet.of_checkAbsP`), so an internal transition that drains a buffer at
+  the cap no longer defeats livelock freedom; `async_decide` tries it when the plain
+  abstraction fails.
+* **Routing logic from RTL.** `comb_from_verilog` imports a combinational netlist (`Comb`,
+  `Circuit/Comb.lean`), now with buses and bit selects; `Comb.unique` shows that every settled
+  state of the gates agrees with its evaluation. `Routing/RTL.lean` connects a router's
+  routing logic to a network: `Network.implementedBy` (checked by evaluating the netlist on
+  every handled packet) gives `N.withRtl r = N`, so every theorem about `N` holds for the
+  network routed by the netlist (`Network.correct_of_rtl`); `Network.coveredBy` shows that the
+  netlist handles every packet the network can carry. Example: the XY routing logic of a 4×4
+  mesh (`Examples/RTL.lean`).
+* `#export_pnml N "file.pnml"` writes a net as PNML, to compare with other model checkers;
+  `bench/` has the scripts behind the timings of the README.
+* Examples (`Examples/Bitmap.lean`): handshakes, a barrier, an unbounded log, a ring of
+  C-elements; tutorial
+  paragraphs on potentials, bitmaps and routing logic.
+
 * **Interconnection networks with dynamic routing** (`Routing/Basic.lean`). `Network` models
   packet-switched networks with one-packet channel buffers, adaptive routing functions and
   run-time selection functions. `Network.Correct` is routing deadlock freedom and routing

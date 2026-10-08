@@ -3,6 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.Stg.Concrete
 import AsyncLean.Circuit.Basic
+import AsyncLean.Circuit.Comb
 
 /-!
 # Infrastructure for importing designs
@@ -77,6 +78,10 @@ instance : ToExpr BExpr := ⟨BExpr.toExprAux, mkConst ``BExpr⟩
 instance : ToExpr Gate where
   toTypeExpr := mkConst ``Gate
   toExpr g := mkAppN (mkConst ``Gate.mk) #[toExpr g.name, toExpr g.out, toExpr g.fn, toExpr g.internal]
+
+instance : ToExpr Comb where
+  toExpr c := mkApp3 (mkConst ``Comb.mk) (toExpr c.nin) (toExpr c.gates) (toExpr c.outs)
+  toTypeExpr := mkConst ``Comb
 
 instance : ToExpr Circuit where
   toTypeExpr := mkConst ``Circuit
