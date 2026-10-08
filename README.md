@@ -556,7 +556,13 @@ loses under transpose traffic. Extra wire buys throughput roughly in proportion:
 graphs (twice and six times the wire) gain 40 to 90 % with packets, and 1.0 and 0.47 times the
 mesh's fluid throughput per unit of wire. Under uniform traffic packets reach 50 % of the fluid
 optimum on the mesh but only 35 to 40 % on the new designs: their extra capacity sits in a few
-links that one-packet channels and a spanning-tree escape cannot keep busy.
+links that one-packet channels and a spanning-tree escape cannot keep busy. Over a wider set of radix-4 graphs (torus, folded and twisted torus, circulants, de
+Bruijn, random and search-optimised 4-regular graphs, laid out to minimise wire) the fluid model
+gives 2 to 3.8 times the mesh's uniform throughput at 64 and 256 routers, and 0.83 to 1.00 times
+per unit of wire; a wire bound (total wire over the mean Manhattan distance of the traffic) caps
+any graph at 1.33 (64 routers) and 1.41 (256) times the mesh per unit of wire under uniform
+traffic. The folded torus is the cleanest trade: twice the throughput for twice the wire, no
+link longer than 2.
 
 ## 8. Which tactic when?
 
