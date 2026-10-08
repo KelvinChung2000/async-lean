@@ -174,9 +174,10 @@ def BSet.count (s : BSet) : ℕ := s.fold (fun n _ b => n + (Nat.toDigits 2 b).c
 
 /-- **Forward reachability**: the states reachable from `init`, staying inside `within` if
 given.  Fails on an overflow (an `ok` test failing) or a borrow/carry across the chunk
-boundary, or beyond `maxChunks` chunks of `2 ^ (k + shift)` states. -/
+boundary, or beyond `maxChunks` chunks of `2 ^ (k + shift)` states (or `maxSmall` chunks
+of `2 ^ k` states, unless it is `0`). -/
 def forward (cx : Ctx) (ti : Array TInfo) (init : BSet) (within : Option BSet)
-    (maxChunks : ℕ) (shift : ℕ := 0) : Except String BSet := Id.run do
+    (maxChunks : ℕ) (shift : ℕ := 0) (maxSmall : ℕ := 0) : Except String BSet := Id.run do
   let k := cx.k
   let mut all := init
   let mut frontier := init
@@ -203,7 +204,8 @@ def forward (cx : Ctx) (ti : Array TInfo) (init : BSet) (within : Option BSet)
           if old == 0 then big := big.insert (h' >>> shift)
           all := all.insert h' (old ||| new)
           next := next.insert h' (next.get h' ||| new)
-      if big.size > maxChunks then return .error "too many chunks"
+      if big.size > maxChunks || (maxSmall != 0 && all.size > maxSmall) then
+        return .error "too many chunks"
     frontier := next
   return .ok all
 
@@ -341,12 +343,12 @@ def maskOf (is : List ℕ) : ℕ := is.foldl (fun m i => m ||| (1 <<< i)) 0
 increasing)`; the candidate needing the fewest rounds is kept. -/
 def mkCert (tb : Array Tr) (internal : ℕ → Bool) (k₀ k L : ℕ) (dl ll lv : Bool) (s₀ : ℕ)
     (rankCands : List (List ℕ × ℕ)) (distCands : List ℕ → List (List ℕ × ℕ × ℕ))
-    (maxChunks : ℕ := 200000) :
+    (maxChunks : ℕ := 200000) (maxSmall : ℕ := 0) :
     Except String (Bitmap.Cert × BSet × (List ℕ × ℕ) × (List ℕ × ℕ × ℕ)) := do
   -- explore with small chunks: a sparse set exceeds the budget quickly
   let cx₀ := Ctx.mk' k₀
   let A₀ ← forward cx₀ (tb.map fun e => tinfo cx₀ e false) (BSet.single k₀ s₀) none maxChunks
-    (k - k₀)
+    (k - k₀) maxSmall
   let cx := Ctx.mk' k
   let ti := (tb.mapIdx fun i e => tinfo cx e (ll && internal i))
   let A := A₀.regroup k₀ k
@@ -587,7 +589,8 @@ def bitmapDense (fuel : ℕ := 3000) : Bool := Id.run do
 
 /-- **A bitmap certificate for a net** (untrusted): the layout, the number of low bits, the
 certificate, and the potentials of ranks and distances. -/
-def mkBitmapCert (dl ll lv allPlaces : Bool) (maxChunks : ℕ := 100000) (target : ℕ := 20) :
+def mkBitmapCert (dl ll lv allPlaces : Bool) (maxChunks : ℕ := 100000) (target : ℕ := 20)
+    (maxSmall : ℕ := 0) :
     Except String (List LField × ℕ × Bitmap.Cert × (List ℕ × ℕ) × (List ℕ × ℕ × ℕ)) := do
   let mut last := "no layout"
   let rc := N.rankCands ll
@@ -604,7 +607,7 @@ def mkBitmapCert (dl ll lv allPlaces : Bool) (maxChunks : ℕ := 100000) (target
       let k₀ := min k (chooseK L 12)
       let tb := (N.atable L).toArray
       match BitmapGen.mkCert tb (fun i => (N.trans[i]?.map (·.internal)).getD false) k₀ k
-          N.trans.length dl ll lv (encV L N.initVec) rc (N.distCands tb) maxChunks with
+          N.trans.length dl ll lv (encV L N.initVec) rc (N.distCands tb) maxChunks maxSmall with
       | .ok (c, A, pR, pD) =>
         match best with
         | some (_, _, _, _, _, n) => if A.size < n then best := some (L, k, c, pR, pD, A.size)
@@ -629,12 +632,13 @@ variable (C : Circuit)
 
 /-- **A bitmap certificate for a circuit** (untrusted): the number of low bits and the
 certificate.  Signals are single bits, so any number of low bits fits. -/
-def mkBitmapCert (dl ll lv : Bool) (maxChunks : ℕ := 100000) (target : ℕ := 20) :
+def mkBitmapCert (dl ll lv : Bool) (maxChunks : ℕ := 100000) (target : ℕ := 20)
+    (maxSmall : ℕ := 0) :
     Except String (ℕ × Bitmap.Cert) := do
   let k := min C.signals target
   let k₀ := min k 12
   let (c, _, _, _) ← BitmapGen.mkCert C.btable.toArray (fun i => (C.gateD (i / 2)).internal) k₀ k
-    (2 * C.gates.length) dl ll lv (C.bpack C.s₀) [([], 0)] (fun _ => []) maxChunks
+    (2 * C.gates.length) dl ll lv (C.bpack C.s₀) [([], 0)] (fun _ => []) maxChunks maxSmall
   return (k, c)
 
 end Circuit

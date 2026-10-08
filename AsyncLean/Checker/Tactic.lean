@@ -765,7 +765,9 @@ def decideBitmap (goal : MVarId) (N : Expr) (p : Option Goal) (K : ℕ := 1)
     | some .livelock => (false, true, false)
     | some .live => (false, false, true)
     | _ => (true, true, true)
-  match net.mkBitmapCert dl ll lv p.isNone maxChunks low with
+  -- a speculative search (with a cost limit) also stops early on sparse sets: 2048 chunks
+  -- of 2 ^ 12 markings are about as many as the memory bound below lets through
+  match net.mkBitmapCert dl ll lv p.isNone maxChunks low (if limit.isSome then 2048 else 0) with
   | .error _ => return false
   | .ok (L, k, c, pR, pD) =>
     if p.isNone && !net.layoutBound L K then return false
@@ -802,7 +804,7 @@ def decideBitmapC (goal : MVarId) (C₀ : Expr) (p : Goal) (maxChunks : ℕ := 1
   let maxChunks := match limit with
     | some lim => min maxChunks (bitmapChunkBound (2 * Cv.gates.length) low lim)
     | none => maxChunks
-  match Cv.mkBitmapCert dl ll lv maxChunks low with
+  match Cv.mkBitmapCert dl ll lv maxChunks low (if limit.isSome then 2048 else 0) with
   | .error _ => return false
   | .ok (k, c) =>
     if let some lim := limit then
@@ -1145,9 +1147,10 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
         match Nv.mkPORCert fuel with
         | .ok (w, t) =>
           -- a large reduced state space: bitmaps may be cheaper (about a millisecond of
-          -- kernel time per reduced marking)
+          -- kernel time per reduced marking; finding a bitmap certificate takes seconds, so
+          -- not below a few thousand)
           let n := t.toList.length
-          if n.toFloat * 0.003 > 2.0 then
+          if n > 2000 then
             if ← decideBitmap goal N (some p) 1 8192 20 (some (n.toFloat * 0.003)) then return
           let lit := FastExpr.pnetE Nv
           closeWithCheckLitM goal (FastExpr.checkPORE lit Nv w t)
@@ -1176,7 +1179,8 @@ def asyncDecide (fuel : ℕ) (cap : Option ℕ := none) : TacticM Unit := do
           | .error _ => none
         -- a reduced marking costs about 10 ms of kernel time with the cycle proviso and the
         -- traces of liveness
-        if porcSize.all (fun n => n.toFloat * 0.01 > 1.0) && Nv.bitmapDense then
+        -- (finding a bitmap certificate takes seconds, so not below a few thousand)
+        if porcSize.all (fun n => n > 2000) && Nv.bitmapDense then
           let lim := (porcSize.map fun n => n.toFloat * 0.01).getD 120.0
           if ← decideBitmap goal N (some p) 1 8192 20 (some lim) then return
         if let .ok (w, t, hubs) := porc then
