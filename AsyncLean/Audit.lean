@@ -30,6 +30,7 @@ import AsyncLean.Routing.Optimal
 import AsyncLean.Routing.Embed
 import AsyncLean.Routing.Source
 import AsyncLean.Routing.Reduce
+import AsyncLean.Routing.Graph
 import AsyncLean.AxiomAudit
 
 /-!
@@ -88,6 +89,9 @@ open LTS
   Network.EscapeSel.sourceSel Network.movable_of_source Network.deadlockFreeWith_of_source
   Network.starvationFreeWith_of_source Network.mem_tieredSel Network.tieredSel_conserving
   Network.wf_dep_of_reduction
+  GraphData.correct GraphData.correct_of_escapeSel GraphData.correct_of_sourceSel
+  GraphData.route_adj GraphData.adaptive_ne_nil GraphData.exists_correct GraphData.escRank_lt
+  GraphData.rank_lt GraphData.closed
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB

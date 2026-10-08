@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+* **Safe adaptive routing on every topology** (`Routing/Graph.lean`). For every finite connected
+  undirected graph (`GraphData`: vertex list, symmetric neighbour lists, a distance estimate and
+  a rooted spanning tree, which `GraphData.ofConnected` builds for any connected graph), minimal
+  adaptive routing on virtual channel 1 with an absorbing tree-routing escape on virtual channel
+  0 is deadlock, livelock and starvation free (`GraphData.correct`), also under every selection
+  satisfying `EscapeSel` or `SourceSel` (`correct_of_escapeSel`, `correct_of_sourceSel`);
+  `GraphData.exists_correct` states it for every connected graph. Instances
+  (`Examples/GraphRouting.lean`): the torus of every size (`torus_correct`) and the Petersen
+  graph (`petersen_correct`).
+  * `scripts/routing_bounds.py`: the optimal throughput of mesh routing with and without
+    detours (a linear program) and the worst case of XY and O1TURN over all permutations.
+
 * **Any preference is safe** (`Examples/MeshTiered.lean`): Duato's, the west-first and the
   north-last mesh are deadlock, livelock and starvation free under every tiered selection that
   contains the throttled escape tier `Mesh.escTier`, for every size (`duatoTiers_correct`,

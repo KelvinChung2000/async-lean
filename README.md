@@ -731,6 +731,7 @@ The network properties are listed in section 7.
 | `Routing/Embed.lean` | carrying a deadlock of a small network into every network that contains a copy of it |
 | `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
 | `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
+| `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
