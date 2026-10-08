@@ -54,6 +54,7 @@ import AsyncLean.Routing.Embed
 import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
+import AsyncLean.Routing.GraphBudget
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
@@ -80,4 +81,5 @@ import AsyncLean.Examples.MeshMetrics
 import AsyncLean.Examples.MeshTiered
 import AsyncLean.Examples.GraphRouting
 import AsyncLean.Examples.Saturation
+import AsyncLean.Examples.GraphBudget
 import AsyncLean.Tutorial

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+* **Bounded returns from the escape layer** (`Routing/GraphBudget.lean`,
+  `Examples/GraphBudget.lean`). The absorbing escape of `Routing/Graph.lean` costs throughput,
+  and unbounded returns can livelock. A packet header now carries a return budget `B`: from an
+  escape channel a packet may take an adaptive hop while its budget lasts, spending one unit.
+  For every finite connected graph and every `B` the network is deadlock free, livelock free
+  (at most `B * rankBound + (2 * height + 1) * (dist + 1)` hops), starvation free and delivers
+  under sustained load (`budget_correct`, `budget_correct_of_sourceSel`, `budget_underLoad`,
+  `exists_budget_correct`); `B = 0` is the absorbing network. Torus instances for every size.
+
 * **Delivery under sustained load** (`Routing/Saturation.lean`, `Examples/Saturation.lean`).
   Strong fairness over whole transitions makes a run of a finite deadlock- and livelock-free
   network revisit the empty configuration, so `StarvationFree` says nothing about a saturated

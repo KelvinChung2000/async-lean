@@ -736,6 +736,7 @@ The network properties are listed in section 7.
 | `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
 | `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
+| `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape layer: a packet may leave the escape layer `B` times |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
