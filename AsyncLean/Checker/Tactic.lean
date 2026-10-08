@@ -672,8 +672,11 @@ into `K` key ranges of equal size, and each range is its own kernel goal. -/
 def closeFastParts (goal : MVarId) (N : Expr) (Nv : PNet) (w : ℕ) (c : Fast.Cert)
     (dl ll lv : Bool) (thm : Name) (K : ℕ) : TacticM Bool := do
   let nm ← mkAuxDeclName `_fastCert
-  addDecl (.defnDecl { name := nm, levelParams := [], type := mkConst ``Fast.Cert,
-    value := FastExpr.certE c, hints := .opaque, safety := .safe })
+  let certT := mkConst ``Fast.Cert
+  let dv : DefinitionVal :=
+    { name := nm, levelParams := [], type := certT, value := FastExpr.certE c,
+      hints := .opaque, safety := .safe }
+  addDecl (.defnDecl dv)
   let cE := mkConst nm
   let B := 2 ^ w
   let tb := FastExpr.listE (mkConst ``PNet.FEntry) ((Nv.ftable w).map FastExpr.fentryE)

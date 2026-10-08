@@ -432,14 +432,17 @@ noncomputable def checkPart (F : ℕ → List (ℕ × ℕ × Bool)) (imask : ℕ
     (inR lo hi x.1)
 
 theorem inR_spec {lo hi n : ℕ} : inR lo hi n = true ↔ lo ≤ n ∧ (hi = 0 ∨ n < hi) := by
+  have hl : Nat.ble lo n = true ↔ lo ≤ n := ⟨Nat.le_of_ble_eq_true, Nat.ble_eq_true_of_le⟩
+  have hb : Nat.beq hi 0 = true ↔ hi = 0 := ⟨Nat.eq_of_beq_eq_true, fun h => h ▸ Nat.beq_refl 0⟩
+  have ht : Nat.blt n hi = true ↔ n < hi := ⟨Nat.le_of_ble_eq_true, Nat.ble_eq_true_of_le⟩
   unfold inR
-  cases h₁ : Nat.ble lo n <;> cases h₂ : Nat.beq hi 0 <;>
-    simp_all [Nat.ble_eq, Nat.beq_eq, Nat.blt_eq]
+  cases h₁ : Nat.ble lo n <;> cases h₂ : Nat.beq hi 0 <;> cases h₃ : Nat.blt n hi <;>
+    simp only [h₁, h₂, h₃, Bool.false_eq_true, false_iff, true_iff] at hl hb ht ⊢ <;> omega
 
 theorem checkPart_split {F : ℕ → List (ℕ × ℕ × Bool)} {imask : ℕ} {dl lv : Bool} {c : Cert}
     {lo hi : ℕ} (m : ℕ) (hm : Nat.beq m 0 = false) (h₁ : checkPart F imask dl lv c lo m = true)
     (h₂ : checkPart F imask dl lv c m hi = true) : checkPart F imask dl lv c lo hi = true := by
-  have hm : m ≠ 0 := by simpa using hm
+  have hm : m ≠ 0 := Nat.ne_of_beq_eq_false hm
   unfold checkPart at *
   rw [ktall_iff] at *
   intro x hx
