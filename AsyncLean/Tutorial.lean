@@ -376,7 +376,9 @@ proofs for dateline rings of every size are in `Examples/Routing.lean`.
 `Examples/OptimalRouting.lean` asks how adaptive a deadlock-free routing function can be: it
 improves Duato's mesh with a turn-model escape layer and proves, with `async_decide`, that the
 result is *maximally adaptive* (`Network.MaximallyAdaptive`): no further hop can be added
-without a deadlock.
+without a deadlock. `Examples/MeshMaximal.lean` proves this for meshes of every size by carrying
+kernel-checked deadlocks of a 3 × 3 window into the large mesh, and `Examples/MeshMetrics.lean`
+finds the optimal routing for each cost: hop count, virtual channels, routing-table size.
 
 In hardware the routing decision is made by the router's routing logic.
 `comb_from_verilog` imports it as a combinational netlist (`Comb`), and an `RtlRouter` says
@@ -398,6 +400,8 @@ gate delays.  `Examples/RTL.lean` does this for the XY routing logic of a 4×4 m
   bit-parallel certificates.
 * `Examples/RTL.lean`: a mesh routed by its Verilog routing logic.
 * `Examples/OptimalRouting.lean`: maximally adaptive deadlock-free routing.
+* `Examples/MeshMaximal.lean`, `Examples/MeshMetrics.lean`: the same for every mesh size, and
+  optimal routing per cost.
 -/
 
 #assert_standard_axioms handshake_correct handshake_safe sharedServer_deadlocks choiceNet_live

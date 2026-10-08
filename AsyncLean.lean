@@ -85,4 +85,6 @@ import AsyncLean.Examples.DuatoWormhole
 import AsyncLean.Examples.RTL
 import AsyncLean.Examples.OptimalRouting
 import AsyncLean.Examples.MeshMaximal
+import AsyncLean.Examples.MeshNorthLast
+import AsyncLean.Examples.MeshMetrics
 import AsyncLean.Tutorial
