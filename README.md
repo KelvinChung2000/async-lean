@@ -488,26 +488,26 @@ Measured end to end (search and kernel check), each goal in its own file, on one
 | 4 handshakes `Correct` (lexicographic measures) | symbolic certificate | 2.1 s |
 
 Tightly coupled designs, `Correct`, against the `async_decide` of the previous release
-(`bench/suite.sh`; end to end, including about 6 s of loading the library; FAIL is out of
-memory):
+(`bench/suite.sh`; end to end, including a few seconds of loading the library, warm caches;
+FAIL is out of memory; the `async_bitmap` times of the last three rows predate checkpoints):
 
 | Goal | markings | previous `async_decide` | `async_decide` | `async_bitmap` |
 |---|---|---|---|---|
-| 8 handshakes | 4⁸ | 27 s | 9.5 s | 7.3 s |
-| 10 handshakes | 4¹⁰ | 127 s | 24 s | 12 s |
-| 12 handshakes | 4¹² | FAIL | FAIL | 128 s |
-| barrier of 10 | 3¹⁰ | 49 s | 14 s | 12 s |
-| barrier of 12 | 3¹² | 335 s | 132 s | 114 s |
-| 30-stage FIFO | | 10 s | 9.1 s | > 600 s |
-| 10 philosophers | | 6.8 s | 6.2 s | 24 s |
-| 12 philosophers, deadlock free | | 8.5 s | 7.4 s | 136 s |
+| 8 handshakes | 4⁸ | 21 s | 8.0 s | 5.3 s |
+| 10 handshakes | 4¹⁰ | 93 s | 11 s | 7.9 s |
+| 12 handshakes | 4¹² | FAIL | 79 s | 76 s |
+| barrier of 10 | 3¹⁰ | 39 s | 10 s | 8.2 s |
+| barrier of 12 | 3¹² | 258 s | 90 s | 87 s |
+| 30-stage FIFO | | 7.5 s | 8.1 s | > 600 s |
+| 10 philosophers | | 4.6 s | 5.2 s | 24 s |
+| 12 philosophers, deadlock free | | 5.9 s | 5.6 s | 136 s |
 
 Bitmaps pay off when the packed markings are dense; on loosely coupled or sparse designs
 (FIFOs, philosophers) partial-order reduction or the state equation stays far cheaper, and
-`async_decide` keeps choosing them: it tries bitmaps only when the reduced state space has
-more than 2000 markings and a sample of the markings is dense once packed. It also refuses
-bitmaps whose kernel check it estimates above 4 GB of memory — twelve handshakes need about
-11 GB — so that goal needs `async_bitmap`.
+`async_decide` keeps choosing them: it tries bitmaps when a quick probe of the reduced state
+space exceeds 3000 markings, or the full one 2000, and a sample of the markings is dense once
+packed. The kernel's memory is bounded by cutting the rounds at checkpoints: twelve
+handshakes peak at 3.4 GB.
 
 ## 9. Using a result in a larger proof
 
@@ -587,7 +587,7 @@ this into a sufficient condition that sees such networks, and `async_decide` fal
 |---|---|
 | `…exceeds the fuel` / `no counterexample found within N states` | raise it: `async_decide (fuel := 1000000)`, or switch to `async_structural`, `async_minimize` or the theory |
 | the kernel check is slow | explicit checking costs a few milliseconds per reachable (or reduced) state; for a state space that is dense once packed try `async_bitmap`, for a large safe net `async_bdd`, and for deadlock freedom `async_structural`. Add `set_option maxHeartbeats 0 in` before the theorem if Lean times out |
-| `async_bitmap` runs out of memory | the kernel keeps every bitmap it computes; use `async_bitmap (low := 16)` for smaller chunks, or prove deadlock freedom and livelock freedom separately |
+| `async_bitmap` runs out of memory | the kernel keeps every bitmap it computes within a declaration; use `async_bitmap (seg := 1)` for one round per checkpoint, `async_bitmap (low := 16)` for smaller chunks, or prove deadlock freedom and livelock freedom separately |
 | `the goal must be stated for the design's own initial state and internal predicate` | state the goal with `N.M₀` and `N.Internal` (or `C.s₀`, `C.Internal`), or use `N.Correct`; for other initial states use the theory |
 | `unsupported goal` | the tactic recognises the goals listed in sections 4–7; unfold your own definitions first, or split a conjunction with `⟨by async_decide, by async_decide⟩` |
 | `POTENTIAL DEADLOCK` for a network | list the escape hop first in `route`, or name escape channels with `async_routing (escape := …)` |
@@ -700,9 +700,9 @@ The network properties are listed in section 7.
   large (tightly synchronised designs, or many internal transitions next to external ones),
   the reduced state space approaches the full one; `async_decide` then turns to bitmaps when
   the packed markings are dense, and for safe nets to symbolic certificates. Bitmaps cost
-  memory as well as time: the kernel keeps every bitmap it computes, about
-  `rounds × transitions × 3` bitmaps (12 GB for the `4^12` markings of twelve handshakes with
-  `Correct`, 2–3 GB below a million markings). Their cost grows with the number of packed
+  memory as well as time: the kernel keeps every bitmap it computes within a declaration,
+  about `transitions × 3` bitmaps per round, so the rounds are cut at checkpoints checked in
+  separate declarations (3.4 GB for the `4^12` markings of twelve handshakes with `Correct`). Their cost grows with the number of packed
   positions, not of markings, so they do not suit sparse state spaces (dining philosophers,
   whose fork places repeat what the philosophers' states say). Symbolic certificates cost
   about a millisecond of kernel time per pair of diagram nodes walked (a few hundred to a few thousand pairs on the families of section 8), and
