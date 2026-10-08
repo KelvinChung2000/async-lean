@@ -31,6 +31,7 @@ import AsyncLean.Routing.Embed
 import AsyncLean.Routing.Source
 import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
+import AsyncLean.Routing.Saturation
 import AsyncLean.AxiomAudit
 
 /-!
@@ -92,6 +93,12 @@ open LTS
   GraphData.correct GraphData.correct_of_escapeSel GraphData.correct_of_sourceSel
   GraphData.route_adj GraphData.adaptive_ne_nil GraphData.exists_correct GraphData.escRank_lt
   GraphData.rank_lt GraphData.closed
+  Run.stronglyFairFor_of_stronglyFair Network.channelFair_of_stronglyFair Network.leaves_free
+  Network.exists_leave_of_channelFair Network.delivered_of_leave_rank
+  Network.starvationFreeUnderLoad_of_source Network.starvationFreeUnderLoad_of_escape
+  Network.starvationFreeWith_of_underLoad Network.Saturated.run_channelFair
+  Network.Saturated.run_infOften_inject Network.Saturated.run_ne_empty
+  Network.Saturated.not_stronglyFair Network.Saturated.run_delivered
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB

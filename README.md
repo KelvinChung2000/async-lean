@@ -303,6 +303,7 @@ permitted channel is free.
 |---|---|
 | `N.Correct` | `N.DeadlockFree ∧ N.LivelockFree`: whenever the network holds a packet some packet can move, and there is no infinite run without new injections |
 | `N.StarvationFree` | along every strongly fair run, every packet is eventually delivered. Strong fairness is demanding here: with finitely many configurations it makes a run of a deadlock- and livelock-free network revisit every reachable configuration, the empty one included, so this is no guarantee for a network kept saturated |
+| `N.StarvationFreeUnderLoad sel src` | along every **channel-fair** run (each channel that is offered a way out infinitely often gets its packet out infinitely often), every packet outside `src` is eventually delivered, **with injections never stopping**; channel fairness does not force the network to drain (`Routing/Saturation.lean`) |
 | `N.WormholeCorrect` | deadlock and livelock freedom under **wormhole switching** (a packet spans several channels), for packets of every length; also `N.WormholeDeadlockFree`, `N.WormholeLivelockFree` |
 
 ### Ask, prove, refute
@@ -735,6 +736,7 @@ The network properties are listed in section 7.
 | `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
 | `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
+| `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |

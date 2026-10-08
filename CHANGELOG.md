@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+* **Delivery under sustained load** (`Routing/Saturation.lean`, `Examples/Saturation.lean`).
+  Strong fairness over whole transitions makes a run of a finite deadlock- and livelock-free
+  network revisit the empty configuration, so `StarvationFree` says nothing about a saturated
+  network. `ChannelFair` asks only that a channel offered a way out infinitely often gets its
+  packet out infinitely often; it is implied by strong fairness and allows runs that never
+  drain (`Network.Saturated`: a channel-fair run that injects forever and is never empty
+  again). Under it, with injections never stopping, every packet outside the throttled
+  sources is delivered (`Network.starvationFreeUnderLoad_of_source`), every packet under
+  selections that never refuse a free escape hop (`starvationFreeUnderLoad_of_escape`).
+  Instances for every size: Duato's, the west-first and the north-last mesh under every tiered
+  selection containing the throttled escape tier and under every valid selection, and every
+  finite connected graph (`GraphData.underLoad`, `GraphData.exists_underLoad`). Packets held in
+  a throttled injection channel can starve under saturation and are not covered.
+
 * **Safe adaptive routing on every topology** (`Routing/Graph.lean`). For every finite connected
   undirected graph (`GraphData`: vertex list, symmetric neighbour lists, a distance estimate and
   a rooted spanning tree, which `GraphData.ofConnected` builds for any connected graph), minimal
