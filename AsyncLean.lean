@@ -53,6 +53,7 @@ import AsyncLean.Circuit.Step
 import AsyncLean.Auto.Structural
 import AsyncLean.Routing.Basic
 import AsyncLean.Routing.Fairness
+import AsyncLean.Routing.Source
 import AsyncLean.Routing.Check
 import AsyncLean.Routing.Wormhole
 import AsyncLean.Routing.WormholeCheck
@@ -87,4 +88,5 @@ import AsyncLean.Examples.OptimalRouting
 import AsyncLean.Examples.MeshMaximal
 import AsyncLean.Examples.MeshNorthLast
 import AsyncLean.Examples.MeshMetrics
+import AsyncLean.Examples.MeshTiered
 import AsyncLean.Tutorial

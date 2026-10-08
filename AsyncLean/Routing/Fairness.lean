@@ -137,7 +137,8 @@ livelock-free network with finitely many reachable configurations, when a rankin
 decreases on every hop. -/
 theorem delivered_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal) (rk : C → P → ℕ)
     (hrk : ∀ c p q, legal c p → N.arrived c p = false → q ∈ N.route c p → rk q.1 q.2 < rk c p)
-    {sel : Selection C P} (hsel : N.ValidSel sel) (hD : N.DeadlockFreeWith sel)
+    {sel : Selection C P} (hsub : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p)
+    (hD : N.DeadlockFreeWith sel)
     (hL : N.LivelockFreeWith sel) (hfin : {f | (N.ltsWith sel).Reachable empty f}.Finite)
     (r : (N.ltsWith sel).Run empty) (hfair : r.StronglyFair) :
     ∀ n c p, r.st n c = some p → N.Delivered r n c := by
@@ -178,20 +179,21 @@ theorem delivered_of_ranking {legal : C → P → Prop} (hcl : N.Closed legal) (
       | hop hp' harr hq _ =>
         rw [hpm, Option.some.injEq] at hp'
         subst hp'
-        have hl := N.legal_of_reachable hcl hsel (r.reachable m) c _ hpm
-        refine ih _ (hk ▸ hrk c _ (c', p') hl harr (hsel.sub _ _ _ _ hq)) (m + 1) c' p' rfl ?_
+        have hl := N.legal_of_reachable_sub hcl hsub (r.reachable m) c _ hpm
+        refine ih _ (hk ▸ hrk c _ (c', p') hl harr (hsub _ _ _ _ hq)) (m + 1) c' p' rfl ?_
         rw [hs']
         simp
 
 /-- With finitely many legal pairs there are finitely many reachable configurations. -/
 theorem reachable_finite {legal : C → P → Prop} (hcl : N.Closed legal)
-    (hfin : {q : C × P | legal q.1 q.2}.Finite) {sel : Selection C P} (hsel : N.ValidSel sel) :
+    (hfin : {q : C × P | legal q.1 q.2}.Finite) {sel : Selection C P}
+    (hsub : ∀ f c p q, q ∈ sel f c p → q ∈ N.route c p) :
     {f | (N.ltsWith sel).Reachable empty f}.Finite := by
   let graph : Config C P → Set (C × P) := fun f => {q | f q.1 = some q.2}
   refine Set.Finite.of_finite_image (f := graph) ?_ ?_
   · refine hfin.finite_subsets.subset ?_
     rintro _ ⟨f, hf, rfl⟩ q hq
-    exact N.legal_of_reachable hcl hsel hf q.1 q.2 hq
+    exact N.legal_of_reachable_sub hcl hsub hf q.1 q.2 hq
   · intro f _ g _ hfg
     funext c
     cases hf : f c with
@@ -223,10 +225,10 @@ theorem starvationFree_of_escape_ranking {legal : C → P → Prop} (hcl : N.Clo
   obtain ⟨p, hp⟩ := Option.ne_none_iff_exists'.1 hc
   have hchan : {c | ∃ p, legal c p}.Finite :=
     (hfin.image Prod.fst).subset fun c ⟨p, hl⟩ => ⟨(c, p), hl, rfl⟩
-  exact delivered_of_ranking hcl rk hrk hsel
+  exact delivered_of_ranking hcl rk hrk hsel.sub
     (N.deadlockFree_of_escape hcl R₁ hsub hconn hwf sel hsel)
     (N.livelockFree_of_ranking hcl hchan rk hrk sel hsel)
-    (reachable_finite hcl hfin hsel) r hfair n c p hp
+    (reachable_finite hcl hfin hsel.sub) r hfair n c p hp
 
 end Network
 
