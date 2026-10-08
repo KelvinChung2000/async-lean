@@ -469,7 +469,10 @@ escape hops, so Duato's condition for selections fails; `Network.deadlockFreeWit
 their sources as long as a source lets its packet go once the rest of the network is empty.
 Duato's mesh, the west-first and the north-last mesh are deadlock, livelock and starvation free
 under `tieredMesh` for every size and every `g ≤ 8` (`duatoTiered_correct`,
-`westFirstTiered_correct`, `northLastTiered_correct`).
+`westFirstTiered_correct`, `northLastTiered_correct`). Only the throttled escape tier
+(`Mesh.escTier`) matters for this: the same holds for **every** tier list containing it,
+whatever the other tiers prefer and whatever they read of the network (`duatoTiers_correct`,
+`westFirstTiers_correct`, `northLastTiers_correct`), so a new preference costs no new proof.
 
 Peak accepted throughput (packets per node and cycle, the largest over a sweep of offered
 loads; `python3 scripts/routing_sim.py --bench` prints the underlying tables):
@@ -492,6 +495,28 @@ uniform: 0.14 at an offered 0.3). On 4 × 4 meshes, which saturate late, the thr
 3 to 5 % against the random selections. No selection among those tried was best on every
 pattern: taking the extra hops of the west-first mesh helps transpose traffic and makes hotspot
 traffic collapse, and bit-complement traffic favours keeping every packet on its XY path.
+
+**What is left, and why.** `scripts/routing_experiments.py` tries further selections, all within
+the proved family (8 × 8 mesh, peak over a load sweep, mean of 2 seeds):
+
+| 8 × 8 mesh | uniform | transpose | shuffle | bit reversal | hotspot | bit complement |
+|---|---|---|---|---|---|---|
+| best existing scheme | 0.492 | **0.447** (west-first) | 0.524 | 0.345 | 0.373 | **0.298** (XY on both) |
+| `tieredMesh` | 0.506 | 0.399 | 0.527 | 0.374 | **0.386** | 0.265 |
+| ... with the west-first hops last | 0.507 | 0.429 | 0.543 | 0.369 | 0.379 | 0.250 |
+| global view (least occupied path) | **0.508** | 0.402 | 0.540 | 0.376 | 0.382 | 0.263 |
+| sources learning their mode | 0.495 | 0.418 | **0.546** | **0.399** | 0.374 | 0.249 |
+| controller switching modes | 0.506 | 0.410 | 0.531 | 0.357 | 0.378 | 0.282 |
+| two-phase XY (via a random node) | 0.448 | 0.330 | 0.449 | 0.260 | 0.327 | 0.235 |
+
+Seeing the whole network does not help (the global-view row matches `tieredMesh`), so the gaps
+are not for lack of information. Under bit-complement traffic every packet crosses both
+bisections; XY on both virtual channels pushes about 0.6 packets per cycle through each
+bisection channel, which is what a saturated chain of one-packet channels carries in this model
+(0.50 to 0.57), so it is at the limit and can be matched but not beaten, and every deviation
+from XY loses there. Transpose traffic needs the deviations and no throttling. Rules that trade
+between the two (waiting before deviating, choosing the mode by distance, a controller
+switching modes) move along that trade-off without reaching both ends.
 
 ## 8. Which tactic when?
 
@@ -705,6 +730,7 @@ The network properties are listed in section 7.
 | `Routing/Optimal.lean` | comparing routing functions by adaptivity, maximally adaptive routing, refutations for intervals of routing functions |
 | `Routing/Embed.lean` | carrying a deadlock of a small network into every network that contains a copy of it |
 | `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
+| `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |

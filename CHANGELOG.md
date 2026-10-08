@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+* **Any preference is safe** (`Examples/MeshTiered.lean`): Duato's, the west-first and the
+  north-last mesh are deadlock, livelock and starvation free under every tiered selection that
+  contains the throttled escape tier `Mesh.escTier`, for every size (`duatoTiers_correct`,
+  `westFirstTiers_correct`, `northLastTiers_correct`); `tieredMesh` is one instance.
+  * `Routing/Reduce.lean`: `Network.wf_dep_of_reduction`, acyclic channel dependencies transfer
+    along any map of channels that sends dependencies to chains of dependencies.
+  * `scripts/routing_experiments.py`: a global-view selection, sources learning their mode, a
+    controller switching modes, two-phase XY, patience and distance rules. None beats every
+    existing scheme on every pattern; under bit-complement traffic XY on both virtual channels is
+    at the bisection limit of the model.
+
 * **A selection that performs, proved safe** (`Examples/MeshTiered.lean`). `tieredMesh` offers a
   packet its dimension-order hop (XY on virtual channel 0, YX on virtual channel 1), then the
   escape hop, then virtual channel 1, and throttles the sources: a packet leaves its injection

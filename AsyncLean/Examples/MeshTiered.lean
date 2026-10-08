@@ -47,6 +47,9 @@ packet go once the rest of the network is empty.  So, for every mesh size and ev
   at their sources too).
 * `westFirstTiered_correct k g`, `northLastTiered_correct k g` : the same on the maximally
   adaptive meshes.
+* `duatoTiers_correct`, `westFirstTiers_correct`, `northLastTiers_correct` : the same for
+  **every** tier list containing the throttled escape tier `escTier k g`; the other tiers may
+  prefer any permitted hops and read the whole configuration.
 -/
 
 namespace AsyncLean.Examples
@@ -70,13 +73,22 @@ least `g` of its 8 outgoing channels free. -/
 def sourceOpen (k g : ℕ) (f : Config ℕ ℕ) (c : ℕ) (q : ℕ × ℕ) : Bool :=
   dir c != 4 || decide (g ≤ freeOut f (head k q.1))
 
+/-- The throttled escape tier: the XY hop on virtual channel 0, from a source only towards a
+router with at least `g` free outgoing channels.  Every tier list containing it is safe
+(`tieredSel_sourceSel`), whatever the other tiers prefer. -/
+def escTier (k g : ℕ) : Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool :=
+  fun f c d q => sourceOpen k g f c q && q.1 == ch (head k c) (xy k (head k c) d) 0
+
 /-- The tiers: the preferred hop (from an injection channel: either dimension order), the escape
 hop, then any productive hop on virtual channel 1. -/
 def meshTiers (k g : ℕ) : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool) :=
   [fun f c d q => sourceOpen k g f c q &&
       (q.1 == prefCh k c d || (dir c == 4 && q.1 == ch (head k c) (xy k (head k c) d) 0)),
-   fun f c d q => sourceOpen k g f c q && q.1 == ch (head k c) (xy k (head k c) d) 0,
+   escTier k g,
    fun f c _ q => sourceOpen k g f c q && q.1 % 2 == 1]
+
+theorem escTier_mem_meshTiers (k g : ℕ) : escTier k g ∈ meshTiers k g :=
+  List.mem_cons_of_mem _ List.mem_cons_self
 
 end Mesh
 
@@ -109,38 +121,42 @@ theorem esc_not_source {k c d : ℕ} {q : ℕ × ℕ} (hq : q ∈ xyEscape k c d
   rw [dir_ch (by omega) (by omega)]
   omega
 
-/-- The tiered selection satisfies Duato's condition with throttled sources on every network
-whose permitted hops include the XY escape hop, for every throttling threshold up to 8. -/
+/-- **Every tier list containing the throttled escape tier** gives a selection satisfying
+Duato's condition with throttled sources, on every network whose permitted hops include the XY
+escape hop, for every throttling threshold up to 8.  The other tiers are arbitrary: they may
+prefer any hops, in any order, and read the whole configuration. -/
 theorem tieredSel_sourceSel {k : ℕ} (N : Network ℕ ℕ)
-    (hesc : ∀ c d, (ch (head k c) (xy k (head k c) d) 0, d) ∈ N.route c d) {g : ℕ} (hg : g ≤ 8) :
-    N.SourceSel (xyEscape k) (fun c => dir c = 4) (N.tieredSel (meshTiers k g)) where
+    (hesc : ∀ c d, (ch (head k c) (xy k (head k c) d) 0, d) ∈ N.route c d) {g : ℕ} (hg : g ≤ 8)
+    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
+    N.SourceSel (xyEscape k) (fun c => dir c = 4) (N.tieredSel tiers) where
   sub _ _ _ _ h := (N.mem_tieredSel h).1
   conserving f c d hs _ := by
     rintro ⟨q, hq, hfree⟩
     simp only [xyEscape, List.mem_singleton] at hq
     subst hq
-    exact N.tieredSel_conserving (List.mem_cons_of_mem _ List.mem_cons_self) (hesc c d) hfree
-      (by simp [sourceOpen, hs])
+    exact N.tieredSel_conserving ht (hesc c d) hfree (by simp [escTier, sourceOpen, hs])
   source f c d _ _ hempty := by
     rintro ⟨q, hq, hfree⟩
     simp only [xyEscape, List.mem_singleton] at hq
     subst hq
-    exact N.tieredSel_conserving (List.mem_cons_of_mem _ List.mem_cons_self) (hesc c d) hfree
-      (by simp [sourceOpen, freeOut_eq hempty, hg])
+    exact N.tieredSel_conserving ht (hesc c d) hfree
+      (by simp [escTier, sourceOpen, freeOut_eq hempty, hg])
 
 theorem tiered_sourceSel (turn : ℕ → ℕ → ℕ → List ℕ) (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
     (turnDuatoMesh turn k).SourceSel (xyEscape k) (fun c => dir c = 4) (tieredMesh turn k g) :=
-  tieredSel_sourceSel _ (fun _ _ => by simp [turnDuatoMesh]) hg
+  tieredSel_sourceSel _ (fun _ _ => by simp [turnDuatoMesh]) hg (escTier_mem_meshTiers k g)
 
 end Mesh
 
-/-- **The west-first mesh of every size under the tiered, source-throttled selection** is
-deadlock free, livelock free and starvation free. -/
-theorem westFirstTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
-    (westFirstMesh k).DeadlockFreeWith (tieredMesh westFirst k g) ∧
-      (westFirstMesh k).LivelockFreeWith (tieredMesh westFirst k g) ∧
-      (westFirstMesh k).StarvationFreeWith (tieredMesh westFirst k g) :=
-  have hsel := tiered_sourceSel westFirst k hg
+/-- **The west-first mesh of every size under every tiered selection containing the throttled
+escape tier** is deadlock free, livelock free and starvation free. -/
+theorem westFirstTiers_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
+    (westFirstMesh k).DeadlockFreeWith ((westFirstMesh k).tieredSel tiers) ∧
+      (westFirstMesh k).LivelockFreeWith ((westFirstMesh k).tieredSel tiers) ∧
+      (westFirstMesh k).StarvationFreeWith ((westFirstMesh k).tieredSel tiers) :=
+  have hsel := tieredSel_sourceSel (westFirstMesh k) (k := k)
+    (fun _ _ => by simp [westFirstMesh, turnDuatoMesh]) hg ht
   have hR : ∀ c d q, wfLegal k c d → (westFirstMesh k).arrived c d = false →
       q ∈ xyEscape k c d → ¬ dir q.1 = 4 := fun _ _ _ _ _ hq => esc_not_source hq
   have hrk : ∀ c d q, wfLegal k c d → (westFirstMesh k).arrived c d = false →
@@ -153,13 +169,15 @@ theorem westFirstTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
     (westFirstMesh k).starvationFreeWith_of_source (wf_closed k) (wf_pairs_finite k) (xyEscape k)
       wf_esc_conn (wf_wf k) hR (wfDist k) hrk hsel⟩
 
-/-- **The north-last mesh of every size under the tiered, source-throttled selection** is
-deadlock free, livelock free and starvation free. -/
-theorem northLastTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
-    (northLastMesh k).DeadlockFreeWith (tieredMesh northLast k g) ∧
-      (northLastMesh k).LivelockFreeWith (tieredMesh northLast k g) ∧
-      (northLastMesh k).StarvationFreeWith (tieredMesh northLast k g) :=
-  have hsel := tiered_sourceSel northLast k hg
+/-- **The north-last mesh of every size under every tiered selection containing the throttled
+escape tier** is deadlock free, livelock free and starvation free. -/
+theorem northLastTiers_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
+    (northLastMesh k).DeadlockFreeWith ((northLastMesh k).tieredSel tiers) ∧
+      (northLastMesh k).LivelockFreeWith ((northLastMesh k).tieredSel tiers) ∧
+      (northLastMesh k).StarvationFreeWith ((northLastMesh k).tieredSel tiers) :=
+  have hsel := tieredSel_sourceSel (northLastMesh k) (k := k)
+    (fun _ _ => by simp [northLastMesh, turnDuatoMesh]) hg ht
   have hR : ∀ c d q, nlLegal k c d → (northLastMesh k).arrived c d = false →
       q ∈ xyEscape k c d → ¬ dir q.1 = 4 := fun _ _ _ _ _ hq => esc_not_source hq
   ⟨(northLastMesh k).deadlockFreeWith_of_source (nl_closed k) (xyEscape k) nl_esc_conn (nl_wf k)
@@ -170,15 +188,15 @@ theorem northLastTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
       (xyEscape k) nl_esc_conn (nl_wf k) hR (meshDist k) (fun _ _ _ hl ha hq => nl_dist hl ha hq)
       hsel⟩
 
-/-- The tiered selection only takes hops of Duato's mesh (the preferred, escape and virtual
-channel 1 hops), so it can run on Duato's mesh itself: **Duato's mesh of every size under the
-tiered, source-throttled selection** is deadlock free, livelock free and starvation free. -/
-theorem duatoTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
-    (duatoMesh k).DeadlockFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) ∧
-      (duatoMesh k).LivelockFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) ∧
-      (duatoMesh k).StarvationFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) :=
+/-- **Duato's mesh of every size under every tiered selection containing the throttled escape
+tier** is deadlock free, livelock free and starvation free. -/
+theorem duatoTiers_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
+    (duatoMesh k).DeadlockFreeWith ((duatoMesh k).tieredSel tiers) ∧
+      (duatoMesh k).LivelockFreeWith ((duatoMesh k).tieredSel tiers) ∧
+      (duatoMesh k).StarvationFreeWith ((duatoMesh k).tieredSel tiers) :=
   have ext := duatoMesh_extends westFirst k
-  have hsel := tieredSel_sourceSel (duatoMesh k) (k := k) (fun _ _ => by simp [duatoMesh]) hg
+  have hsel := tieredSel_sourceSel (duatoMesh k) (k := k) (fun _ _ => by simp [duatoMesh]) hg ht
   have hcl : (duatoMesh k).Closed (wfLegal k) :=
     ⟨(wf_closed k).inject, fun c d q hl ha hq => (wf_closed k).route c d q hl ha
       (ext.route c d q ha hq)⟩
@@ -195,6 +213,32 @@ theorem duatoTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
     (duatoMesh k).starvationFreeWith_of_source hcl (wf_pairs_finite k) (xyEscape k) hconn hwf hR
       (wfDist k) hrk hsel⟩
 
+/-- **The west-first mesh of every size under the tiered, source-throttled selection** is
+deadlock free, livelock free and starvation free. -/
+theorem westFirstTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
+    (westFirstMesh k).DeadlockFreeWith (tieredMesh westFirst k g) ∧
+      (westFirstMesh k).LivelockFreeWith (tieredMesh westFirst k g) ∧
+      (westFirstMesh k).StarvationFreeWith (tieredMesh westFirst k g) :=
+  westFirstTiers_correct k hg (escTier_mem_meshTiers k g)
+
+/-- **The north-last mesh of every size under the tiered, source-throttled selection** is
+deadlock free, livelock free and starvation free. -/
+theorem northLastTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
+    (northLastMesh k).DeadlockFreeWith (tieredMesh northLast k g) ∧
+      (northLastMesh k).LivelockFreeWith (tieredMesh northLast k g) ∧
+      (northLastMesh k).StarvationFreeWith (tieredMesh northLast k g) :=
+  northLastTiers_correct k hg (escTier_mem_meshTiers k g)
+
+/-- The tiered selection only takes hops of Duato's mesh (the preferred, escape and virtual
+channel 1 hops), so it can run on Duato's mesh itself: **Duato's mesh of every size under the
+tiered, source-throttled selection** is deadlock free, livelock free and starvation free. -/
+theorem duatoTiered_correct (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
+    (duatoMesh k).DeadlockFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) ∧
+      (duatoMesh k).LivelockFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) ∧
+      (duatoMesh k).StarvationFreeWith ((duatoMesh k).tieredSel (meshTiers k g)) :=
+  duatoTiers_correct k hg (escTier_mem_meshTiers k g)
+
+#assert_standard_axioms duatoTiers_correct westFirstTiers_correct northLastTiers_correct
 #assert_standard_axioms duatoTiered_correct westFirstTiered_correct northLastTiered_correct Mesh.tiered_sourceSel
 
 end AsyncLean.Examples

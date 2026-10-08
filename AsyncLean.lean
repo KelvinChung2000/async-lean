@@ -51,6 +51,7 @@ import AsyncLean.Routing.Wormhole
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Routing.Optimal
 import AsyncLean.Routing.Embed
+import AsyncLean.Routing.Reduce
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
