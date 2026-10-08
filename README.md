@@ -396,14 +396,43 @@ example : ¬ (duatoMesh 3).MaximallyAdaptive (minimalHops 3) := duatoMesh_not_ma
 -- for every mesh size, also under wormhole switching, and every packet takes a shortest path.
 example (k : ℕ) : (westFirstMesh k).Correct := westFirstMesh_correct k
 example (k : ℕ) : (westFirstMesh k).WormholeCorrect := westFirstMesh_wormholeCorrect k
--- After that, no productive hop can be added without a deadlock.
-example : (westFirstMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
-example : (westFirstMesh 4).MaximallyAdaptive (minimalHops 4) := by async_decide
-example : (northLastMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide
+-- After that, no productive hop can be added without a deadlock, on any mesh.
+example (k : ℕ) : (westFirstMesh k).MaximallyAdaptive (minimalHops k) :=
+  westFirstMesh_maximal_all k
+example (k : ℕ) : (northLastMesh k).MaximallyAdaptive (minimalHops k) :=
+  northLastMesh_maximal_all k
 -- The two maximal meshes are incomparable: no deadlock-free routing contains both.
-example (N : Network ℕ ℕ) (h₁ : (westFirstMesh 3).Extends N) (h₂ : (northLastMesh 3).Extends N)
-    (hU : N.Within (minimalHops 3)) : ¬ N.DeadlockFree := no_common_improvement N h₁ h₂ hU
+example (k : ℕ) (hk : 2 ≤ k) (N : Network ℕ ℕ) (h₁ : (westFirstMesh k).Extends N)
+    (h₂ : (northLastMesh k).Extends N) (hU : N.Within (minimalHops k)) : ¬ N.DeadlockFree :=
+  no_common_improvement_all hk N h₁ h₂ hU
 ```
+
+On a concrete mesh `async_decide` finds the deadlocks itself
+(`example : (westFirstMesh 3).MaximallyAdaptive (minimalHops 3) := by async_decide`). The proof
+for every size ([`Examples/MeshMaximal.lean`](AsyncLean/Examples/MeshMaximal.lean)) follows a
+packet that took an extra hop: either it keeps going vertically on virtual channel 0, or it
+stops next to a group of 8 or 13 packets that deadlock with it. Eight such groups are checked
+by the kernel in a 3 × 3 mesh and carried into the `k × k` mesh by a generic embedding theorem
+(`Network.not_deadlockFree_of_runGoodB`, [`Routing/Embed.lean`](AsyncLean/Routing/Embed.lean)).
+The north-last mesh is correct for every size as well
+([`Examples/MeshNorthLast.lean`](AsyncLean/Examples/MeshNorthLast.lean)); under wormhole
+switching Duato's condition fails for it, while it holds for the west-first mesh.
+
+**One yardstick per cost.** "Most adaptive" depends on what you allow; fixing the yardstick by
+the cost to minimise gives these results, all for every mesh size
+([`Examples/MeshMetrics.lean`](AsyncLean/Examples/MeshMetrics.lean)):
+
+| Cost | Optimum, proved | Reached by |
+|---|---|---|
+| Hops (zero-load latency) | no routing that moves between neighbours takes fewer hops than the distance (`hops_lower_bound`) | every scheme below takes exactly that many (`family_latency_optimal`) |
+| Buffers: 1 virtual channel | maximally adaptive among minimal routing on one virtual channel (`westFirst1_maximal_all`, `northLast1_maximal_all`); XY is not (`xyMesh_not_maximal_all`) | `westFirst1`, `northLast1`, correct also under wormhole switching |
+| Buffers: 2 virtual channels | maximally adaptive among minimal routing on two virtual channels | `westFirstMesh`, `northLastMesh` |
+| Routing table | at least 4 decisions per inner router for any deadlock-free minimal routing (`table_lower_bound`) | XY: exactly 4 (`xy_table`); turn-model meshes: at most 8 on every size |
+
+No routing function is best for every cost: the table is a set of Pareto points.
+[`scripts/validate_routing.py`](scripts/validate_routing.py) replays every deadlock the
+maximality proofs build on meshes up to 8 × 8 and re-checks acyclicity, hop counts and table
+sizes; it is a cross-check, not part of the proofs.
 
 **More adaptive is not always faster.** In a cycle-level simulation
 ([`scripts/routing_sim.py`](scripts/routing_sim.py), 8 × 8 mesh, not part of the proofs) the
@@ -415,6 +444,9 @@ to refuse a free *escape* hop (`Network.EscapeSel`, `Network.deadlockFreeWith_of
 router may use the extra hops only towards lightly loaded routers (`westFirstGated`, proved
 correct for every size by `westFirstGated_correct`). That policy matches Duato's mesh under
 uniform and bit-complement traffic and has a third of its latency under transpose traffic.
+On one virtual channel there is no such free lunch: west-first beats XY under transpose
+traffic (throughput 0.17 against 0.13 at an offered 0.3) but XY saturates later under uniform
+(0.19 against 0.12) and bit-complement traffic (0.10 against 0.07), with or without gating.
 
 So there is no single most adaptive deadlock-free routing function to look for. There are
 several maximal ones, and `MaximallyAdaptive` certifies that a design is one of them. Wormhole
@@ -634,6 +666,7 @@ The network properties are listed in section 7.
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Routing/Optimal.lean` | comparing routing functions by adaptivity, maximally adaptive routing, refutations for intervals of routing functions |
+| `Routing/Embed.lean` | carrying a deadlock of a small network into every network that contains a copy of it |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -646,7 +679,7 @@ The network properties are listed in section 7.
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost |
 
 ### Scope and limits
 
@@ -677,11 +710,12 @@ The network properties are listed in section 7.
   switching. Duato's condition is proved necessary and sufficient for store-and-forward
   switching; for wormhole switching the sufficient direction is proved.
 * `MaximallyAdaptive` is relative to the hops `U` you allow and compares routing functions
-  only at the pairs a packet can occupy. It is checked for one concrete network at a time: the
-  west-first mesh on 3 × 3 and 4 × 4 (the 4 × 4 search and check take about five minutes), the
-  north-last mesh on 3 × 3. Maximality for every mesh size is not proved; correctness of the
-  west-first mesh is. Adaptivity is not performance: the simulation results above are
-  measurements, not theorems.
+  only at the pairs a packet can occupy. The turn-model meshes are proved maximal for every
+  size for minimal routing on one and on two virtual channels; allowing detours or more
+  virtual channels changes the yardstick, and the maximal routing functions with it. The
+  per-cost optimality results are about hop counts, virtual channels and the number of routing
+  decisions; throughput and latency under load are not theorems, and the simulation results
+  above are measurements.
 
 ### Building the documentation
 

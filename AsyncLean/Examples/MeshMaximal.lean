@@ -221,14 +221,51 @@ theorem route_emb (ht : TurnLocal turn) (hL : ∀ u ∈ L, Fits k ox oy u) {c d 
     simp only [Function.comp_apply, embCh_ch (u := head 3 c) (dr := dr) (vc := 1) (by omega)
       (by omega)]
 
-theorem arrived_emb (hL : ∀ u ∈ L, Fits k ox oy u) {c d : ℕ} (hc : winOK L c = true)
-    (hd : d ∈ L) :
-    (turnDuatoMesh turn k).arrived (embCh k ox oy c) (emb k ox oy d) =
-      (turnDuatoMesh turn 3).arrived c d := by
+theorem td_route_mem (ht : TurnLocal turn) {k c d : ℕ} {q : ℕ × ℕ} (hne : head k c ≠ d)
+    (hq : q ∈ (turnDuatoMesh turn k).route c d) :
+    ∃ dr vc, dr ∈ productive k (head k c) d ∧ vc < 2 ∧ q = (ch (head k c) dr vc, d) := by
+  simp only [turnDuatoMesh, List.mem_cons, List.mem_append, List.mem_map, List.mem_filter] at hq
+  rcases hq with (rfl | ⟨dr, ⟨hdr, -⟩, rfl⟩) | ⟨dr, hdr, rfl⟩
+  · exact ⟨_, 0, xy_mem_productive hne, by omega, rfl⟩
+  · exact ⟨dr, 0, ht.1 _ _ _ _ hdr, by omega, rfl⟩
+  · exact ⟨dr, 1, hdr, by omega, rfl⟩
+
+/-- **A family of mesh routing functions**, one per size, that the window argument applies to:
+packets are injected at every node for every other node and arrive at their destination, every
+hop is productive, and the hops only depend on the position of the destination relative to the
+packet (so a window of a large mesh routes like the 3 × 3 mesh). -/
+structure MeshFamily (Mk : ℕ → Network ℕ ℕ) : Prop where
+  arrived : ∀ k c d, (Mk k).arrived c d = (head k c == d)
+  inject : ∀ k, (Mk k).inject = allPairs (k * k) fun s => ch s 4 0
+  route : ∀ k c d q, head k c ≠ d → q ∈ (Mk k).route c d →
+    ∃ dr vc, dr ∈ productive k (head k c) d ∧ vc < 2 ∧ q = (ch (head k c) dr vc, d)
+  emb : ∀ k ox oy (L : List ℕ), (∀ u ∈ L, Fits k ox oy u) → ∀ c d, winOK L c = true → d ∈ L →
+    (Mk k).route (embCh k ox oy c) (emb k ox oy d) =
+      ((Mk 3).route c d).map fun q => (embCh k ox oy q.1, emb k ox oy q.2)
+
+/-- A yardstick that only depends on the position of the destination relative to the packet. -/
+def HopsLocal (Uk : ℕ → ℕ → ℕ → List (ℕ × ℕ)) : Prop :=
+  ∀ k ox oy (L : List ℕ), (∀ u ∈ L, Fits k ox oy u) → ∀ c d, winOK L c = true → d ∈ L →
+    Uk k (embCh k ox oy c) (emb k ox oy d) =
+      (Uk 3 c d).map fun q => (embCh k ox oy q.1, emb k ox oy q.2)
+
+theorem minimalHops_local : HopsLocal minimalHops := fun _ _ _ _ hL _ _ hc hd =>
+  minimalHops_emb hL hc hd
+
+theorem turnDuato_family (ht : TurnLocal turn) : MeshFamily (turnDuatoMesh turn) where
+  arrived _ _ _ := rfl
+  inject _ := rfl
+  route _ _ _ _ hne hq := td_route_mem ht hne hq
+  emb _ _ _ _ hL _ _ hc hd := route_emb ht hL hc hd
+
+variable {Mk : ℕ → Network ℕ ℕ}
+
+theorem arrived_emb (hF : MeshFamily Mk) (hL : ∀ u ∈ L, Fits k ox oy u) {c d : ℕ}
+    (hc : winOK L c = true) (hd : d ∈ L) :
+    (Mk k).arrived (embCh k ox oy c) (emb k ox oy d) = (Mk 3).arrived c d := by
   have fh := hL _ (winOK_iff.1 hc).2.2
   have fd := hL _ hd
-  show (head k (embCh k ox oy c) == emb k ox oy d) = (head 3 c == d)
-  rw [head_embCh hL hc, Bool.eq_iff_iff, beq_iff_eq, beq_iff_eq]
+  rw [hF.arrived, hF.arrived, head_embCh hL hc, Bool.eq_iff_iff, beq_iff_eq, beq_iff_eq]
   exact ⟨emb_inj fh fd, congrArg _⟩
 
 theorem mem_allPairs {n : ℕ} {f : ℕ → ℕ} {c d : ℕ} :
@@ -239,11 +276,10 @@ theorem mem_allPairs {n : ℕ} {f : ℕ → ℕ} {c d : ℕ} :
   · rintro ⟨s, hs, d', ⟨hd', hne⟩, rfl, rfl⟩; exact ⟨s, hs, hd', hne, rfl⟩
   · rintro ⟨s, hs, hd, hne, rfl⟩; exact ⟨s, hs, d, ⟨hd, hne⟩, rfl, rfl⟩
 
-theorem inject_emb (hL : ∀ u ∈ L, Fits k ox oy u) {c d : ℕ} (hc : winOK L c = true)
-    (hd : d ∈ L) (h : (c, d) ∈ (turnDuatoMesh turn 3).inject) :
-    (embCh k ox oy c, emb k ox oy d) ∈ (turnDuatoMesh turn k).inject := by
-  rw [show (turnDuatoMesh turn 3).inject = allPairs (3 * 3) (fun s => ch s 4 0) from rfl] at h
-  rw [show (turnDuatoMesh turn k).inject = allPairs (k * k) (fun s => ch s 4 0) from rfl]
+theorem inject_emb (hF : MeshFamily Mk) (hL : ∀ u ∈ L, Fits k ox oy u) {c d : ℕ}
+    (hc : winOK L c = true) (hd : d ∈ L) (h : (c, d) ∈ (Mk 3).inject) :
+    (embCh k ox oy c, emb k ox oy d) ∈ (Mk k).inject := by
+  rw [hF.inject] at h ⊢
   obtain ⟨s, -, -, hne, rfl⟩ := mem_allPairs.1 h
   have hn : node (ch s 4 0) = s := node_ch (by omega) (by omega)
   have fs := hL _ (hn ▸ (winOK_iff.1 hc).2.1)
@@ -251,10 +287,13 @@ theorem inject_emb (hL : ∀ u ∈ L, Fits k ox oy u) {c d : ℕ} (hc : winOK L 
   exact mem_allPairs.2 ⟨emb k ox oy s, emb_lt fs, emb_lt fd, fun he => hne (emb_inj fd fs he),
     embCh_ch (u := s) (dr := 4) (vc := 0) (by omega) (by omega)⟩
 
-theorem route_snd {k c d : ℕ} {q : ℕ × ℕ} (hq : q ∈ (turnDuatoMesh turn k).route c d) :
-    q.2 = d := by
-  simp only [turnDuatoMesh, List.mem_cons, List.mem_append, List.mem_map] at hq
-  rcases hq with (rfl | ⟨_, -, rfl⟩) | ⟨_, -, rfl⟩ <;> rfl
+theorem not_arrived (hF : MeshFamily Mk) {k c d : ℕ} : (Mk k).arrived c d = false ↔ head k c ≠ d := by
+  rw [hF.arrived]; simp
+
+theorem route_snd (hF : MeshFamily Mk) {k c d : ℕ} {q : ℕ × ℕ}
+    (ha : (Mk k).arrived c d = false) (hq : q ∈ (Mk k).route c d) : q.2 = d := by
+  obtain ⟨_, _, _, _, rfl⟩ := hF.route k c d q ((not_arrived hF).1 ha) hq
+  rfl
 
 end Window
 
@@ -263,29 +302,31 @@ end Window
 /-- The routing function blocking the packets of a window certificate: the frozen packet
 (header `9`) is blocked when the hops `spec` are; every other packet when all its productive
 hops are. -/
-def winHi (spec : List (ℕ × ℕ)) (c d : ℕ) : List (ℕ × ℕ) :=
-  if d = 9 then spec else minimalHops 3 c d
+def winHi (U : ℕ → ℕ → List (ℕ × ℕ)) (spec : List (ℕ × ℕ)) (c d : ℕ) : List (ℕ × ℕ) :=
+  if d = 9 then spec else U c d
 
 /-- **A window certificate.**  From the configuration with only the frozen packet (header `9`,
 standing for a packet whose destination may lie outside the window) in channel `n`, the run
 `as` of `M` stays in the window `L` and ends in a configuration where every packet is blocked:
-the frozen packet when the hops `spec` are, every other one when all its productive hops are. -/
-def winCertB (M : Network ℕ ℕ) (L : List ℕ) (n : ℕ) (spec : List (ℕ × ℕ))
-    (as : List (Act ℕ ℕ)) : Bool :=
+the frozen packet when the hops `spec` are, every other one when all its hops in the yardstick
+`U` are. -/
+def winCertB (M : Network ℕ ℕ) (U : ℕ → ℕ → List (ℕ × ℕ)) (L : List ℕ) (n : ℕ)
+    (spec : List (ℕ × ℕ)) (as : List (Act ℕ ℕ)) : Bool :=
   !L.contains 9 && winOK L n &&
   match M.runGoodB (winOK L) (winGood L) [(n, 9)] as with
-  | some qs => !qs.isEmpty && (M.withRoute (winHi spec)).stuckB qs &&
+  | some qs => !qs.isEmpty && (M.withRoute (winHi U spec)).stuckB qs &&
       qs.all fun q => q.1 == n && q.2 == 9 || winGood L q.1 q.2
   | none => false
 
 /-- **A window certificate refutes deadlock freedom at any position of any mesh.**  If the
 frozen packet's channel, placed in the `k × k` mesh, can hold a packet for `d` alone, and the
 hops `N` permits it there are among the hops `spec` (placed in the mesh), then every network
-`N` permitting the hops of the turn-model mesh and only minimal hops deadlocks. -/
-theorem not_deadlockFree_of_winCertB {turn : ℕ → ℕ → ℕ → List ℕ} (ht : TurnLocal turn)
-    {k ox oy : ℕ} {N : Network ℕ ℕ} (hext : (turnDuatoMesh turn k).Extends N)
-    (hU : N.Within (minimalHops k)) {L : List ℕ} {n : ℕ} {spec : List (ℕ × ℕ)}
-    {as : List (Act ℕ ℕ)} (hcert : winCertB (turnDuatoMesh turn 3) L n spec as = true)
+`N` permitting the hops of the family and only hops of the yardstick deadlocks. -/
+theorem not_deadlockFree_of_winCertB {Mk : ℕ → Network ℕ ℕ} (hF : MeshFamily Mk)
+    {Uk : ℕ → ℕ → ℕ → List (ℕ × ℕ)} (hUk : HopsLocal Uk)
+    {k ox oy : ℕ} {N : Network ℕ ℕ} (hext : (Mk k).Extends N)
+    (hU : N.Within (Uk k)) {L : List ℕ} {n : ℕ} {spec : List (ℕ × ℕ)}
+    {as : List (Act ℕ ℕ)} (hcert : winCertB (Mk 3) (Uk 3) L n spec as = true)
     (hL : ∀ u ∈ L, Fits k ox oy u) {d : ℕ}
     (hreach : N.lts.Reachable empty (fill [(embCh k ox oy n, d)]))
     (harr : N.arrived (embCh k ox oy n) d = false)
@@ -308,8 +349,8 @@ theorem not_deadlockFree_of_winCertB {turn : ℕ → ℕ → ℕ → List ℕ} (
       · rfl
     have hgood : ∀ c p, winGood L c p = true → winOK L c = true ∧ p ∈ L := fun c p h => by
       simpa [winGood, List.contains_iff_mem] using h
-    refine not_deadlockFree_of_runGoodB (M := turnDuatoMesh turn 3) (N := N) (φ := embCh k ox oy)
-      (ψ := ψ) (winHi spec) ?_ ?_ ?_ ?_ ?_ hrun hne hstuck ?_
+    refine not_deadlockFree_of_runGoodB (M := Mk 3) (N := N) (φ := embCh k ox oy)
+      (ψ := ψ) (winHi (Uk 3) spec) ?_ ?_ ?_ ?_ ?_ hrun hne hstuck ?_
     · intro c₁ c₂ h₁ h₂ he
       have hc₁ := winOK_iff.1 h₁
       have hc₂ := winOK_iff.1 h₂
@@ -319,17 +360,16 @@ theorem not_deadlockFree_of_winCertB {turn : ℕ → ℕ → ℕ → List ℕ} (
     · intro c p hg hcp
       obtain ⟨hc, hp⟩ := hgood c p hg
       rw [hψ p hp, hext.inject]
-      exact inject_emb hL hc hp hcp
+      exact inject_emb hF hL hc hp hcp
     · intro c p c' p' hg hg' harr' hq
       obtain ⟨hc, hp⟩ := hgood c p hg
       obtain ⟨-, hp'⟩ := hgood c' p' hg'
       rw [hψ p hp, hψ p' hp']
-      have ha : (turnDuatoMesh turn k).arrived (embCh k ox oy c) (emb k ox oy p) = false := by
-        rw [arrived_emb hL hc hp]; exact harr'
+      have ha : (Mk k).arrived (embCh k ox oy c) (emb k ox oy p) = false := by
+        rw [arrived_emb hF hL hc hp]; exact harr'
       refine ⟨by rw [hext.arrived]; exact ha, hext.route _ _ _ ha ?_⟩
-      have : p' = p := route_snd hq
-      subst this
-      have h2 := route_emb ht hL hc hp
+      obtain rfl : p' = p := route_snd hF harr' hq
+      have h2 := hF.emb k ox oy L hL c _ hc hp
       have h3 := List.mem_map_of_mem (f := fun q : ℕ × ℕ => (embCh k ox oy q.1, emb k ox oy q.2)) hq
       rw [h2]; exact h3
     · intro q hq
@@ -345,13 +385,13 @@ theorem not_deadlockFree_of_winCertB {turn : ℕ → ℕ → ℕ → List ℕ} (
         simp only [ψ, ite_true, winHi]
         exact ⟨harr, hP⟩
       · obtain ⟨hc, hp⟩ := hgood c p h
-        have ha : (turnDuatoMesh turn k).arrived (embCh k ox oy c) (emb k ox oy p) = false := by
-          rw [arrived_emb hL hc hp]; exact harr'
+        have ha : (Mk k).arrived (embCh k ox oy c) (emb k ox oy p) = false := by
+          rw [arrived_emb hF hL hc hp]; exact harr'
         have hp9 : p ≠ 9 := fun h => h9L (h ▸ hp)
         simp only [hψ p hp, winHi, hp9, ite_false]
         refine ⟨by rw [hext.arrived]; exact ha, fun q hq => ?_⟩
         have hq' := hU _ _ _ (by rw [hext.arrived]; exact ha) hq
-        rw [minimalHops_emb hL hc hp] at hq'
+        rw [hUk k ox oy L hL c p hc hp] at hq'
         obtain ⟨q'', hq'', rfl⟩ := List.mem_map.1 hq'
         exact ⟨q'', hq'', rfl⟩
   · simp at hcert
@@ -402,31 +442,31 @@ def certNEB : List (Act ℕ ℕ) :=
   certNE ++ [.inject 38 7, .hop 38 35 7, .inject 68 4, .hop 68 60 4, .inject 68 4, .hop 68 61 4,
     .inject 78 1, .hop 78 76 1, .inject 78 1, .hop 78 77 1]
 
-theorem wf_certNW : winCertB (westFirstMesh 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true := by
+theorem wf_certNW : winCertB (westFirstMesh 3) (minimalHops 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true := by
   decide +kernel
 
-theorem wf_certNWB : winCertB (westFirstMesh 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
+theorem wf_certNWB : winCertB (westFirstMesh 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
     certNWB = true := by
   decide +kernel
 
-theorem wf_certSW : winCertB (westFirstMesh 3) [0, 1, 3, 4] 46 [(12, 9), (13, 9)] certSW = true := by
+theorem wf_certSW : winCertB (westFirstMesh 3) (minimalHops 3) [0, 1, 3, 4] 46 [(12, 9), (13, 9)] certSW = true := by
   decide +kernel
 
-theorem wf_certSWB : winCertB (westFirstMesh 3) [0, 1, 3, 4, 6, 7] 76 [(42, 9), (43, 9), (47, 9)]
+theorem wf_certSWB : winCertB (westFirstMesh 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 76 [(42, 9), (43, 9), (47, 9)]
     certSWB = true := by
   decide +kernel
 
-theorem nl_certNW : winCertB (northLastMesh 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true := by
+theorem nl_certNW : winCertB (northLastMesh 3) (minimalHops 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true := by
   decide +kernel
 
-theorem nl_certNWB : winCertB (northLastMesh 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
+theorem nl_certNWB : winCertB (northLastMesh 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
     certNWB = true := by
   decide +kernel
 
-theorem nl_certNE : winCertB (northLastMesh 3) [0, 1, 3, 4] 4 [(30, 9), (31, 9)] certNE = true := by
+theorem nl_certNE : winCertB (northLastMesh 3) (minimalHops 3) [0, 1, 3, 4] 4 [(30, 9), (31, 9)] certNE = true := by
   decide +kernel
 
-theorem nl_certNEB : winCertB (northLastMesh 3) [0, 1, 3, 4, 6, 7] 4 [(30, 9), (31, 9), (35, 9)]
+theorem nl_certNEB : winCertB (northLastMesh 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 4 [(30, 9), (31, 9), (35, 9)]
     certNEB = true := by
   decide +kernel
 
@@ -456,33 +496,24 @@ theorem minimalHops_mem {k c d : ℕ} {q : ℕ × ℕ} (hq : q ∈ minimalHops k
   · exact ⟨dr, 0, hdr, by omega, rfl⟩
   · exact ⟨dr, 1, hdr, by omega, rfl⟩
 
-variable {turn : ℕ → ℕ → ℕ → List ℕ}
+variable {Mk : ℕ → Network ℕ ℕ}
 
-theorem td_route_mem (ht : TurnLocal turn) {k c d : ℕ} {q : ℕ × ℕ} (hne : head k c ≠ d)
-    (hq : q ∈ (turnDuatoMesh turn k).route c d) :
-    ∃ dr vc, dr ∈ productive k (head k c) d ∧ vc < 2 ∧ q = (ch (head k c) dr vc, d) := by
-  simp only [turnDuatoMesh, List.mem_cons, List.mem_append, List.mem_map, List.mem_filter] at hq
-  rcases hq with (rfl | ⟨dr, ⟨hdr, -⟩, rfl⟩) | ⟨dr, hdr, rfl⟩
-  · exact ⟨_, 0, xy_mem_productive hne, by omega, rfl⟩
-  · exact ⟨dr, 0, ht.1 _ _ _ _ hdr, by omega, rfl⟩
-  · exact ⟨dr, 1, hdr, by omega, rfl⟩
-
-theorem td_closed (ht : TurnLocal turn) (k : ℕ) : (turnDuatoMesh turn k).Closed (tdLegal k) := by
+theorem td_closed (hF : MeshFamily Mk) (k : ℕ) : (Mk k).Closed (tdLegal k) := by
   constructor
   · intro q hq
+    rw [hF.inject] at hq
     obtain ⟨s, hs, hd, -, he⟩ := mem_allPairs.1 (show (q.1, q.2) ∈ allPairs (k * k) _ from hq)
     exact ⟨hd, s, 4, 0, he, hs, by omega, Or.inl ⟨rfl, rfl⟩⟩
   · intro c d q hl ha hq
-    have hne : head k c ≠ d := by simpa [turnDuatoMesh] using ha
-    obtain ⟨dr, vc, hdr, hvc, rfl⟩ := td_route_mem ht hne hq
+    have hne : head k c ≠ d := (not_arrived hF).1 ha
+    obtain ⟨dr, vc, hdr, hvc, rfl⟩ := hF.route k c d q hne hq
     exact ⟨hl.1, _, dr, vc, rfl, tdLegal_head hl, hvc, Or.inr hdr⟩
 
 /-- A hop leaves the channel the packet is in. -/
-theorem td_ne (ht : TurnLocal turn) {k c d : ℕ} {q : ℕ × ℕ} (hl : tdLegal k c d)
-    (ha : (turnDuatoMesh turn k).arrived c d = false)
-    (hq : q ∈ (turnDuatoMesh turn k).route c d) : q.1 ≠ c := by
-  have hne : head k c ≠ d := by simpa [turnDuatoMesh] using ha
-  obtain ⟨dr, vc, hdr, hvc, rfl⟩ := td_route_mem ht hne hq
+theorem td_ne (hF : MeshFamily Mk) {k c d : ℕ} {q : ℕ × ℕ} (hl : tdLegal k c d)
+    (ha : (Mk k).arrived c d = false) (hq : q ∈ (Mk k).route c d) : q.1 ≠ c := by
+  have hne : head k c ≠ d := (not_arrived hF).1 ha
+  obtain ⟨dr, vc, hdr, hvc, rfl⟩ := hF.route k c d q hne hq
   obtain ⟨hd, u, dr', vc', rfl, hu, hvc', hdr'⟩ := hl
   intro he
   have hdr4 := productive_lt hdr
@@ -514,26 +545,25 @@ theorem reach_hop {N : Network ℕ ℕ} {c d c' : ℕ}
   exact ⟨_, hst⟩
 
 /-- **A packet can occupy alone every pair it can occupy**, in every network permitting the
-hops of a turn-model mesh. -/
-theorem reachable_single (ht : TurnLocal turn) {k : ℕ} {N : Network ℕ ℕ}
-    (hext : (turnDuatoMesh turn k).Extends N) {c d : ℕ}
-    (h : (turnDuatoMesh turn k).PairReachable (c, d)) :
+hops of a mesh family. -/
+theorem reachable_single (hF : MeshFamily Mk) {k : ℕ} {N : Network ℕ ℕ}
+    (hext : (Mk k).Extends N) {c d : ℕ} (h : (Mk k).PairReachable (c, d)) :
     tdLegal k c d ∧ N.lts.Reachable empty (fill [(c, d)]) := by
   obtain ⟨q₀, hq₀, hr⟩ := h
-  suffices ∀ q, Relation.ReflTransGen (turnDuatoMesh turn k).PacketStep q₀ q →
+  suffices ∀ q, Relation.ReflTransGen (Mk k).PacketStep q₀ q →
       tdLegal k q.1 q.2 ∧ N.lts.Reachable empty (fill [q]) from this _ hr
   intro q hq
   induction hq with
   | refl =>
-    refine ⟨(td_closed ht k).inject _ hq₀, Relation.ReflTransGen.single ⟨.inject q₀.1 q₀.2, ?_⟩⟩
+    refine ⟨(td_closed hF k).inject _ hq₀, Relation.ReflTransGen.single ⟨.inject q₀.1 q₀.2, ?_⟩⟩
     exact StepWith.inject (f := empty) (by rw [hext.inject]; exact hq₀) rfl
   | @tail b q' _ hst ih =>
     obtain ⟨hl, hr⟩ := ih
     obtain ⟨ha, hq⟩ := hst
-    refine ⟨(td_closed ht k).route _ _ _ hl ha hq, ?_⟩
-    have hsnd : q'.2 = b.2 := route_snd hq
+    refine ⟨(td_closed hF k).route _ _ _ hl ha hq, ?_⟩
+    have hsnd : q'.2 = b.2 := route_snd hF ha hq
     have he : q' = (q'.1, b.2) := Prod.ext rfl hsnd
-    have hne := td_ne ht hl ha hq
+    have hne := td_ne hF hl ha hq
     rw [he] at hq ⊢
     exact reach_hop (c := b.1) (d := b.2) hr (by rw [hext.arrived]; exact ha)
       (hext.route _ _ _ ha hq) hne
@@ -545,25 +575,24 @@ theorem embCh_val {k ox oy u dr vc : ℕ} (hdr : dr < 5) (hvc : vc < 2) (c : ℕ
     embCh k ox oy c = ch (k * (oy + u / 3) + (ox + u % 3)) dr vc := by
   subst hc; exact embCh_ch hdr hvc
 
-theorem minimal_of {k : ℕ} {N : Network ℕ ℕ} (hext : (turnDuatoMesh turn k).Extends N)
+theorem minimal_of {k : ℕ} {N : Network ℕ ℕ} (hext : (Mk k).Extends N)
     (hU : N.Within (minimalHops k)) {c d : ℕ} {q : ℕ × ℕ}
-    (ha : (turnDuatoMesh turn k).arrived c d = false) (hq : q ∈ N.route c d) :
+    (ha : (Mk k).arrived c d = false) (hq : q ∈ N.route c d) :
     ∃ dr vc, dr ∈ productive k (head k c) d ∧ vc < 2 ∧ q = (ch (head k c) dr vc, d) :=
   minimalHops_mem (hU c d q (by rw [hext.arrived]; exact ha) hq)
 
-theorem arrived_false {k c d : ℕ} (h : head k c ≠ d) :
-    (turnDuatoMesh turn k).arrived c d = false := by
-  simpa [turnDuatoMesh] using h
+theorem arrived_false (hF : MeshFamily Mk) {k c d : ℕ} (h : head k c ≠ d) :
+    (Mk k).arrived c d = false := (not_arrived hF).2 h
 
 /-- **Following a north-bound packet that has to go west.**  A packet for `d` alone on virtual
 channel 0 in the channel from node `(x, y)` north to `(x, y + 1)`, with `d` west of column `x`
 and `r` rows above row `y + 1`: whatever minimal hops `N` adds to the turn-model mesh, the
 packet runs into one of the two window deadlocks. -/
-theorem climbNW (ht : TurnLocal turn)
-    (htop : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true)
-    (hB : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
+theorem climbNW (hF : MeshFamily Mk)
+    (htop : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4] 14 [(42, 9), (43, 9)] certNW = true)
+    (hB : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 14 [(42, 9), (43, 9), (45, 9)]
       certNWB = true)
-    {k : ℕ} {N : Network ℕ ℕ} (hext : (turnDuatoMesh turn k).Extends N)
+    {k : ℕ} {N : Network ℕ ℕ} (hext : (Mk k).Extends N)
     (hU : N.Within (minimalHops k)) :
     ∀ r x y d, d < k * k → d % k < x → x < k → d / k = y + 1 + r →
       N.lts.Reachable empty (fill [(ch (k * y + x) 2 0, d)]) → ¬ N.DeadlockFree := by
@@ -578,12 +607,12 @@ theorem climbNW (ht : TurnLocal turn)
       rw [head_N (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * y + x) 2 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     have e14 : embCh k (x - 1) y 14 = ch (k * y + x) 2 0 := by
       rw [embCh_val (u := 1) (dr := 2) (vc := 0) (by omega) (by omega) 14 rfl]
       congr 1; norm_num; omega
     rw [← e14] at hreach ha
-    refine not_deadlockFree_of_winCertB ht hext hU htop (ox := x - 1) (oy := y) ?_ hreach
+    refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU htop (ox := x - 1) (oy := y) ?_ hreach
       (by rw [hext.arrived]; exact ha) ?_
     · intro u hu
       simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -609,7 +638,7 @@ theorem climbNW (ht : TurnLocal turn)
       rw [head_N (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * y + x) 2 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     by_cases hN0 : (ch (k * (y + 1) + x) 2 0, d) ∈ N.route (ch (k * y + x) 2 0) d
     · -- the packet goes on north on virtual channel 0
       refine ih x (y + 1) d hd hdx hx (by omega) (reach_hop hreach
@@ -620,7 +649,7 @@ theorem climbNW (ht : TurnLocal turn)
         rw [embCh_val (u := 1) (dr := 2) (vc := 0) (by omega) (by omega) 14 rfl]
         congr 1; norm_num; omega
       rw [← e14] at hreach ha
-      refine not_deadlockFree_of_winCertB ht hext hU hB (ox := x - 1) (oy := y) ?_ hreach
+      refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU hB (ox := x - 1) (oy := y) ?_ hreach
         (by rw [hext.arrived]; exact ha) ?_
       · intro u hu
         simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -646,11 +675,11 @@ theorem embCh_at {k ox oy u dr vc X Y : ℕ} (hdr : dr < 5) (hvc : vc < 2) (c : 
   rw [embCh_val hdr hvc c hc, hx, hy]
 
 /-- **Following a south-bound packet that has to go west**: the mirror image of `climbNW`. -/
-theorem climbSW (ht : TurnLocal turn)
-    (htop : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4] 46 [(12, 9), (13, 9)] certSW = true)
-    (hB : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4, 6, 7] 76 [(42, 9), (43, 9), (47, 9)]
+theorem climbSW (hF : MeshFamily Mk)
+    (htop : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4] 46 [(12, 9), (13, 9)] certSW = true)
+    (hB : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 76 [(42, 9), (43, 9), (47, 9)]
       certSWB = true)
-    {k : ℕ} {N : Network ℕ ℕ} (hext : (turnDuatoMesh turn k).Extends N)
+    {k : ℕ} {N : Network ℕ ℕ} (hext : (Mk k).Extends N)
     (hU : N.Within (minimalHops k)) :
     ∀ r x y d, d < k * k → d % k < x → x < k → y + 1 < k → d / k + r = y →
       N.lts.Reachable empty (fill [(ch (k * (y + 1) + x) 3 0, d)]) → ¬ N.DeadlockFree := by
@@ -667,11 +696,11 @@ theorem climbSW (ht : TurnLocal turn)
       rw [head_S (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * (y + 1) + x) 3 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     have e46 : embCh k (x - 1) y 46 = ch (k * (y + 1) + x) 3 0 :=
       embCh_at (u := 4) (by omega) (by omega) 46 rfl (by omega) (by omega)
     rw [← e46] at hreach ha
-    refine not_deadlockFree_of_winCertB ht hext hU htop (ox := x - 1) (oy := y) ?_ hreach
+    refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU htop (ox := x - 1) (oy := y) ?_ hreach
       (by rw [hext.arrived]; exact ha) ?_
     · intro u hu
       simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -701,7 +730,7 @@ theorem climbSW (ht : TurnLocal turn)
       rw [head_S (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * (y + 1) + x) 3 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     by_cases hS0 : (ch (k * y + x) 3 0, d) ∈ N.route (ch (k * (y + 1) + x) 3 0) d
     · -- the packet goes on south on virtual channel 0
       have := ih x (y - 1) d hd hdx hx hy1 hdy1
@@ -712,7 +741,7 @@ theorem climbSW (ht : TurnLocal turn)
     · have e76 : embCh k (x - 1) (y - 1) 76 = ch (k * (y + 1) + x) 3 0 :=
         embCh_at (u := 7) (by omega) (by omega) 76 rfl (by omega) (by omega)
       rw [← e76] at hreach ha
-      refine not_deadlockFree_of_winCertB ht hext hU hB (ox := x - 1) (oy := y - 1) ?_ hreach
+      refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU hB (ox := x - 1) (oy := y - 1) ?_ hreach
         (by rw [hext.arrived]; exact ha) ?_
       · intro u hu
         simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -733,11 +762,11 @@ theorem climbSW (ht : TurnLocal turn)
             (by omega)⟩
 
 /-- **Following a north-bound packet that has to go east**: the mirror image of `climbNW`. -/
-theorem climbNE (ht : TurnLocal turn)
-    (htop : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4] 4 [(30, 9), (31, 9)] certNE = true)
-    (hB : winCertB (turnDuatoMesh turn 3) [0, 1, 3, 4, 6, 7] 4 [(30, 9), (31, 9), (35, 9)]
+theorem climbNE (hF : MeshFamily Mk)
+    (htop : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4] 4 [(30, 9), (31, 9)] certNE = true)
+    (hB : winCertB (Mk 3) (minimalHops 3) [0, 1, 3, 4, 6, 7] 4 [(30, 9), (31, 9), (35, 9)]
       certNEB = true)
-    {k : ℕ} {N : Network ℕ ℕ} (hext : (turnDuatoMesh turn k).Extends N)
+    {k : ℕ} {N : Network ℕ ℕ} (hext : (Mk k).Extends N)
     (hU : N.Within (minimalHops k)) :
     ∀ r x y d, d < k * k → x < d % k → d / k = y + 1 + r →
       N.lts.Reachable empty (fill [(ch (k * y + x) 2 0, d)]) → ¬ N.DeadlockFree := by
@@ -752,11 +781,11 @@ theorem climbNE (ht : TurnLocal turn)
       rw [head_N (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * y + x) 2 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     have e4 : embCh k x y 4 = ch (k * y + x) 2 0 :=
       embCh_at (u := 0) (by omega) (by omega) 4 rfl (by omega) (by omega)
     rw [← e4] at hreach ha
-    refine not_deadlockFree_of_winCertB ht hext hU htop (ox := x) (oy := y) ?_ hreach
+    refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU htop (ox := x) (oy := y) ?_ hreach
       (by rw [hext.arrived]; exact ha) ?_
     · intro u hu
       simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -781,7 +810,7 @@ theorem climbNE (ht : TurnLocal turn)
       rw [head_N (by omega), Nat.mul_add_one]; omega
     have hne : head k (ch (k * y + x) 2 0) ≠ d := by
       rw [hh]; intro he; rw [he] at hC; omega
-    have ha := arrived_false (turn := turn) hne
+    have ha := arrived_false hF hne
     by_cases hN0 : (ch (k * (y + 1) + x) 2 0, d) ∈ N.route (ch (k * y + x) 2 0) d
     · refine ih x (y + 1) d hd hdx (by omega) (reach_hop hreach
         (by rw [hext.arrived]; exact ha) hN0 fun he => ?_)
@@ -790,7 +819,7 @@ theorem climbNE (ht : TurnLocal turn)
     · have e4 : embCh k x y 4 = ch (k * y + x) 2 0 :=
         embCh_at (u := 0) (by omega) (by omega) 4 rfl (by omega) (by omega)
       rw [← e4] at hreach ha
-      refine not_deadlockFree_of_winCertB ht hext hU hB (ox := x) (oy := y) ?_ hreach
+      refine not_deadlockFree_of_winCertB hF minimalHops_local hext hU hB (ox := x) (oy := y) ?_ hreach
         (by rw [hext.arrived]; exact ha) ?_
       · intro u hu
         simp only [List.mem_cons, List.mem_nil_iff, or_false] at hu
@@ -905,7 +934,7 @@ theorem westFirstMesh_maximal_all (k : ℕ) :
     (westFirstMesh k).MaximallyAdaptive (minimalHops k) := by
   intro N hext hU hD c d hreach harr q hq
   by_contra hqN
-  obtain ⟨hl, hr⟩ := reachable_single westFirst_local hext hreach
+  obtain ⟨hl, hr⟩ := reachable_single (turnDuato_family westFirst_local) hext hreach
   obtain ⟨dr, vc, hdr, hvc, rfl⟩ := minimal_of hext hU harr hq
   obtain ⟨rfl, hwest, hdr23⟩ := wf_extra hdr hvc hqN
   have hr' := reach_hop hr (by rw [hext.arrived]; exact harr) hq
@@ -921,11 +950,11 @@ theorem westFirstMesh_maximal_all (k : ℕ) :
   rw [hb] at huy hu
   rcases hdr23 with rfl | rfl
   · rw [← hu] at hr'
-    exact climbNW westFirst_local wf_certNW wf_certNWB hext hU (a - (b + 1)) (u % k) b d hd
+    exact climbNW (turnDuato_family westFirst_local) wf_certNW wf_certNWB hext hU (a - (b + 1)) (u % k) b d hd
       hwest hux (by omega) hr' hD
   · rw [show b = (b - 1) + 1 by omega] at hu
     rw [← hu] at hr'
-    exact climbSW westFirst_local wf_certSW wf_certSWB hext hU (b - 1 - a) (u % k) (b - 1) d hd
+    exact climbSW (turnDuato_family westFirst_local) wf_certSW wf_certSWB hext hU (b - 1 - a) (u % k) (b - 1) d hd
       hwest hux (by omega) (by omega) hr' hD
 
 /-- **The north-last mesh of every size is maximally adaptive** as well. -/
@@ -933,7 +962,7 @@ theorem northLastMesh_maximal_all (k : ℕ) :
     (northLastMesh k).MaximallyAdaptive (minimalHops k) := by
   intro N hext hU hD c d hreach harr q hq
   by_contra hqN
-  obtain ⟨hl, hr⟩ := reachable_single northLast_local hext hreach
+  obtain ⟨hl, hr⟩ := reachable_single (turnDuato_family northLast_local) hext hreach
   obtain ⟨dr, vc, hdr, hvc, rfl⟩ := minimal_of hext hU harr hq
   obtain ⟨rfl, rfl, hside⟩ := nl_extra hdr hvc hqN
   have hr' := reach_hop hr (by rw [hext.arrived]; exact harr) hq
@@ -950,9 +979,9 @@ theorem northLastMesh_maximal_all (k : ℕ) :
   rw [hb] at huy hu
   rw [← hu] at hr'
   rcases Nat.lt_or_gt_of_ne hside with hw | he
-  · exact climbNW northLast_local nl_certNW nl_certNWB hext hU (a - (b + 1)) (u % k) b d hd
+  · exact climbNW (turnDuato_family northLast_local) nl_certNW nl_certNWB hext hU (a - (b + 1)) (u % k) b d hd
       hw hux (by omega) hr' hD
-  · exact climbNE northLast_local nl_certNE nl_certNEB hext hU (a - (b + 1)) (u % k) b d hd
+  · exact climbNE (turnDuato_family northLast_local) nl_certNE nl_certNEB hext hU (a - (b + 1)) (u % k) b d hd
       he (by omega) hr' hD
 
 /-- Maximal under wormhole switching too, for every size. -/

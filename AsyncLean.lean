@@ -71,4 +71,6 @@ import AsyncLean.Examples.Symbolic
 import AsyncLean.Examples.Routing
 import AsyncLean.Examples.OptimalRouting
 import AsyncLean.Examples.MeshMaximal
+import AsyncLean.Examples.MeshNorthLast
+import AsyncLean.Examples.MeshMetrics
 import AsyncLean.Tutorial

@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+* **Maximally adaptive on every mesh size** (`Examples/MeshMaximal.lean`). The west-first and
+  north-last meshes are maximally adaptive among minimal routing functions on two virtual
+  channels for every `k` (`westFirstMesh_maximal_all`, `northLastMesh_maximal_all`), with no
+  common improvement for every `k ≥ 2` and Duato's mesh not maximal for every `k ≥ 2`. The
+  proof follows the packet that takes an extra hop and closes with one of eight deadlocks
+  checked in a 3 × 3 window.
+  * `Routing/Embed.lean`: `Network.runGoodB`, `Network.path_of_runGoodB` and
+    `Network.not_deadlockFree_of_runGoodB` carry a run and a deadlock of a small network into
+    a large one along a map of channels and headers, with frozen packets standing for packets
+    whose destination lies outside the window.
+  * `Mesh.MeshFamily` collects what the window argument needs of a family of mesh routing
+    functions; the 4 × 4 search of `OptimalRouting.lean` is subsumed and removed.
+* **The north-last mesh of every size** (`Examples/MeshNorthLast.lean`) is deadlock and
+  livelock free, starvation free and correct under escape-respecting selections, along
+  shortest paths. Under wormhole switching Duato's condition fails for it.
+* **Optimal routing per cost** (`Examples/MeshMetrics.lean`), for every mesh size:
+  * hop count: `hops_lower_bound` (no neighbour routing beats the distance) and
+    `family_latency_optimal`;
+  * buffers: `westFirst1` and `northLast1` on a single virtual channel are correct (also under
+    wormhole switching) and maximally adaptive among minimal routing on one virtual channel;
+    XY is correct (`xyMesh_correct_all`) but not maximal;
+  * routing tables: `table_lower_bound` (4 decisions per inner router for any deadlock-free
+    minimal routing), `xy_table` (XY makes exactly 4), `westFirstMesh_table_le` and
+    `northLastMesh_table_le` (at most 8, independent of the size).
+* `scripts/validate_routing.py` replays the maximality constructions on meshes up to 8 × 8 and
+  re-checks acyclicity, hop counts and table sizes; `scripts/routing_sim.py` simulates the
+  single-channel schemes too.
+
 * **Maximally adaptive routing** (`Routing/Optimal.lean`). `Network.Extends` and
   `Network.Within` compare routing functions by the hops they permit.
   `Network.MaximallyAdaptive U N` says that adding any set of hops of `U` to `N` introduces a
@@ -21,8 +49,8 @@
     The west-first mesh of **every size** is deadlock and livelock free, starvation free and
     correct under wormhole switching, and every packet takes exactly as many hops as the
     distance to its destination. It is maximally adaptive among minimal routing functions on
-    two virtual channels on the 3 × 3 and 4 × 4 meshes (the north-last mesh on 3 × 3), also
-    under wormhole switching. No deadlock-free routing function contains both. Fully adaptive
+    two virtual channels on the 3 × 3 mesh (the north-last mesh too), also under wormhole
+    switching. No deadlock-free routing function contains both. Fully adaptive
     minimal routing on both virtual channels deadlocks.
 * **Duato's theorem for congestion-aware selections** (`Network.EscapeSel`,
   `Network.deadlockFreeWith_of_escape`, `Network.livelockFreeWith_of_ranking`): a selection may

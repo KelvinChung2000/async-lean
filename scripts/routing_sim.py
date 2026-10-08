@@ -11,6 +11,7 @@ injection channel.
 
 Usage: python3 scripts/routing_sim.py [--k 8]
            [--policy random|vc1first|vc1xy|congestion|gated<g>]
+           [--schemes xyMesh,westFirst1,northLast1,duatoMesh,westFirstMesh,northLastMesh]
            [--patterns uniform,transpose,bitcomp] [--rates 0.1,0.2,0.3,0.4,0.5]
 
 Each cell is "accepted throughput (packets / node / cycle) / average latency (cycles)".
@@ -59,7 +60,16 @@ def mesh(k):
             return vc0 + [ch(u, x, 1) for x in productive(u, d)]
         return route
 
+    def one_vc(turn):
+        def route(c, d):
+            u = head(c)
+            return [ch(u, x, 0) for x in turn(u, d)]
+        return route
+
     routes = {
+        'xyMesh': one_vc(lambda u, d: [xy(u, d)]),
+        'westFirst1': one_vc(west_first),
+        'northLast1': one_vc(north_last),
         'duatoMesh': duato,
         'westFirstMesh': turn_duato(west_first),
         'northLastMesh': turn_duato(north_last),
@@ -149,13 +159,15 @@ def main():
     ap.add_argument('--policy', default='random')
     ap.add_argument('--patterns', default='uniform,transpose,bitcomp')
     ap.add_argument('--rates', default='0.1,0.2,0.3,0.4,0.5')
+    ap.add_argument('--schemes', default='duatoMesh,westFirstMesh,northLastMesh')
     args = ap.parse_args()
     rates = [float(r) for r in args.rates.split(',')]
     _, _, routes = mesh(args.k)
     for pattern in args.patterns.split(','):
         print(f'== {pattern}, {args.k} x {args.k} mesh, selection: {args.policy}')
         print(f'{"routing":<16}' + ''.join(f'{"rate " + str(r):>15}' for r in rates))
-        for name, route in routes.items():
+        for name in args.schemes.split(','):
+            route = routes[name]
             cells = []
             for r in rates:
                 thr, lat = simulate(args.k, route, r, pattern, args.policy)

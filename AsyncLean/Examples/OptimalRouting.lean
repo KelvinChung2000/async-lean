@@ -616,7 +616,8 @@ theorem minimalMesh_deadlocks : ¬ (minimalMesh 3).DeadlockFree :=
       .inject 18 3, .hop 18 14 3, .inject 8 4, .hop 8 0 4])
     (by decide +kernel)
 
-/-- The north-last mesh is correct too (checked here for one size). -/
+/-- The north-last mesh is correct too, here checked for one size; `northLastMesh_correct_all`
+(`Examples/MeshNorthLast.lean`) proves it for every size. -/
 theorem northLastMesh_correct : (northLastMesh 4).Correct := by async_decide
 
 /-! ### Comparing adaptivity -/
