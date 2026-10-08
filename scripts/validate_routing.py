@@ -18,8 +18,14 @@ channel `ch(u, dir, vc) = (u * 5 + dir) * 2 + vc`, directions 0 east, 1 west, 2 
 3. `hops` : every route of every packet has exactly the Manhattan length.
 4. `tables` : the number of different routing decisions per router (XY: 4 at inner routers, the
    turn-model meshes: at most 8).
+5. `tiered` : the tiered, source-throttled selection of `MeshTiered.lean` (`tieredMesh`), on
+   Duato's mesh and the two-channel west-first and north-last meshes up to 4 x 4 and every
+   threshold `g <= 8`: long
+   random runs of single steps (inject, hop to an offered free channel, eject) never reach a
+   configuration that holds a packet but where none can move, and the selection only offers
+   permitted free hops.
 
-Usage: python3 scripts/validate_routing.py [--kmax 8]
+Usage: python3 scripts/validate_routing.py [--kmax 8] [--walks 60]
 """
 import argparse
 import sys
@@ -268,6 +274,62 @@ def acyclic(m, route, esc):
     return all(visit(c) for c in list(deps) if c not in state)
 
 
+# ---------------------------------------------------------------- 5. tiered selection
+
+def tiered_offers(m, route, occ, c, d, g):
+    """The hops `tieredMesh` offers the packet with destination `d` in channel `c` (the Lean
+    definition: the free permitted hops of the first tier that admits one)."""
+    k, u = m.k, m.head(c)
+    yx = 2 if u // k < d // k else 3 if d // k < u // k else m.xy(u, d)
+    src = dirc(c) == 4
+    esc = ch(u, m.xy(u, d), 0)
+    pref = esc if c % 2 == 0 and not src else ch(u, yx, 1)
+
+    def free_out(v):
+        return sum(1 for dr in range(4) for vc in (0, 1) if ch(v, dr, vc) not in occ)
+
+    def open_(q):
+        return not src or g <= free_out(m.head(q))
+    tiers = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1]
+    for t in tiers:
+        offered = [q for q in route(c, d) if q not in occ and open_(q) and t(q)]
+        if offered:
+            return offered
+    return []
+
+
+def check_tiered(k, turn_name, g, walks, steps, rnd):
+    m = Mesh(k)
+    turn = {'west-first': m.west_first, 'north-last': m.north_last,
+            'duato': lambda u, d: [m.xy(u, d)]}[turn_name]
+    route = m.two_vc(turn)
+    inj = m.injections()
+    for _ in range(walks):
+        occ = {}
+        for _ in range(steps):
+            moves = []
+            for c, d in occ.items():
+                if m.head(c) == d:
+                    moves.append(('eject', c, None))
+                    continue
+                offered = tiered_offers(m, route, occ, c, d, g)
+                assert all(q in route(c, d) and q not in occ for q in offered), (c, d, offered)
+                moves += [('hop', c, q) for q in offered]
+            if occ and not moves:
+                raise AssertionError(('deadlock', k, turn_name, g, sorted(occ.items())))
+            injects = [(c, d) for c, d in inj if c not in occ]
+            # fill the network: inject with probability 0.7 when possible
+            if injects and (not moves or rnd.random() < 0.7):
+                c, d = rnd.choice(injects)
+                occ[c] = d
+            elif moves:
+                kind, c, q = rnd.choice(moves)
+                d = occ.pop(c)
+                if kind == 'hop':
+                    occ[q] = d
+    return walks
+
+
 # ---------------------------------------------------------------- 3, 4. hops and tables
 
 def check_hops(m, route):
@@ -291,6 +353,7 @@ def table_size(m, route, u):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--kmax', type=int, default=8)
+    ap.add_argument('--walks', type=int, default=60)
     args = ap.parse_args()
     ok = True
     for k in range(2, args.kmax + 1):
@@ -318,6 +381,15 @@ def main():
             assert sizes['xy'] == 4 and all(v <= 8 for v in sizes.values()), sizes
             line.append('tables ' + ' '.join(f'{n}={v}' for n, v in sizes.items()))
         print(line[0] + ': ' + '; '.join(line[1:]))
+    import random
+    rnd = random.Random(1)
+    for k in (2, 3, 4):
+        walks = args.walks // 3 if k == 4 else args.walks
+        for name in ('duato', 'west-first', 'north-last'):
+            for g in range(9):
+                check_tiered(k, name, g, walks, 400, rnd)
+        print(f'k={k}: tiered selection, g = 0..8: no deadlock in {walks} random runs of 400 '
+              'steps per threshold, on Duato\'s, the west-first and the north-last mesh')
     print('all checks passed' if ok else 'FAILED')
     sys.exit(0 if ok else 1)
 

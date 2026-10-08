@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+* **A selection that performs, proved safe** (`Examples/MeshTiered.lean`). `tieredMesh` offers a
+  packet its dimension-order hop (XY on virtual channel 0, YX on virtual channel 1), then the
+  escape hop, then virtual channel 1, and throttles the sources: a packet leaves its injection
+  channel only towards a router with at least `g` of its 8 outgoing channels free. Duato's mesh,
+  the west-first and the north-last mesh are deadlock, livelock and starvation free under it for
+  every size and every `g ≤ 8` (`duatoTiered_correct`, `westFirstTiered_correct`,
+  `northLastTiered_correct`). In simulation it has the best worst case over six traffic
+  patterns of the schemes compared on 8 × 8 and 16 × 16 meshes, and the highest peak
+  throughput under four of them.
+  * `Routing/Source.lean`: Duato's theorem for selections that hold packets back at their
+    sources (`Network.SourceSel`, `Network.deadlockFreeWith_of_source`), starvation freedom
+    under such a selection (`Network.StarvationFreeWith`,
+    `Network.starvationFreeWith_of_source`), and tiered selections (`Network.tieredSel`).
+  * `Network.delivered_of_ranking` and `Network.reachable_finite` only need the selection to
+    offer permitted hops.
+  * `scripts/routing_sim.py`: source throttling (`T<g>:`), the tiered selection, O1TURN, XY on
+    both virtual channels, three more traffic patterns and `--bench`;
+    `scripts/validate_routing.py` runs random single-step runs of the tiered selection on small
+    meshes for every threshold and finds no deadlock.
+
 * **Maximally adaptive on every mesh size** (`Examples/MeshMaximal.lean`). The west-first and
   north-last meshes are maximally adaptive among minimal routing functions on two virtual
   channels for every `k` (`westFirstMesh_maximal_all`, `northLastMesh_maximal_all`), with no

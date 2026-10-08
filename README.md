@@ -456,6 +456,43 @@ switching (`Network.MaximallyAdaptive.wormhole`).
 `#eval N.explainMaximal StateOrd.cmp StateOrd.cmp U` reports the search, or a hop that can be
 added.
 
+### A selection that performs
+
+Maximal adaptivity says which hops a packet *may* take; throughput under load depends on which
+one it *does* take. `tieredMesh` (`Examples/MeshTiered.lean`) offers each packet the free hops
+of the first tier that has one: its dimension-order hop (XY on virtual channel 0, YX on virtual
+channel 1, so flows in different orders share no channel), then the escape hop, then any hop on
+virtual channel 1. It also throttles the sources: a packet leaves its injection channel only
+towards a router with at least `g` of its 8 outgoing channels free. Throttling refuses free
+escape hops, so Duato's condition for selections fails; `Network.deadlockFreeWith_of_source`
+(`Routing/Source.lean`) proves Duato's theorem for selections that may hold packets back at
+their sources as long as a source lets its packet go once the rest of the network is empty.
+Duato's mesh, the west-first and the north-last mesh are deadlock, livelock and starvation free
+under `tieredMesh` for every size and every `g ≤ 8` (`duatoTiered_correct`,
+`westFirstTiered_correct`, `northLastTiered_correct`).
+
+Peak accepted throughput (packets per node and cycle, the largest over a sweep of offered
+loads; `python3 scripts/routing_sim.py --bench` prints the underlying tables):
+
+| 16 × 16 mesh | uniform | transpose | shuffle | bit reversal | hotspot | bit complement | worst / best |
+|---|---|---|---|---|---|---|---|
+| Duato's mesh, random selection | 0.199 | 0.197 | 0.149 | 0.138 | 0.114 | 0.089 | 0.75 |
+| Duato's mesh, random, throttled (`g = 4`) | 0.228 | 0.196 | 0.155 | 0.138 | 0.114 | 0.104 | 0.78 |
+| XY on both virtual channels | 0.227 | 0.133 | 0.125 | 0.096 | 0.082 | **0.120** | 0.60 |
+| O1TURN | 0.174 | 0.125 | 0.107 | 0.087 | 0.090 | 0.100 | 0.54 |
+| west-first mesh, random selection | 0.200 | **0.221** | 0.198 | 0.113 | 0.080 | 0.080 | 0.67 |
+| **`tieredMesh`, `g = 4`** | **0.237** | 0.202 | **0.199** | **0.140** | **0.118** | 0.108 | **0.90** |
+
+On 8 × 8 meshes the picture is the same (`tieredMesh` first under uniform, shuffle, bit-reversal
+and hotspot traffic, worst case 0.87 of the best against 0.84 for the next scheme); the
+west-first mesh with a random selection is 15 % faster under transpose traffic and XY on both
+virtual channels 12 % faster under bit-complement traffic. Past saturation `tieredMesh` keeps
+its throughput, where Duato's mesh with a random selection loses up to half of it (16 × 16,
+uniform: 0.14 at an offered 0.3). On 4 × 4 meshes, which saturate late, the throttling costs it
+3 to 5 % against the random selections. No selection among those tried was best on every
+pattern: taking the extra hops of the west-first mesh helps transpose traffic and makes hotspot
+traffic collapse, and bit-complement traffic favours keeping every packet on its XY path.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -667,6 +704,7 @@ The network properties are listed in section 7.
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Routing/Optimal.lean` | comparing routing functions by adaptivity, maximally adaptive routing, refutations for intervals of routing functions |
 | `Routing/Embed.lean` | carrying a deadlock of a small network into every network that contains a copy of it |
+| `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -679,7 +717,7 @@ The network properties are listed in section 7.
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost, a tiered source-throttled selection |
 
 ### Scope and limits
 
@@ -715,7 +753,8 @@ The network properties are listed in section 7.
   virtual channels changes the yardstick, and the maximal routing functions with it. The
   per-cost optimality results are about hop counts, virtual channels and the number of routing
   decisions; throughput and latency under load are not theorems, and the simulation results
-  above are measurements.
+  above are measurements. For `tieredMesh` what is proved is safety (deadlock, livelock and
+  starvation freedom), not its speed.
 
 ### Building the documentation
 

@@ -28,6 +28,7 @@ import AsyncLean.Auto.Structural
 import AsyncLean.Routing.WormholeCheck
 import AsyncLean.Routing.Optimal
 import AsyncLean.Routing.Embed
+import AsyncLean.Routing.Source
 import AsyncLean.AxiomAudit
 
 /-!
@@ -83,6 +84,8 @@ open LTS
   Network.deadlockFree_iff_exists_escape Network.reachable_of_injectable
   Network.delivered_of_ranking Network.starvationFree_of_escape_ranking
   Network.reachable_finite Network.exists_leave
+  Network.EscapeSel.sourceSel Network.movable_of_source Network.deadlockFreeWith_of_source
+  Network.starvationFreeWith_of_source Network.mem_tieredSel Network.tieredSel_conserving
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
