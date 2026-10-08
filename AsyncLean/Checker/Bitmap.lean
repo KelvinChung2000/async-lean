@@ -1169,6 +1169,157 @@ theorem of_check {σ ι : Type*} {A : LTS σ ι} {Good : σ → Prop} {enc : σ 
     exact ⟨M'', hr.trans hr', hen⟩
 
 end Sound
+
+/-! ### Checkpoints
+
+The kernel keeps every number it computes while it checks one declaration, so the memory of
+`checkR` and `checkD` grows with their number of rounds.  The rounds can be cut at
+*checkpoints*: sets given with the certificate, each checked in its own declaration to be what
+`m` more rounds give from the previous one (`segR`, `segD`); the last part (`finR`, `finD`)
+runs the remaining rounds from the last checkpoint.  The checkpoints are compared exactly
+(`teq`), so a wrong one makes the check fail, never succeed. -/
+
+section Checkpoints
+
+/-- `n` rounds of ranking from `A`. -/
+noncomputable def rankFrom (tb : List Tr) (k imask dR : ℕ) (t A : BTree (ℕ × ℕ)) (n : ℕ) :
+    BTree (ℕ × ℕ) :=
+  Nat.rec (motive := fun _ => BTree (ℕ × ℕ)) A (fun _ R => rstep k imask dR t tb R) n
+
+/-- `n` rounds of distances from `A`. -/
+noncomputable def distFrom (tb : List Tr) (k kD : ℕ) (t A : BTree (ℕ × ℕ)) (n : ℕ) :
+    BTree (ℕ × ℕ) :=
+  Nat.rec (motive := fun _ => BTree (ℕ × ℕ)) A (fun _ D => dstep k kD t tb D) n
+
+/-- Equality of trees of bitmaps. -/
+noncomputable def teq : BTree (ℕ × ℕ) → BTree (ℕ × ℕ) → Bool :=
+  BTree.rec (motive := fun _ => BTree (ℕ × ℕ) → Bool)
+    (fun b => BTree.rec (motive := fun _ => Bool) true (fun _ _ _ _ _ => false) b)
+    (fun _ x _ ihl ihr b => BTree.rec (motive := fun _ => Bool) false
+      (fun l' y r' _ _ => band (band (Nat.beq x.1 y.1) (Nat.beq x.2 y.2)) (band (ihl l') (ihr r')))
+      b)
+
+theorem eq_of_teq : ∀ {a b : BTree (ℕ × ℕ)}, teq a b = true → a = b
+  | .leaf, .leaf, _ => rfl
+  | .leaf, .node _ _ _, h => by simp [teq] at h
+  | .node _ _ _, .leaf, h => by simp [teq] at h
+  | .node l x r, .node l' y r', h => by
+    change band (band (Nat.beq x.1 y.1) (Nat.beq x.2 y.2)) (band (teq l l') (teq r r')) = true
+      at h
+    obtain ⟨h1, h2⟩ := band_eq.1 h
+    obtain ⟨hx1, hx2⟩ := band_eq.1 h1
+    obtain ⟨hl, hr⟩ := band_eq.1 h2
+    rw [eq_of_teq hl, eq_of_teq hr, Prod.ext (Nat.eq_of_beq_eq_true hx1)
+      (Nat.eq_of_beq_eq_true hx2)]
+
+/-- The rank sets before the first round. -/
+noncomputable def rankZero (c : Cert) : BTree (ℕ × ℕ) := tmap (fun _ _ => 0) c.1
+
+/-- The distance sets before the first round: the hubs and the states enabling a transition
+of `dD`. -/
+noncomputable def distZero (tb : List Tr) (k dD : ℕ) (c : Cert) : BTree (ℕ × ℕ) :=
+  tmap (fun h a => Nat.land a (Nat.lor (hubBits k h c.2.1) (decEn k dD tb h 0))) c.1
+
+/-- A segment of `m` rank rounds from the checkpoint `A` ends at the checkpoint `B`. -/
+noncomputable def segR (tb : List Tr) (k imask dR : ℕ) (c : Cert) (m : ℕ)
+    (A B : BTree (ℕ × ℕ)) : Bool :=
+  teq (rankFrom tb k imask dR c.1 A m) B
+
+/-- A segment of `m` distance rounds from the checkpoint `A` ends at the checkpoint `B`. -/
+noncomputable def segD (tb : List Tr) (k kD : ℕ) (c : Cert) (m : ℕ) (A B : BTree (ℕ × ℕ)) :
+    Bool :=
+  teq (distFrom tb k kD c.1 A m) B
+
+/-- The last part of `checkR`, from the checkpoint `A` of round `n`. -/
+noncomputable def finR (tb : List Tr) (k imask dR : ℕ) (c : Cert) (A : BTree (ℕ × ℕ))
+    (n r : ℕ) : Bool :=
+  band (Nat.beq c.2.2.1 (Nat.add n r))
+    (ktall c.1 fun x => sub x.2 (look x.1 (rankFrom tb k imask dR c.1 A r)))
+
+/-- The last part of `checkD`, from the checkpoint `A` of round `n`. -/
+noncomputable def finD (tb : List Tr) (k kD L : ℕ) (lv : Bool) (c : Cert)
+    (A : BTree (ℕ × ℕ)) (n r : ℕ) : Bool :=
+  Bool.rec (motive := fun _ => Bool) true
+    (band (Nat.beq c.2.2.2 (Nat.add n r))
+      (band (ktall c.1 fun x => sub x.2 (look x.1 (distFrom tb k kD c.1 A r)))
+        (kall c.2.1 fun h => band (Nat.beq h.2.length L) (chkTraces (asucc tb) h.1 h.2 0))))
+    lv
+
+/-- `A` is the set of round `n` of ranking. -/
+def RankAt (tb : List Tr) (k imask dR : ℕ) (c : Cert) (n : ℕ) (A : BTree (ℕ × ℕ)) : Prop :=
+  rankIter k imask dR c.1 tb n = A
+
+/-- `A` is the set of round `n` of distances. -/
+def DistAt (tb : List Tr) (k dD kD : ℕ) (c : Cert) (n : ℕ) (A : BTree (ℕ × ℕ)) : Prop :=
+  distIter k dD kD c.1 tb c.2.1 n = A
+
+theorem rankFrom_add (tb : List Tr) (k imask dR : ℕ) (t A : BTree (ℕ × ℕ)) (a : ℕ) :
+    ∀ b, rankFrom tb k imask dR t A (a + b) = rankFrom tb k imask dR t (rankFrom tb k imask dR t A a) b
+  | 0 => rfl
+  | b + 1 => by
+    change rstep k imask dR t tb (rankFrom tb k imask dR t A (a + b)) =
+      rstep k imask dR t tb (rankFrom tb k imask dR t (rankFrom tb k imask dR t A a) b)
+    rw [rankFrom_add tb k imask dR t A a b]
+
+theorem distFrom_add (tb : List Tr) (k kD : ℕ) (t A : BTree (ℕ × ℕ)) (a : ℕ) :
+    ∀ b, distFrom tb k kD t A (a + b) = distFrom tb k kD t (distFrom tb k kD t A a) b
+  | 0 => rfl
+  | b + 1 => by
+    change dstep k kD t tb (distFrom tb k kD t A (a + b)) =
+      dstep k kD t tb (distFrom tb k kD t (distFrom tb k kD t A a) b)
+    rw [distFrom_add tb k kD t A a b]
+
+theorem rankAt_zero (tb : List Tr) (k imask dR : ℕ) (c : Cert) :
+    RankAt tb k imask dR c 0 (rankZero c) := rfl
+
+theorem distAt_zero (tb : List Tr) (k dD kD : ℕ) (c : Cert) :
+    DistAt tb k dD kD c 0 (distZero tb k dD c) := rfl
+
+theorem rankAt_seg {tb : List Tr} {k imask dR : ℕ} {c : Cert} {n m : ℕ} {A B : BTree (ℕ × ℕ)}
+    (h : RankAt tb k imask dR c n A) (hs : segR tb k imask dR c m A B = true) :
+    RankAt tb k imask dR c (Nat.add n m) B := by
+  unfold RankAt at *
+  rw [← eq_of_teq hs, ← h]
+  exact rankFrom_add tb k imask dR c.1 _ n m
+
+theorem distAt_seg {tb : List Tr} {k dD kD : ℕ} {c : Cert} {n m : ℕ} {A B : BTree (ℕ × ℕ)}
+    (h : DistAt tb k dD kD c n A) (hs : segD tb k kD c m A B = true) :
+    DistAt tb k dD kD c (Nat.add n m) B := by
+  unfold DistAt at *
+  rw [← eq_of_teq hs, ← h]
+  exact distFrom_add tb k kD c.1 _ n m
+
+/-- **`checkR` from checkpoints.** -/
+theorem checkR_of_fin {tb : List Tr} {k imask dR : ℕ} {c : Cert} {n r : ℕ} {A : BTree (ℕ × ℕ)}
+    (h : RankAt tb k imask dR c n A) (hf : finR tb k imask dR c A n r = true) :
+    checkR tb k imask dR c = true := by
+  obtain ⟨h1, h2⟩ := band_eq.1 hf
+  unfold checkR
+  rw [Nat.eq_of_beq_eq_true h1]
+  have : rankIter k imask dR c.1 tb (Nat.add n r) = rankFrom tb k imask dR c.1 A r := by
+    rw [← h]; exact rankFrom_add tb k imask dR c.1 _ n r
+  rw [this]; exact h2
+
+/-- **`checkD` from checkpoints.** -/
+theorem checkD_of_fin {tb : List Tr} {k dD kD L : ℕ} {lv : Bool} {c : Cert} {n r : ℕ}
+    {A : BTree (ℕ × ℕ)} (h : DistAt tb k dD kD c n A) (hf : finD tb k kD L lv c A n r = true) :
+    checkD tb k dD kD L lv c = true := by
+  cases lv
+  · rfl
+  change band (Nat.beq c.2.2.2 (Nat.add n r))
+      (band (ktall c.1 fun x => sub x.2 (look x.1 (distFrom tb k kD c.1 A r)))
+        (kall c.2.1 fun h => band (Nat.beq h.2.length L) (chkTraces (asucc tb) h.1 h.2 0)))
+    = true at hf
+  obtain ⟨h1, h2⟩ := band_eq.1 hf
+  change band (ktall c.1 fun x => sub x.2 (look x.1 (distIter k dD kD c.1 tb c.2.1 c.2.2.2)))
+      (kall c.2.1 fun h => band (Nat.beq h.2.length L) (chkTraces (asucc tb) h.1 h.2 0)) = true
+  rw [Nat.eq_of_beq_eq_true h1]
+  have : distIter k dD kD c.1 tb c.2.1 (Nat.add n r) = distFrom tb k kD c.1 A r := by
+    rw [← h]; exact distFrom_add tb k kD c.1 _ n r
+  rw [this]; exact h2
+
+end Checkpoints
+
 end Bitmap
 
 end AsyncLean

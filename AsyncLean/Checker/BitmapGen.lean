@@ -413,6 +413,86 @@ def mkCert (tb : Array Tr) (internal : ℕ → Bool) (k₀ k L : ℕ) (dl ll lv 
       hubs := hubs ++ [(y, trs)]
   return ((chunkTree A.toArray, hubs, rR, rD), A, (wR, dR), potD)
 
+/-! ### Checkpoints: rounds exactly as the kernel computes them -/
+
+/-- One round of ranking (`Bitmap.rstep`), over the chunks of `A`. -/
+def rstepB (cx : Ctx) (tis : Array TInfo) (A R : BSet) : BSet := Id.run do
+  let k := cx.k
+  let mut out : BSet := {}
+  for (h, a) in A do
+    let mut bad := 0
+    for t in tis do
+      if !gHC k h t.guard then continue
+      if h + t.addH < t.subH then continue
+      let h' := h + t.addH - t.subH
+      let open' := (A.get h') ^^^ ((A.get h') &&& R.get h')
+      bad := bad ||| (t.gLAt h &&& unshiftByC open' t.addL t.subL)
+    out := out.insert h (R.get h ||| (a ^^^ (a &&& bad)))
+  return out
+
+/-- One round of distances (`Bitmap.dstep`), over the chunks of `A`. -/
+def dstepB (cx : Ctx) (keeps : Array TInfo) (A D : BSet) : BSet := Id.run do
+  let k := cx.k
+  let mut out : BSet := {}
+  for (h, a) in A do
+    let mut pre := 0
+    for t in keeps do
+      if !gHC k h t.guard then continue
+      if h + t.addH < t.subH then continue
+      pre := pre ||| (t.gLAt h &&& unshiftByC (D.get (h + t.addH - t.subH)) t.addL t.subL)
+    out := out.insert h (D.get h ||| (a &&& pre))
+  return out
+
+/-- The distance sets before the first round (`Bitmap.distZero`). -/
+def distZeroB (cx : Ctx) (decs : Array TInfo) (A : BSet) (hubs : List ℕ) : BSet := Id.run do
+  let k := cx.k
+  let mut out : BSet := {}
+  for (h, a) in A do
+    let mut en := 0
+    for t in decs do
+      if gHC k h t.guard then en := en ||| t.gLAt h
+    for y in hubs do
+      if y >>> k == h then en := en ||| (1 <<< (y &&& (2 ^ k - 1)))
+    out := out.insert h (a &&& en)
+  return out
+
+/-- Replace the bitmaps of a tree, keeping its keys and shape. -/
+def mapVals (f : ℕ → ℕ) : BTree (ℕ × ℕ) → BTree (ℕ × ℕ)
+  | .leaf => .leaf
+  | .node l x r => .node (mapVals f l) (x.1, f x.1) (mapVals f r)
+
+/-- The sets of rounds `m, 2m, …` (strictly below `n`) of `step` from `R₀`, as trees shaped
+like `t`. -/
+def checkpointsB (t : BTree (ℕ × ℕ)) (step : BSet → BSet) (R₀ : BSet) (n m : ℕ) :
+    List (BTree (ℕ × ℕ)) := Id.run do
+  if m == 0 then return []
+  let mut out : Array (BTree (ℕ × ℕ)) := #[]
+  let mut R := R₀
+  let mut i := 0
+  while i + m < n do
+    for _ in [0:m] do R := step R
+    i := i + m
+    out := out.push (mapVals R.get t)
+  return out.toList
+
+/-- **Checkpoints** every `m` rounds of the ranks and distances of the certificate `c`, for the
+table `tb` with chunks of `k` low bits (`Bitmap.segR`, `Bitmap.segD`). -/
+def checkpoints (tb : Array Tr) (internal : ℕ → Bool) (k : ℕ) (ll lv : Bool) (c : Bitmap.Cert)
+    (dR dD kD m : ℕ) : List (BTree (ℕ × ℕ)) × List (BTree (ℕ × ℕ)) :=
+  let cx := Ctx.mk' k
+  let A : BSet := c.1.toList.foldl (fun s (h, a) => s.insert h a) {}
+  let ti := tb.mapIdx fun i e => tinfo cx e (ll && internal i)
+  let pick (p : ℕ → TInfo → Bool) := ((ti.mapIdx fun i t => (i, t)).filter fun (i, t) => p i t).map
+    (·.2)
+  let tis := pick fun i t => t.internal && !dR.testBit i
+  let decs := pick fun i _ => dD.testBit i
+  let keeps := pick fun i _ => kD.testBit i
+  let cR := checkpointsB c.1 (rstepB cx tis A) {} c.2.2.1 m
+  let cD := if lv then
+      checkpointsB c.1 (dstepB cx keeps A) (distZeroB cx decs A (c.2.1.map (·.1))) c.2.2.2 m
+    else []
+  (cR, cD)
+
 end BitmapGen
 
 namespace PNet
