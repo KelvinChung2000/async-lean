@@ -34,6 +34,7 @@ import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
+import AsyncLean.Routing.Lanes
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -45,6 +46,7 @@ import AsyncLean.Flow.Tree
 import AsyncLean.Flow.Symmetric
 import AsyncLean.Flow.GraphCert
 import AsyncLean.Flow.GraphPatterns
+import AsyncLean.Flow.Scaling
 import AsyncLean.AxiomAudit
 
 /-!
@@ -122,6 +124,12 @@ open LTS
   GraphData.detour_underLoad_of_escapeSel GraphData.detour_underLoad GraphData.detour_underLoad_of_sourceSel
   GraphData.detour_hops_le GraphData.detour_hops_le_some GraphData.detour_phase_hops_le
   GraphData.detour_route_adj GraphData.detourNet_route_none GraphData.exists_detour_correct
+  Network.SafeCert.correct Network.SafeCert.underLoad Network.SafeCert.underLoad_of_valid
+  Network.SafeCert.sourceSel Network.SafeCert.lanes_dep Network.SafeCert.lanes_esc_wf
+  Network.lanes_correct Network.lanes_underLoad Network.lanes_step Network.lanes_path_one
+  Network.lanes_path Network.ejections_flatMap Network.copies_path Network.lanes_reachable_iff
+  Network.lanes_reachable_lane GraphData.lanes_correct GraphData.lanes_budget_correct
+  GraphData.lanes_detour_correct GraphData.lanes_detour_sourceSel
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
@@ -276,6 +284,14 @@ open LTS
   Fluid.valiant Fluid.valiant_grid Fluid.valiant_mesh Fluid.valiant_mesh_opt
   Fluid.torus_bitcomp_upper Fluid.torus_worst_upper Fluid.cube_comp_upper Fluid.cube_worst_upper
   Fluid.valiant_torus Fluid.torus_worst_opt Fluid.valiant_cube Fluid.cube_worst_opt
+
+-- Fluid model: throughput scales exactly linearly with the connections; lanes reach it
+#assert_standard_axioms
+  Fluid.Routable.zero Fluid.Routable.smul Fluid.Routable.mono Fluid.Routable.add
+  Fluid.routable_sum Fluid.layered_routable Fluid.Routable.copies Fluid.copies_routable_iff
+  Fluid.opt_copies Fluid.worstOpt_copies Fluid.opt_superadditive Fluid.mesh_copies_worst
+  Fluid.torus_copies_worst Fluid.cube_copies_worst Fluid.mesh_copies_uniform
+  Fluid.torus_copies_uniform Fluid.cube_copies_uniform Fluid.torus_eight_copies_worst
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms
