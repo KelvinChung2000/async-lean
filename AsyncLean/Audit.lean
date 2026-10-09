@@ -39,6 +39,7 @@ import AsyncLean.Flow.MeshOdd
 import AsyncLean.Flow.MeshWorst
 import AsyncLean.Flow.Certificate
 import AsyncLean.Flow.MeshPatterns
+import AsyncLean.Flow.Valiant
 import AsyncLean.AxiomAudit
 
 /-!
@@ -260,5 +261,11 @@ open LTS
   Fluid.transpose8_opt Fluid.transpose8_minimal Fluid.shuffle8_opt Fluid.shuffle8_minimal
   Fluid.bitrev8_opt Fluid.bitrev8_minimal Fluid.hotspot8_opt Fluid.hotspot8_minimal_opt
   Fluid.hotspot8_detour_gain
+
+-- Fluid model: Valiant's bound on every symmetric network; worst cases of the torus and hypercube
+#assert_standard_axioms
+  Fluid.valiant Fluid.valiant_grid Fluid.valiant_mesh Fluid.valiant_mesh_opt
+  Fluid.torus_bitcomp_upper Fluid.torus_worst_upper Fluid.cube_comp_upper Fluid.cube_worst_upper
+  Fluid.valiant_torus Fluid.torus_worst_opt Fluid.valiant_cube Fluid.cube_worst_opt
 
 end AsyncLean
