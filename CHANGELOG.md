@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
+  order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
+  injection limit with them on neighbour traffic.
+
 * **A torus scheme ahead of every existing one on every pattern (simulation)**:
   `bandit2m7f5k` in `scripts/torus_experiments.py` (marginal-cost prices, flow-count gate for
   the long way, Valiant only for concentrated destinations), a selection of the proved

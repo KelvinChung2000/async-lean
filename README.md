@@ -724,6 +724,21 @@ complement and tornado (0.454, 0.445), but not enough on shuffle, bit reversal, 
 random permutation; dropping the random intermediate (`Y`) keeps the permutations at the
 minimal network's level but loses tornado (0.400) and bit complement (0.444).
 
+With 8 fresh seeds and standard errors (`scripts/torus_significance.py`), `bandit2m7f5k` is
+ahead of the best published scheme on every pattern but neighbour, where every scheme that
+reaches it is at the injection limit:
+
+| | uniform | transpose | shuffle | bit rev. | bit comp. | hotspot | tornado | neighbour | random perm. |
+|---|---|---|---|---|---|---|---|---|---|
+| best of DOR / Valiant / UGAL | 0.7109 ±3 | 0.5613 ±2 | 0.6244 ±2 | 0.6255 ±3 | 0.4476 ±5 | 0.5166 ±6 | 0.4352 ±4 | 1.0000 | 0.6438 ±4 |
+| `bandit2m7f5k` | **0.7522 ±3** | **0.5664 ±4** | **0.6458 ±7** | **0.6462 ±5** | **0.4506 ±7** | **0.5231 ±13** | **0.4416 ±4** | 1.0000 | **0.6729 ±6** |
+
+(± in units of 10⁻⁴.) The narrowest margins, bit complement and hotspot, are 3.5 and 4.5
+combined standard errors. Our own variants disagree with each other by real margins (the
+minimal network beats its congestion-aware version on hotspot, 0.5231 against 0.5178, and loses
+on transpose, 0.5684 against 0.5716), so no scheme can be expected to be ahead of every variant;
+the bar is the published schemes.
+
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
 (Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on
