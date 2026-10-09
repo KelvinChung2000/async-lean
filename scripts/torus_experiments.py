@@ -39,6 +39,11 @@ throttle g = 4, return budget B = 2). Schemes:
   a detour only when its price is at least r % below the minimal route's (`w<w>`: w % for the
   random intermediate). Anywhere in the name: `C` picks, among the free hops of a tier, those
   into the router with the most free output channels; `Y` drops the random-intermediate option.
+* `fg<pL>_<pV>_<fL>_<fV>` (percentages): no learning. The long way with probability pL when the
+  smoothed flow out of the source in the long direction is at most fL % of the minimal
+  direction's; otherwise, for a source whose last 8 destinations include at most 2 nodes, a
+  random intermediate with probability pV when the source's non-minimal outputs carry at most
+  fV % of the minimal ones' flow.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -67,6 +72,8 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     allvc1 = [[(u*5+p)*2+1 for p in range(4) if adj[u][p] >= 0] for u in range(N)]
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
+    if scheme.startswith('fg'):
+        pL, pV, fL, fV = (float(x) / 100 for x in scheme[2:].split('_'))
     if scheme.startswith('bandit'):
         bspec = scheme.lstrip('banditx').split('f')[0].split('m')[0].split('q')[0].split('g')[0].split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
@@ -80,6 +87,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     flow = [[0.0] * 4 for _ in range(N)]    # smoothed packets per cycle through each output port
     fgate = float(scheme.split('kr')[0].rstrip('nk').split('e')[0].split('f')[1].split('v')[0].rstrip('u')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    if scheme.startswith('fg'): fgate = 0.0
     vgate = 'v' in scheme[6:]
     vnodisc = scheme.endswith('u')
     perhop = scheme.startswith('bandit') and scheme.endswith('n')
@@ -214,6 +222,21 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                                 cost = lw[2] * (1 + aL*ema[s][lw[1]])
                                 if cost < bestL: bestL, inter = cost, lw[0]
                 opt = 0
+                if scheme.startswith('fg') and dist[s][d] > 1:
+                    recent[s].append(d)
+                    mports = [(c2 // 2) % 5 for c2 in vc1[s][d]]
+                    fmin = min(flow[s][p] for p in mports)
+                    done = False
+                    for dim in (0, 1):
+                        lw = longway(s, d, dim)
+                        if lw and flow[s][lw[1]] <= fL * fmin and rnd.random() < pL:
+                            inter, opt, done = lw[0], 1 + dim, True
+                            break
+                    if not done and len(set(recent[s])) <= 2:
+                        others = [p for p in range(4) if adj[s][p] >= 0 and p not in mports]
+                        if others and min(flow[s][p] for p in others) <= fV * fmin and rnd.random() < pV:
+                            w = rnd.randrange(N)
+                            if w not in (s, d): inter, opt = w, 3
                 if scheme.startswith('bandit') and dist[s][d] > 1:
                     opts = [(0, -1, dist[s][d])]
                     for dim in ((0, 1) if not scheme.startswith('banditx') else ()):
