@@ -45,6 +45,11 @@ with packets as divisible as the fluid's.  The backpressure scheduler (`Run.Back
   backlog bounded and is delivered in full.  Only some traffic reaching every pair is needed
   (for instance the uniform traffic): no knowledge of `dem`, `θ` or the flow is used by the
   scheduler.
+* `Run.backpressure_fitsIn` : **finite buffers suffice.**  Started empty, the run never holds
+  more than `B / (2 ε) + ε` in any per-destination queue (`Run.FitsIn`), so buffers of that size
+  are never exceeded; the size grows like `1 / ε` as the load approaches the optimum.
+  `mesh_buffer` : on the mesh with `m` connections per link, under a load `(1 - δ)` times the
+  optimum, buffers of `145 m k⁷ / (16 δ) + m` packets per destination suffice (a loose constant).
 * `Run.potential_ceiling` : **the ceiling**, for every scheduler: a run that keeps its backlog
   bounded under the load `ρ * dem` respects every potential bound of the fluid model
   (`potential_bound`); `Run.cut_ceiling`, `Run.hop_ceiling` are the cut and hop forms.
@@ -425,7 +430,65 @@ theorem backpressure_stable (hr : r.Backpressure) {dem : V → V → ℚ}
     have h4 := r.backlog_nonneg 0
     linarith
 
+/-- The run **fits in buffers of size `b`**: no per-destination queue ever holds more than
+`b`.  A network with buffers of size `b` per destination at every vertex, which blocks or drops
+on overflow, then behaves exactly like the run: the overflow never happens. -/
+def FitsIn (b : ℚ) : Prop := ∀ t v d, r.Q t v d ≤ b
+
+omit [DecidableEq V] in
+/-- A queue is at most `x + ε` when the energy is at most `x² + 2 x ε`. -/
+theorem queue_le_of_energy {Q : V → V → ℚ} {x ε : ℚ} (hx : 0 ≤ x)
+    (hε : 0 < ε) (hE : energy Q ≤ x ^ 2 + 2 * x * ε) (v d : V) : Q v d ≤ x + ε := by
+  have h1 : Q v d ^ 2 ≤ energy Q :=
+    (single_le_sum (f := fun v => Q v d ^ 2) (fun v _ => sq_nonneg _) (mem_univ v)).trans
+      (single_le_sum (f := fun d => ∑ v, Q v d ^ 2) (fun d _ => sum_nonneg fun v _ => sq_nonneg _)
+        (mem_univ d))
+  nlinarith
+
+/-- **Finite buffers suffice.**  Started empty, a backpressure run whose arrivals stay `ε > 0`
+below a traffic `dem` routable at throughput `1` never holds more than
+`driftConst N dem / (2 ε) + ε` in any per-destination queue: buffers of that size are never
+exceeded, and the run delivers everything that arrives except what those buffers hold.  The
+buffer grows like `1 / ε` as the load approaches the fluid optimum. -/
+theorem backpressure_fitsIn (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1)
+    (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
+    (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) (h0 : ∀ v d, r.Q 0 v d = 0) :
+    r.FitsIn (driftConst N dem / (2 * ε) + ε) ∧
+      ∀ t, ∑ s ∈ range t, r.arrived s -
+          (Fintype.card V : ℚ) ^ 2 * (driftConst N dem / (2 * ε) + ε) ≤
+        ∑ s ∈ range t, r.delivered s := by
+  set B := driftConst N dem
+  have hB := driftConst_nonneg N dem
+  set x := B / (2 * ε) with hxdef
+  have hx : 0 ≤ x := div_nonneg hB (by positivity)
+  have hE0 : energy (r.Q 0) = 0 := by simp [energy, h0]
+  have hfit : r.FitsIn (x + ε) := fun t v d => by
+    have h := r.energy_bounded hr F hdem hε harr t
+    rw [hE0, max_eq_right (by positivity)] at h
+    have e : B = 2 * x * ε := by
+      rw [hxdef, show (2 : ℚ) * (B / (2 * ε)) * ε = B / (2 * ε) * (2 * ε) by ring,
+        div_mul_cancel₀ B (by positivity)]
+    have e' : (B / (2 * ε)) ^ 2 + B = x ^ 2 + 2 * x * ε := by rw [← e]
+    exact queue_le_of_energy hx hε (h.trans e'.le) v d
+  refine ⟨hfit, fun t => ?_⟩
+  have hb : backlog (r.Q t) ≤ (Fintype.card V : ℚ) ^ 2 * (x + ε) := by
+    calc backlog (r.Q t) ≤ ∑ _d : V, ∑ _v : V, (x + ε) :=
+          sum_le_sum fun d _ => sum_le_sum fun v _ => hfit t v d
+      _ = (Fintype.card V : ℚ) ^ 2 * (x + ε) := by
+          simp only [sum_const, card_univ, nsmul_eq_mul]; ring
+  have h1 := r.delivered_sum t
+  have h2 : backlog (r.Q 0) = 0 := by simp [backlog, h0]
+  linarith
+
 end Run
+
+/-- A flow of `θ * dem` is a flow of the traffic `θ * dem` at throughput `1`. -/
+def Flow.normalize {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (F : Flow N dem θ) :
+    Flow N (fun v d => θ * dem v d) 1 where
+  f := F.f
+  nonneg := F.nonneg
+  conserve d v hv := by rw [one_mul]; exact F.conserve d v hv
+  capacity := F.capacity
 
 /-- Two flows of two traffic matrices, scaled by `α, β ≥ 0` with `α + β ≤ 1`, route the
 mixture at throughput `1`. -/
@@ -958,6 +1021,154 @@ theorem cube_backpressure (n : ℕ) (hn : 1 ≤ n) {m : ℕ} (hm : 0 < m)
   exact r.copies_hop_ceiling harr hb (cube_isHopDistance n)
     (fun u v => by rw [cubeDist_eq]; positivity) hD
     (by rw [cube_sum_cap]; exact cube_uniform_hop n hn)
+
+theorem meshAdj_symm {k : ℕ} (u v : Fin k × Fin k) : MeshAdj u v ↔ MeshAdj v u := by
+  simp only [MeshAdj, LineAdj, Fin.ext_iff]; omega
+
+/-- A vertex of the mesh has at most four neighbours: its capacity out is at most `8`. -/
+theorem mesh_out_cap (k : ℕ) (v : Fin k × Fin k) : ∑ w, (meshNet k).cap v w ≤ 8 := by
+  have one : ∀ (P : Fin k × Fin k → Prop) [DecidablePred P], (∀ a b, P a → P b → a = b) →
+      ∑ w, (if P w then (1 : ℚ) else 0) ≤ 1 := by
+    intro P _ hP
+    rw [sum_boole]
+    exact_mod_cast card_le_one.2 fun a ha b hb =>
+      hP a b (by simpa using ha) (by simpa using hb)
+  have hcap : ∀ w : Fin k × Fin k, (meshNet k).cap v w ≤ 2 *
+      ((if (w.2 : ℕ) = v.2 ∧ (v.1 : ℕ) + 1 = w.1 then (1 : ℚ) else 0) +
+        (if (w.2 : ℕ) = v.2 ∧ (w.1 : ℕ) + 1 = v.1 then (1 : ℚ) else 0) +
+        (if (w.1 : ℕ) = v.1 ∧ (v.2 : ℕ) + 1 = w.2 then (1 : ℚ) else 0) +
+        (if (w.1 : ℕ) = v.1 ∧ (w.2 : ℕ) + 1 = v.2 then (1 : ℚ) else 0)) := by
+    intro w
+    show (if MeshAdj v w then (2 : ℚ) else 0) ≤ _
+    by_cases h : MeshAdj v w
+    · rw [ite_eq_left h]
+      simp only [MeshAdj, LineAdj, Fin.ext_iff] at h
+      split_ifs <;> first | (exfalso; omega) | norm_num
+    · rw [ite_eq_right h]
+      split_ifs <;> norm_num
+  calc ∑ w, (meshNet k).cap v w ≤ ∑ w : Fin k × Fin k, 2 *
+        ((if (w.2 : ℕ) = v.2 ∧ (v.1 : ℕ) + 1 = w.1 then (1 : ℚ) else 0) +
+          (if (w.2 : ℕ) = v.2 ∧ (w.1 : ℕ) + 1 = v.1 then (1 : ℚ) else 0) +
+          (if (w.1 : ℕ) = v.1 ∧ (v.2 : ℕ) + 1 = w.2 then (1 : ℚ) else 0) +
+          (if (w.1 : ℕ) = v.1 ∧ (w.2 : ℕ) + 1 = v.2 then (1 : ℚ) else 0)) :=
+        sum_le_sum fun w _ => hcap w
+    _ ≤ 2 * (1 + 1 + 1 + 1) := by
+        rw [← mul_sum]
+        simp only [sum_add_distrib]
+        have h1 := one (fun w => (w.2 : ℕ) = v.2 ∧ (v.1 : ℕ) + 1 = w.1)
+          fun a b ⟨h1, h2⟩ ⟨h3, h4⟩ => Prod.ext (Fin.ext (by omega)) (Fin.ext (by omega))
+        have h2 := one (fun w => (w.2 : ℕ) = v.2 ∧ (w.1 : ℕ) + 1 = v.1)
+          fun a b ⟨h1, h2⟩ ⟨h3, h4⟩ => Prod.ext (Fin.ext (by omega)) (Fin.ext (by omega))
+        have h3 := one (fun w => (w.1 : ℕ) = v.1 ∧ (v.2 : ℕ) + 1 = w.2)
+          fun a b ⟨h1, h2⟩ ⟨h3, h4⟩ => Prod.ext (Fin.ext (by omega)) (Fin.ext (by omega))
+        have h4 := one (fun w => (w.1 : ℕ) = v.1 ∧ (w.2 : ℕ) + 1 = v.2)
+          fun a b ⟨h1, h2⟩ ⟨h3, h4⟩ => Prod.ext (Fin.ext (by omega)) (Fin.ext (by omega))
+        linarith
+    _ = 8 := by norm_num
+
+/-- The capacity into a vertex of the mesh is at most `8`. -/
+theorem mesh_in_cap (k : ℕ) (v : Fin k × Fin k) : ∑ u, (meshNet k).cap u v ≤ 8 := by
+  have e : ∀ u, (meshNet k).cap u v = (meshNet k).cap v u := fun u => by
+    show (if MeshAdj u v then (2 : ℚ) else 0) = if MeshAdj v u then 2 else 0
+    rw [if_congr (meshAdj_symm u v) rfl rfl]
+  simp only [e]
+  exact mesh_out_cap k v
+
+/-- **Buffers for backpressure on the mesh** with `m` connections per link (`k ≥ 2`, uniform
+traffic).  Let `θ = m · 8 (k² - 1) / k³` (the fluid optimum for even `k`).  Started empty, under
+any load at most `(1 - δ) θ` (`0 < δ ≤ 1`) a backpressure run never holds more than
+`b = 145 m k⁷ / (16 δ) + m` packets in any per-destination queue, and it delivers everything that
+arrives except at most `k⁴ b`.  The buffer is linear in the number of connections and in
+`1 / δ`; the constant is that of the drift argument, far above what simulation needs. -/
+theorem mesh_buffer (k : ℕ) (hk : 2 ≤ k) {m : ℕ} (hm : 0 < m) {δ : ℚ} (hδ : 0 < δ)
+    (hδ1 : δ ≤ 1) (r : Run ((meshNet k).copies m)) (hr : r.Backpressure)
+    (h0 : ∀ v d, r.Q 0 v d = 0)
+    (harr : ∀ t v d, v ≠ d →
+      r.a t v d ≤ (1 - δ) * (m * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3)) * uniform k v d) :
+    r.FitsIn (145 * m * k ^ 7 / (16 * δ) + m) ∧
+      ∀ t, ∑ s ∈ range t, r.arrived s - (k : ℚ) ^ 4 * (145 * m * k ^ 7 / (16 * δ) + m) ≤
+        ∑ s ∈ range t, r.delivered s := by
+  have hk' : (2 : ℚ) ≤ k := by exact_mod_cast hk
+  have hK : (0 : ℚ) < (k : ℚ) ^ 2 - 1 := by nlinarith
+  have hk3 : (8 : ℚ) ≤ (k : ℚ) ^ 3 := by nlinarith
+  have hm' : (0 : ℚ) < m := by exact_mod_cast hm
+  have hk3' : (0 : ℚ) < (k : ℚ) ^ 3 := by linarith
+  set θ := (m : ℚ) * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3) with hθdef
+  have hθ0 : 0 ≤ θ := by
+    rw [hθdef]; exact mul_nonneg hm'.le (div_nonneg (by linarith) hk3'.le)
+  obtain ⟨F⟩ := (mesh_routable k hk).copies m
+  have F' := F.normalize
+  set dem := fun v d => θ * uniform k v d with hdemdef
+  -- the demand of a pair
+  have hθu : ∀ v d : Fin k × Fin k, v ≠ d → θ * uniform k v d = 8 * m / k ^ 3 := fun v d hvd => by
+    unfold uniform; rw [ite_eq_right hvd, hθdef]
+    rw [show (m : ℚ) * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3) * (1 / ((k : ℚ) ^ 2 - 1)) =
+        8 * m / k ^ 3 * (((k : ℚ) ^ 2 - 1) * (1 / ((k : ℚ) ^ 2 - 1))) by ring,
+      mul_one_div_cancel hK.ne', mul_one]
+  have hdem0 : ∀ v d, 0 ≤ dem v d := fun v d => by
+    simp only [hdemdef]
+    exact mul_nonneg hθ0 ((uniform_props hk).1 v d)
+  have hdemm : ∀ v d, dem v d ≤ m := fun v d => by
+    simp only [hdemdef]
+    by_cases hvd : v = d
+    · subst hvd; simp [uniform]
+    · rw [hθu v d hvd, div_le_iff₀ hk3']; nlinarith
+  -- the slack
+  set ε := 8 * m * δ / (k : ℚ) ^ 3 with hεdef
+  have hε : 0 < ε := div_pos (by positivity) hk3'
+  have harr' : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d := fun t v d hvd => by
+    have h := harr t v d hvd
+    simp only [hdemdef]
+    rw [hθu v d hvd]
+    rw [show (1 - δ) * θ * uniform k v d = (1 - δ) * (θ * uniform k v d) by ring,
+      hθu v d hvd] at h
+    rw [hεdef]
+    have : (1 - δ) * (8 * m / k ^ 3) + 8 * m * δ / k ^ 3 = 8 * m / (k : ℚ) ^ 3 := by
+      ring
+    linarith
+  obtain ⟨hfit, hdel⟩ := r.backpressure_fitsIn hr F' hdem0 hε harr' h0
+  -- the drift constant
+  have hout : ∀ v, ∑ w, ((meshNet k).copies m).cap v w ≤ 8 * m := fun v => by
+    simp only [Net.copies_cap, ← mul_sum]
+    nlinarith [mesh_out_cap k v]
+  have hin : ∀ v, ∑ u, ((meshNet k).copies m).cap u v ≤ 8 * m := fun v => by
+    simp only [Net.copies_cap, ← mul_sum]
+    nlinarith [mesh_in_cap k v]
+  have hB : Run.driftConst ((meshNet k).copies m) dem ≤ 145 * (m : ℚ) ^ 2 * (k : ℚ) ^ 4 := by
+    calc Run.driftConst ((meshNet k).copies m) dem ≤
+          ∑ _d : Fin k × Fin k, ∑ _v : Fin k × Fin k, (145 * (m : ℚ) ^ 2) := by
+          refine sum_le_sum fun d _ => sum_le_sum fun v _ => ?_
+          have h1 : 0 ≤ ∑ w, ((meshNet k).copies m).cap v w :=
+            sum_nonneg fun w _ => ((meshNet k).copies m).cap_nonneg v w
+          have h2 : 0 ≤ ∑ u, ((meshNet k).copies m).cap u v :=
+            sum_nonneg fun u _ => ((meshNet k).copies m).cap_nonneg u v
+          have h3 := hout v
+          have h4 := hin v
+          have h5 := hdemm v d
+          have h6 := hdem0 v d
+          nlinarith
+      _ = 145 * (m : ℚ) ^ 2 * (k : ℚ) ^ 4 := by
+          simp only [sum_const, card_univ, Fintype.card_prod, Fintype.card_fin, nsmul_eq_mul]
+          push_cast; ring
+  -- the buffer
+  have hb : Run.driftConst ((meshNet k).copies m) dem / (2 * ε) + ε ≤
+      145 * m * k ^ 7 / (16 * δ) + m := by
+    have e1 : 145 * (m : ℚ) ^ 2 * k ^ 4 / (2 * ε) = 145 * m * k ^ 7 / (16 * δ) := by
+      rw [hεdef, show (2 : ℚ) * (8 * m * δ / k ^ 3) = 16 * m * δ / k ^ 3 by ring,
+        div_div_eq_mul_div, div_eq_div_iff (mul_pos (mul_pos (by norm_num) hm') hδ).ne'
+          (mul_pos (by norm_num) hδ).ne']
+      ring
+    have e2 : ε ≤ m := by
+      rw [hεdef, div_le_iff₀ hk3']; nlinarith
+    have e3 := div_le_div_of_nonneg_right hB (show (0 : ℚ) ≤ 2 * ε by linarith)
+    linarith
+  refine ⟨fun t v d => (hfit t v d).trans hb, fun t => ?_⟩
+  have h := hdel t
+  have hc : ((Fintype.card (Fin k × Fin k) : ℕ) : ℚ) ^ 2 = (k : ℚ) ^ 4 := by
+    simp only [Fintype.card_prod, Fintype.card_fin]; push_cast; ring
+  rw [hc] at h
+  have := mul_le_mul_of_nonneg_left hb (show (0 : ℚ) ≤ (k : ℚ) ^ 4 by positivity)
+  linarith
 
 /-- **Not vacuous**: on the mesh with `m` connections per link, for every load
 `0 ≤ ρ < m · 8 (k² - 1) / k³` there is a backpressure run, from the empty network, with
