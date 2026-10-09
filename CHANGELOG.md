@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* **Detours, proved safe** (`Routing/GraphDetour.lean`, `Examples/GraphDetour.lean`). The header
+  `(d, w, b)` adds a source-chosen intermediate node to `GraphBudget`; for every finite connected
+  graph, budget and choice of intermediates the network is deadlock free, livelock free with an
+  explicit hop bound, starvation free and delivers under sustained load (`detour_correct`,
+  `detour_underLoad`, `exists_detour_correct`); torus instances for every size.
+
 * `scripts/torus_experiments.py`: torus routing with packets — dimension order with datelines,
   Valiant, UGAL, the proved minimal adaptive tree-escape network, and source-chosen detours
   (long way round a ring or a random intermediate, by smoothed congestion). The detour variants

@@ -673,6 +673,17 @@ tornado and neighbour at or above the existing schemes (`ringvx10`). No variant 
 existing scheme on every pattern: the detours that tornado needs cost a little where none are
 needed, the same trade-off as on the mesh, now at the 1 % level.
 
+These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
+`(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
+(Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on
+arrival, the escape heads for `d` and drops it. For every finite connected graph, every budget
+and every `W` the network is deadlock free, livelock free (at most `dist s w + (B + 1) ·
+rankBound` hops), starvation free and delivers under sustained load (`detour_correct`,
+`detour_underLoad`, `detour_hops_le_some`; torus instances in `Examples/GraphDetour.lean`), and
+with `w = none` it is exactly `GraphBudget`'s network (`detourNet_route_none`). Since the source
+may pick any element of `W s d`, the congestion-based choices of `ringvx` and `ringvd` are
+covered.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -892,6 +903,7 @@ The network properties are listed in section 7.
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |

@@ -33,6 +33,7 @@ import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
+import AsyncLean.Routing.GraphDetour
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -117,6 +118,10 @@ open LTS
   GraphData.budget_route_adj GraphData.return_mem_route GraphData.budgetNet_route_zero
   GraphData.exists_budget_correct GraphData.budget_esc_wf GraphData.budget_rank_lt
   GraphData.budget_closed GraphData.rank_lt_rankBound
+  GraphData.detour_correct GraphData.detour_correct_of_escapeSel GraphData.detour_correct_of_sourceSel
+  GraphData.detour_underLoad_of_escapeSel GraphData.detour_underLoad GraphData.detour_underLoad_of_sourceSel
+  GraphData.detour_hops_le GraphData.detour_hops_le_some GraphData.detour_phase_hops_le
+  GraphData.detour_route_adj GraphData.detourNet_route_none GraphData.exists_detour_correct
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
