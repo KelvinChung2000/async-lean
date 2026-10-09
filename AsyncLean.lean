@@ -58,6 +58,7 @@ import AsyncLean.Routing.GraphBudget
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
+import AsyncLean.Flow.MeshWorst
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing

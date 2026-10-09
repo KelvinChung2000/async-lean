@@ -36,6 +36,7 @@ import AsyncLean.Routing.GraphBudget
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
+import AsyncLean.Flow.MeshWorst
 import AsyncLean.AxiomAudit
 
 /-!
@@ -244,5 +245,12 @@ open LTS
   Fluid.mesh_routable_odd Fluid.mesh_cut Fluid.mesh_upper_odd Fluid.mesh_opt_odd
   Fluid.mesh_opt_all Fluid.xyFlow_minimal Fluid.xyRouting_minimal Fluid.xyRoutingOdd_minimal
   Fluid.uniform_minimal_opt
+
+-- Fluid model: the worst case over admissible traffic; O1TURN reaches the best one
+#assert_standard_axioms
+  Fluid.o1turn_admissible Fluid.o1Routing_minimal Fluid.o1_load Fluid.xy_load
+  Fluid.bitcomp_admissible Fluid.bitcomp_upper Fluid.worst_opt Fluid.bitcomp_opt
+  Fluid.bitcomp_minimal Fluid.xy_admissible Fluid.xyWorst_admissible Fluid.xy_worst
+  Fluid.xy_worst_opt Fluid.o1turn_xy_ratio Fluid.worst_opt_eight Fluid.xy_worst_opt_eight
 
 end AsyncLean
