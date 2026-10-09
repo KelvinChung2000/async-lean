@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* `scripts/xp_combo.py`: price-chosen adaptive hops + toll-priced source detours with a
+  price-table filter + escape-share throttle. On the 8 × 8 torus it is at least as good as the
+  published schemes and every listed variant of ours on all nine patterns, with sequential moves
+  and without chaining (ahead on eight, tied at the injection limit on neighbour traffic;
+  two leads within noise).
+
 * Six ideas from other fields tried at equal resources (`scripts/xp_ramp.py`, `xp_prices.py`,
   `xp_backpressure.py`, `xp_physarum.py`, `xp_tolls.py`, `xp_arbiter.py`): price-chosen
   adaptive hops and Pigou tolls help on the torus; arbitration gains depend on the

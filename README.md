@@ -600,6 +600,35 @@ scheme. What does not survive is a comparison in which the arbitration order is 
 choice for everyone: with injection-last arbitration the published schemes gain more on some
 patterns than ours (above).
 
+**One torus scheme at least as good as every other, in both move models (simulation).**
+`scripts/xp_combo.py`, `C:hop=price:src=toll:pm=0.2:thr=lx2_4_32_2:thr2=lx2_4_35_2`, combines
+three of the ideas above: adaptive hops chosen by link price plus propagated route cost (`H`);
+source detours priced by the marginal-cost toll L²/h with an estimated-dual filter (`slex`),
+offered only when the price table puts the detour 20 % below the minimal route (which cuts
+needless detours under random permutation and transpose to 0 to 1 %); and the escape-share
+throttle (`lx`), with 32 % for sources sending to at most 2 destinations and 35 % otherwise.
+Tuned on seeds 1 to 4, evaluated on fresh seeds 11 to 18 (11 to 26 for transpose and hotspot),
+1600 cycles, peak over offered 0.8 and 1.0:
+
+| | uniform | transpose | shuffle | bit rev. | bit comp. | hotspot | tornado | neighbour | random perm. |
+|---|---|---|---|---|---|---|---|---|---|
+| sequential moves: combined | **0.7687** | **0.5971** | **0.6677** | **0.6731** | **0.4783** | **0.5421** | **0.4719** | 1.0 | **0.7102** |
+| best other (any of `dor`, `val`, `ugal`, `min`, `minC`, `min/P`, `bandit2m7f5k`, `H`, `P`, `slex10m10`, `dlexm10`) | 0.7575 | 0.5816 | 0.6637 | 0.6673 | 0.4562 | 0.5395 | 0.4584 | 1.0 | 0.7057 |
+| no chaining: combined | **0.5871** | **0.4379** | **0.5167** | **0.5145** | **0.3314** | **0.4597** | **0.3294** | 1.0 | **0.5322** |
+| best other | 0.5810 | 0.4375 | 0.5100 | 0.5077 | 0.3180 | 0.4525 | 0.3246 | 1.0 | 0.5301 |
+
+It is ahead on eight patterns in each model (by 0.4 to 4.9 %, mostly 5 to 48 standard errors)
+and tied on neighbour traffic at the injection limit; hotspot with sequential moves (+0.5 %,
+z = 1.4) and transpose without chaining (+0.1 %, z = 1.8) are within noise. It is not ahead of
+every configuration built while tuning it: the same parts with a single throttle threshold, or
+`min` with the throttle alone, edge it by 0.1 to 0.6 % on uniform, transpose, bit reversal or
+random permutation — the throttle's threshold trades uniform against tornado and bit
+complement. Safety: the intermediate choice, the minimal hops, the tree escape and bounded
+returns are `detourNet` (`Routing/GraphDetour.lean`); the throttle reads only the configuration
+and opens when the network is empty (an instance proof is still to be written); the prices,
+learned latencies and the per-source threshold choice are history, outside the
+configuration-only selection theorems, as for the bandit.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
