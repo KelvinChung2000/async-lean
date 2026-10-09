@@ -35,6 +35,7 @@ import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
+import AsyncLean.Flow.MeshOdd
 import AsyncLean.AxiomAudit
 
 /-!
@@ -237,5 +238,11 @@ open LTS
   Fluid.mesh_routable Fluid.mesh_upper Fluid.mesh_opt Fluid.mesh_wire Fluid.mesh_len
   Fluid.mesh_cap_le Fluid.wire_ceiling Fluid.wire_ceiling_opt Fluid.mesh_per_wire
   Fluid.ceiling_factor_lt Fluid.mesh_opt_eight Fluid.wire_ceiling_eight
+
+-- Fluid model: the mesh's optimum for every size; no detours needed under uniform traffic
+#assert_standard_axioms
+  Fluid.mesh_routable_odd Fluid.mesh_cut Fluid.mesh_upper_odd Fluid.mesh_opt_odd
+  Fluid.mesh_opt_all Fluid.xyFlow_minimal Fluid.xyRouting_minimal Fluid.xyRoutingOdd_minimal
+  Fluid.uniform_minimal_opt
 
 end AsyncLean
