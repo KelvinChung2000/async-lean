@@ -26,6 +26,8 @@ can lose at most `len u v` per unit, so
   `θ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`.
 
 * `Fluid.potential_bound` : the bound for any potential.
+* `Fluid.Flow.potential_bound_on` : the same for a flow restricted to some links (for example a
+  minimal flow, `Fluid.Flow.Minimal`): the potential need only respect the allowed links.
 * `Fluid.wire_bound` : **the wire bound.**  Place the vertices on the integer grid and let
   `len u v` be the wire length of the link, at least the Manhattan distance of its ends.  Then
   `θ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v * len u v`: the traffic times the distance it
@@ -94,6 +96,51 @@ theorem telescope (F : Flow N dem θ) (d : V) (φ : V → ℚ) (hφ : φ d = 0) 
 
 end Flow
 
+namespace Flow
+
+variable {N : Net V} {dem : V → V → ℚ} {θ : ℚ}
+
+/-- The flow uses only the links allowed by `S`: commodity `d` is on the link `u → v` only if
+`S d u v`. -/
+def SupportedOn (F : Flow N dem θ) (S : V → V → V → Prop) : Prop :=
+  ∀ d u v, 0 < F.f d u v → S d u v
+
+/-- The flow is **minimal** for the distance `dist`: every link a commodity uses brings it
+strictly closer to its destination (no detours). -/
+def Minimal (F : Flow N dem θ) (dist : V → V → ℚ) : Prop :=
+  F.SupportedOn fun d u v => dist v d < dist u d
+
+/-- **The potential bound for a restricted flow.**  If `F` uses only the links allowed by `S`,
+the potential needs to drop by at most `len u v` only along the allowed links. -/
+theorem potential_bound_on (F : Flow N dem θ) {S : V → V → V → Prop} (hF : F.SupportedOn S)
+    (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v) (φ : V → V → ℚ) (hφd : ∀ d, φ d d = 0)
+    (hφ : ∀ d u v, S d u v → 0 < N.cap u v → φ d u - φ d v ≤ len u v) :
+    θ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v := by
+  calc θ * ∑ s, ∑ d, dem s d * φ d s
+      = ∑ d, θ * ∑ s, dem s d * φ d s := by rw [Finset.sum_comm, Finset.mul_sum]
+    _ = ∑ d, ∑ u, ∑ v, F.f d u v * (φ d u - φ d v) :=
+        Finset.sum_congr rfl fun d _ => (F.telescope d (φ d) (hφd d)).symm
+    _ ≤ ∑ d, ∑ u, ∑ v, F.f d u v * len u v := by
+        refine Finset.sum_le_sum fun d _ => Finset.sum_le_sum fun u _ =>
+          Finset.sum_le_sum fun v _ => ?_
+        rcases (F.nonneg d u v).lt_or_eq with hp | hz
+        · have hc : 0 < N.cap u v := by
+            by_contra hc
+            rw [F.eq_zero_of_cap (not_lt.1 hc) d] at hp
+            exact lt_irrefl _ hp
+          exact mul_le_mul_of_nonneg_left (hφ d u v (hF d u v hp) hc) (F.nonneg d u v)
+        · rw [← hz]; simp
+    _ = ∑ u, ∑ v, (∑ d, F.f d u v) * len u v := by
+        rw [Finset.sum_comm]
+        refine Finset.sum_congr rfl fun u _ => ?_
+        rw [Finset.sum_comm]
+        exact Finset.sum_congr rfl fun v _ => (Finset.sum_mul ..).symm
+    _ ≤ ∑ u, ∑ v, N.cap u v * len u v :=
+        Finset.sum_le_sum fun u _ => Finset.sum_le_sum fun v _ =>
+          mul_le_mul_of_nonneg_right (F.capacity u v) (hlen u v)
+
+end Flow
+
 /-- **The potential bound** (weak duality).  Let `φ d v` be a potential towards every
 destination `d` with `φ d d = 0`, dropping by at most `len u v ≥ 0` along every link of positive
 capacity.  If `θ * dem` is routable, then
@@ -103,24 +150,8 @@ theorem potential_bound {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : Rout
     (hφ : ∀ d u v, 0 < N.cap u v → φ d u - φ d v ≤ len u v) :
     θ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v := by
   obtain ⟨F⟩ := h
-  calc θ * ∑ s, ∑ d, dem s d * φ d s
-      = ∑ d, θ * ∑ s, dem s d * φ d s := by rw [Finset.sum_comm, Finset.mul_sum]
-    _ = ∑ d, ∑ u, ∑ v, F.f d u v * (φ d u - φ d v) :=
-        Finset.sum_congr rfl fun d _ => (F.telescope d (φ d) (hφd d)).symm
-    _ ≤ ∑ d, ∑ u, ∑ v, F.f d u v * len u v := by
-        refine Finset.sum_le_sum fun d _ => Finset.sum_le_sum fun u _ =>
-          Finset.sum_le_sum fun v _ => ?_
-        by_cases hc : 0 < N.cap u v
-        · exact mul_le_mul_of_nonneg_left (hφ d u v hc) (F.nonneg d u v)
-        · rw [F.eq_zero_of_cap (not_lt.1 hc) d]; simp
-    _ = ∑ u, ∑ v, (∑ d, F.f d u v) * len u v := by
-        rw [Finset.sum_comm]
-        refine Finset.sum_congr rfl fun u _ => ?_
-        rw [Finset.sum_comm]
-        exact Finset.sum_congr rfl fun v _ => (Finset.sum_mul ..).symm
-    _ ≤ ∑ u, ∑ v, N.cap u v * len u v :=
-        Finset.sum_le_sum fun u _ => Finset.sum_le_sum fun v _ =>
-          mul_le_mul_of_nonneg_right (F.capacity u v) (hlen u v)
+  exact F.potential_bound_on (S := fun _ _ _ => True) (fun _ _ _ _ => trivial) len hlen φ hφd
+    (fun d u v _ hc => hφ d u v hc)
 
 /-- The Manhattan distance of two grid points. -/
 def manhattan (p q : ℤ × ℤ) : ℚ := |(p.1 - q.1 : ℚ)| + |(p.2 - q.2 : ℚ)|
