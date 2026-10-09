@@ -19,7 +19,8 @@ throttle g = 4, return budget B = 2). Schemes:
   long direction is less busy by at least g/10.
 * `bandit<e>[h<h>]`: each source keeps the smoothed in-network latency of its packets per option
   (minimal, long way in x or y, random intermediate) and picks the fastest, exploring e %; with
-  `h`, it switches away from its current option only when another is h % faster.
+  `h`, it switches away from its current option only when another is h % faster; `banditx`
+  without the long-way options.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -47,7 +48,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        bspec = scheme[6:].split('h')
+        bspec = scheme.lstrip('banditx').split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
         hyst = float(bspec[1]) / 100 if len(bspec) > 1 else 0.0
     cur = [0] * N                            # bandit: the option each source currently uses
@@ -167,7 +168,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                 opt = 0
                 if scheme.startswith('bandit') and dist[s][d] > 1:
                     opts = [(0, -1)]
-                    for dim in (0, 1):
+                    for dim in ((0, 1) if not scheme.startswith('banditx') else ()):
                         lw = longway(s, d, dim)
                         if lw: opts.append((1 + dim, lw[0]))
                     w = rnd.randrange(N)
