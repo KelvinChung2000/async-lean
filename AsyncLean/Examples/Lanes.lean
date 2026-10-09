@@ -4,6 +4,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.Examples.GraphRouting
 import AsyncLean.Routing.Lanes
 import AsyncLean.Routing.SharedLanes
+import AsyncLean.Routing.Widen
 import AsyncLean.Flow.Scaling
 import AsyncLean.AxiomAudit
 
@@ -30,6 +31,10 @@ every number of lanes `m` and every budget `B`**:
 `torusShared k m B` shares the lanes (`GraphData.sharedNet`): escapes per lane, adaptive hops on
 the adaptive channels of every lane; `torusShared_correct` proves it deadlock, livelock and
 starvation free and delivering under saturation for every `k`, `m` and `B`.
+
+`torusWide k m B` widens the detour network instead (`Network.widen`): one escape channel,
+`2m - 1` adaptive channels per link and `m` injection channels per node, every copy usable by
+every packet — the best performing use of the connections in simulation; `torusWide_correct`.
 
 With `Fluid.torus_copies_worst` (the best worst case of `m` connections on the torus of even
 side `k ≥ 4` is `m · 8 / k`, reached by Valiant in every lane) this is the scheme that scales
@@ -100,7 +105,21 @@ theorem torusShared_correct (k m B : ℕ) :
         (torusShared k m B).StarvationFreeUnderLoad sel (fun _ => False) :=
   GraphData.shared_correct _ _ B
 
-#assert_standard_axioms torusShared_correct
+/-- **The torus with `m` connections per link, widened**: the detour network with Valiant's
+intermediates and one escape channel, `2m - 1` adaptive channels per link and `m` injection
+channels per node, every copy usable by every packet. -/
+abbrev torusWide (k m B : ℕ) (hm : 0 < m) :=
+  ((torus k).detourNet B (torus k).anyDetour).widen
+    (slots (GraphData.sharedSlots m) (GraphData.sharedSlots_pos hm))
+
+/-- **The widened torus is correct** for every size, number of connections and budget. -/
+theorem torusWide_correct (k m B : ℕ) (hm : 0 < m) :
+    (torusWide k m B hm).Correct ∧ (torusWide k m B hm).StarvationFree ∧
+      ∀ sel, (torusWide k m B hm).ValidSel sel →
+        (torusWide k m B hm).StarvationFreeUnderLoad sel (fun _ => False) :=
+  (torus k).wide_detour_correct B _ _ _
+
+#assert_standard_axioms torusShared_correct torusWide_correct
 #assert_standard_axioms torusLanes_correct torusLanes_sourceSel torusLanes_parallel
 #assert_standard_axioms torusLanes_reachable
 
