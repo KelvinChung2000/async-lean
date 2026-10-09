@@ -750,6 +750,104 @@ with `w = none` it is exactly `GraphBudget`'s network (`detourNet_route_none`). 
 may pick any element of `W s d`, the congestion-based choices of `ringvx` and `ringvd` are
 covered.
 
+### Scaling with the connections
+
+How should a router use more connections — two or four physical links where there was one?
+The fluid model answers exactly (`Flow/Scaling.lean`, over ℚ, every network):
+
+* **No routing grows faster than linearly.** Throughput is homogeneous in the capacities: with
+  `m` connections in place of each one (`Net.copies`), a traffic matrix is routable at `θ` iff
+  it is routable at `θ / m` on one connection (`copies_routable_iff`). The best throughput of
+  `m` connections is exactly `m` times that of one, for a single matrix (`opt_copies`) and for
+  the worst case over any class of matrices (`worstOpt_copies`).
+* **Lanes reach it.** Treat the `m` connections of every link as `m` lanes, each a full copy of
+  the network; a packet picks a lane at its source and stays on it, and inside its lane uses
+  the best scheme for one connection. The lanes' flows add (`Routable.copies`), so this simple
+  scheme is optimal on `m` connections: nothing that mixes lanes, adapts across them or detours
+  through them does better.
+* **Unequal connections.** Split the connections into layers `N i` (a mesh plus a layer of
+  express links, say) and send the fraction `θ i / ∑ θ` of every demand into layer `i`, where
+  `θ i` is what the layer routes on its own: the network routes at `∑ θ i`
+  (`layered_routable`; the optimum is superadditive, `opt_superadditive`).
+
+With `m` connections per link the best worst case over admissible traffic is exactly
+`m · 4/k` on the `k × k` mesh (`mesh_copies_worst`), `m · 8/k` on the torus
+(`torus_copies_worst`; `m` on the 8 × 8 torus, `torus_eight_copies_worst`) and `2m` on the
+hypercube (`cube_copies_worst`), reached by Valiant's routing in every lane; uniform traffic
+gets `m` times `mesh_opt_all`, `torus_uniform_opt` and `cube_uniform_opt`.
+
+**The lane network, proved safe for every number of lanes** (`Routing/Lanes.lean`).
+`Network.lanes ls N` puts the networks `N i` side by side: channels `(i, c)`, a packet routed by
+`N i` and kept in lane `i`, every source free to inject into any lane (round robin, hashing, the
+least loaded lane). Each lane keeps its own two virtual channels; none is added. The library's
+safety proofs all follow one recipe — a closed legal set, a connected escape with a
+well-founded dependency graph, a ranking — which `Network.SafeCert` packages, and
+`SafeCert.lanes` lifts it to the lane network: dependencies never cross lanes, so the escape
+dependency graph is a disjoint union of well-founded ones. Hence:
+
+* `Network.lanes_correct`, `lanes_underLoad` : deadlock and livelock free under every valid
+  selection (which may compare lanes), starvation free under strong fairness, and every packet
+  delivered under saturation along every channel-fair run;
+* `GraphData.lanes_correct`, `lanes_budget_correct`, `lanes_detour_correct`,
+  `lanes_detour_sourceSel` : on every finite connected graph, any number of lanes of the
+  minimal adaptive, bounded-return or detour network, with a different spanning tree and detour
+  rule per lane if wished, throttled sources included; `Examples/Lanes.lean` : the torus of every
+  size with `m` lanes of the detour network behind `bandit2m7f5k` (`torusLanes_correct`,
+  `torusLanes_sourceSel`).
+
+The lanes do not interfere, so the packet network keeps the linear scaling:
+`lanes_reachable_iff` (the reachable configurations are exactly the tuples of reachable
+configurations of the lanes), `lanes_path` (runs of the lanes, one per lane, are together one
+run of the lane network: no lane blocks another) and `copies_path` (any run of one network, run
+in `m` lanes at once, delivers `m` times its packets).
+
+**Sharing the connections, proved safe too.** Lanes are the scheme whose scaling is a theorem;
+with packets, letting a packet use the free channels of other lanes does better (below). Two
+ways of sharing are proved safe on every graph for every number of connections:
+
+* `Routing/SharedLanes.lean` : `GraphData.sharedNet` keeps each packet's escape on its own
+  lane's spanning tree and lets its adaptive hops use the adaptive channel of every lane
+  (`shared_correct`, `shared_sourceSel`); every hop of the lanes is still allowed
+  (`lanes_route_sub`). The escape dependencies land on escape channels and stay in one lane.
+* `Routing/Widen.lean` : **widening.** `Network.widen` replaces every channel of *any* network
+  by any number of copies and lets a packet take any copy of any permitted hop, the escape
+  included. An escape dependency between copies is one between the channels they copy, so
+  `SafeCert.widen` lifts every certificate of the library (`widen_correct`,
+  `widen_sourceSel`; on every graph `GraphData.wide_correct`, `wide_detour_correct`). With one
+  escape channel, `2m - 1` adaptive channels and `m` injection channels
+  (`GraphData.sharedSlots`, `shared_slots_correct`; the torus `torusWide_correct`) this is the
+  `shared` scheme of the simulation.
+
+**Scaling with packets (simulation).** `scripts/lane_scaling.py`, 8 × 8 torus, `m` connections
+per link, each with two one-packet virtual channels, `m` injection channels per node, offered
+load up to `m` packets per node per cycle; the mechanics and selection of
+`scripts/routing_graph_sim.py` (up*/down* escape, tiered selection, `B = 2`, throttle `g = 4`).
+Peak accepted throughput **per node and per connection** (mean of 2 seeds; constant means
+linear scaling):
+
+| scheme | m | uniform | transpose | shuffle | bit rev. | hotspot | bit comp. | random perm. |
+|---|---|---|---|---|---|---|---|---|
+| one connection (`GraphData.net`) | 1 | 0.753 | 0.570 | 0.652 | 0.659 | 0.525 | 0.444 | 0.685 |
+| lanes (`Network.lanes`) | 2 | 0.755 | 0.569 | 0.653 | 0.660 | 0.521 | 0.445 | 0.683 |
+| lanes | 4 | 0.759 | 0.570 | 0.655 | 0.661 | 0.523 | 0.443 | 0.684 |
+| lanes, a spanning tree per lane | 4 | 0.759 | 0.579 | 0.663 | 0.662 | 0.494 | 0.442 | 0.670 |
+| shared lanes (`GraphData.sharedNet`) | 2 | 0.822 | 0.606 | 0.695 | 0.715 | 0.543 | 0.503 | 0.735 |
+| shared lanes | 4 | 0.877 | 0.632 | 0.726 | 0.757 | 0.549 | 0.544 | 0.774 |
+| shared lanes, a spanning tree per lane | 4 | 0.879 | 0.649 | 0.746 | 0.768 | 0.547 | 0.548 | 0.774 |
+| widened: 1 escape + `2m − 1` adaptive (`sharedSlots`) | 2 | 0.900 | 0.668 | 0.768 | 0.805 | 0.552 | 0.633 | 0.823 |
+| widened | 4 | **0.939** | **0.690** | **0.804** | **0.835** | **0.554** | **0.723** | **0.867** |
+
+Lanes scale exactly linearly, as the independence theorems say: the throughput per connection
+stays within 0.006 of one connection's on every pattern. Sharing does better than linearly
+relative to one connection with packets, because a packet blocked in its own lane can take a
+free channel of another: shared lanes gain 5 to 23 % per connection at `m = 4`, and widening,
+which spends only one virtual channel per link on the escape and the rest on adaptive hops,
+gains 6 to 63 % (bit complement 0.723 against 0.443; uniform 0.939, near the injection limit of
+1). That is not a contradiction of `opt_copies`: one connection with packets reaches only part
+of its fluid optimum (flow control), and more channels recover some of it; no scheme can exceed
+`m` times the fluid optimum of one connection. Hotspot traffic is limited by the links into the
+hotspot and scales linearly under every scheme. A spanning tree per lane changes little.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -972,6 +1070,9 @@ The network properties are listed in section 7.
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
+| `Flow/Scaling.lean` | throughput scales exactly linearly with the connections: flows scale and add, the layered scheme, exact optima with `m` connections per link on the mesh, torus and hypercube |
+| `Routing/Lanes.lean` | the lane network: `m` copies of a network side by side; safety certificates and their transfer to every number of lanes; lanes run in parallel and deliver the sum of their packets |
+| `Routing/SharedLanes.lean`, `Routing/Widen.lean` | sharing the connections: escapes per lane with adaptive hops on every lane; widening any network to any number of copies of every channel, every copy usable, with every guarantee kept |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |
@@ -984,7 +1085,7 @@ The network properties are listed in section 7.
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog` |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost, a tiered source-throttled selection, safe routing on the torus and the Petersen graph |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost, a tiered source-throttled selection, safe routing on the torus and the Petersen graph, the torus with `m` lanes |
 
 ### Scope and limits
 

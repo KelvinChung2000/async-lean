@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+* **Routing that scales linearly with the connections** (`Flow/Scaling.lean`,
+  `Routing/Lanes.lean`, `Examples/Lanes.lean`, `scripts/lane_scaling.py`). In the fluid model the
+  best throughput of `m` connections per link is exactly `m` times that of one
+  (`copies_routable_iff`, `opt_copies`, `worstOpt_copies`), reached by `m` lanes each running the
+  one-connection scheme; layers of unequal connections add (`layered_routable`,
+  `opt_superadditive`). Worst case over admissible traffic with `m` connections: exactly `4m/k`
+  (mesh), `8m/k` (torus), `2m` (hypercube). `Network.lanes` makes the lanes a packet network;
+  `Network.SafeCert` packages the library's proof recipe and `SafeCert.lanes` lifts it to every
+  number of lanes (deadlock, livelock and starvation freedom, delivery under saturation:
+  `lanes_correct`, `lanes_underLoad`; on every graph for `GraphData.net`, `budgetNet` and
+  `detourNet`, throttled sources included). The lanes are independent
+  (`lanes_reachable_iff`, `lanes_path`), so `m` copies deliver `m` times the packets of one
+  (`copies_path`). Sharing the connections is proved safe too: `GraphData.sharedNet` (escapes per
+  lane, adaptive hops on every lane, `shared_correct`) and widening (`Network.widen`: any number of
+  copies of every channel of any certified network, every copy usable, `SafeCert.widen`,
+  `widen_correct`, `GraphData.wide_detour_correct`, `shared_slots_correct`). In simulation on the
+  8 × 8 torus (`scripts/lane_scaling.py`), lanes keep the throughput per connection within 0.006
+  of one connection's on every pattern for `m = 1, 2, 4`; widening to one escape and `2m - 1`
+  adaptive channels gains 6 to 63 % per connection over lanes at `m = 4`.
+
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
   injection limit with them on neighbour traffic.
