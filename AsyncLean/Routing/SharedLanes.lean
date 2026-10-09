@@ -10,7 +10,8 @@ import AsyncLean.Routing.Lanes
 exactly `m` copies of one network.  With packets that leaves throughput unused: a packet blocked
 in its own lane cannot take a free channel of another lane going the same way.
 `scripts/lane_scaling.py` measures that letting packets use the adaptive channels of every lane
-gains 7 to 13 % per connection over the lanes on the 8 × 8 torus.  This file proves that this
+gains 4 to 13 % per connection over the lanes on the 8 × 8 torus with two
+connections per link, and 5 to 23 % with four.  This file proves that this
 **shared** use of the lanes stays safe on every graph, for every number of lanes.
 
 ## The network (`GraphData.sharedNet`)
