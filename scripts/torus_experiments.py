@@ -17,6 +17,8 @@ throttle g = 4, return budget B = 2). Schemes:
 * `cmb<aL>_<aV>_<g>_<m>`: no detour for routes of at most m hops; otherwise a random
   intermediate weighted by aV, else the long way round a ring weighted by aL, only when the
   long direction is less busy by at least g/10.
+* `bandit<e>`: each source keeps the smoothed in-network latency of its packets per option
+  (minimal, long way in x or y, random intermediate) and picks the fastest, exploring e %.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -43,6 +45,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     allvc1 = [[(u*5+p)*2+1 for p in range(4) if adj[u][p] >= 0] for u in range(N)]
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
+    if scheme.startswith('bandit'):
+        eps = float(scheme[6:]) / 100 if len(scheme) > 6 else 0.05
+    est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     if scheme.startswith('cmb'):
         aL, aV, gt, md = scheme[3:].split('_')
         aL, aV, gt, md = float(aL), float(aV), float(gt) / 10, int(md)
@@ -70,6 +75,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
         for c in [c for c, p in occ.items() if head[c] == p[0]]:
             pk = occ.pop(c)
             if t >= warmup: lat.append(t-pk[1]); hopsum += pk[2]
+            if len(pk) > 9:
+                e0 = est[pk[9]][pk[7]]
+                est[pk[9]][pk[7]] = 0.9 * e0 + 0.1 * (t - pk[8]) if e0 else float(t - pk[8])
         moved = set(); pks = list(occ); rnd.shuffle(pks)
         for c in pks:
             if c in moved: continue
@@ -152,8 +160,19 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                             if lw and ema[s][lw[1]] + gt <= em:
                                 cost = lw[2] * (1 + aL*ema[s][lw[1]])
                                 if cost < bestL: bestL, inter = cost, lw[0]
+                opt = 0
+                if scheme.startswith('bandit') and dist[s][d] > 1:
+                    opts = [(0, -1)]
+                    for dim in (0, 1):
+                        lw = longway(s, d, dim)
+                        if lw: opts.append((1 + dim, lw[0]))
+                    w = rnd.randrange(N)
+                    if w not in (s, d): opts.append((3, w))
+                    if rnd.random() < eps: opt, inter = rnd.choice(opts)
+                    else: opt, inter = min(opts, key=lambda o: est[s][o[0]])
                 if inter in (s, d): inter = -1
-                occ[c] = [d, born, 0, dist[s][d], 0, mis if scheme.startswith('mis') else 0, inter]
+                occ[c] = [d, born, 0, dist[s][d], 0, mis if scheme.startswith('mis') else 0, inter,
+                          opt, t, s]
     return len(lat)/((cycles-warmup)*N), hopsum/max(1,len(lat))
 
 def sim_dor(rate, pattern, cycles=4000, warmup=1000, seed=1):
