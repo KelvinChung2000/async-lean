@@ -712,6 +712,12 @@ free and delivers under sustained load (`torus_valiant_correct`, `detour_underLo
 The margins on bit complement and tornado are a few standard errors of the simulation; they
 are measurements, not theorems, and our own unthrottled-detour `GraphData.net` is still slightly
 ahead of it on transpose, shuffle, bit reversal and random permutation.
+Lower exploration (0 to 1 %), margins a detour must beat the minimal route by (5 to 25 %),
+and a larger margin for the random intermediate do not close that last gap (at best 0.568 /
+0.651 / 0.656 / 0.679 against 0.570 / 0.652 / 0.658 / 0.684) without giving up tornado: under
+those permutations the learning sources still send 2 to 4 % of packets on detours, about the
+1 % of throughput that minimal routing keeps. Being ahead of the existing schemes and also of
+our own minimal network on every pattern remains open.
 
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
