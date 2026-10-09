@@ -33,7 +33,9 @@ throttle g = 4, return budget B = 2). Schemes:
   `u` instead prices the random intermediate with the minimal hop count (no discount for its
   extra hops); `e<n>`: the random intermediate adds at most n hops to the route; a trailing
   `n` learns the latency per hop and predicts each option's latency as that times its hops
-  (less noise when a source's destinations vary).
+  (less noise when a source's destinations vary); a trailing `k` offers the random intermediate
+  only to a source whose last 8 destinations include at most 2 distinct nodes (concentrated
+  traffic, where Valiant spreads load; under spread-out traffic it only adds hops).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -72,12 +74,14 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     flow = [[0.0] * 4 for _ in range(N)]    # smoothed packets per cycle through each output port
-    fgate = float(scheme.rstrip('n').split('e')[0].split('f')[1].split('v')[0].rstrip('u')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    fgate = float(scheme.rstrip('nk').split('e')[0].split('f')[1].split('v')[0].rstrip('u')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
     vgate = 'v' in scheme[6:]
     vnodisc = scheme.endswith('u')
     perhop = scheme.startswith('bandit') and scheme.endswith('n')
-    vextra = int(scheme.rstrip('n').split('e')[-1]) if scheme.startswith('bandit') and 'e' in scheme[6:] else None
-    vtail = scheme.rstrip('n').split('e')[0].split('v')[-1] if vgate else ''
+    focus = scheme.startswith('bandit') and scheme.endswith('k')
+    recent = [deque(maxlen=8) for _ in range(N)]   # the last destinations of each source
+    vextra = int(scheme.rstrip('nk').split('e')[-1]) if scheme.startswith('bandit') and 'e' in scheme[6:] else None
+    vtail = scheme.rstrip('nk').split('e')[0].split('v')[-1] if vgate else ''
     vthr = (float(vtail) / 10 if vtail else (fgate or 0)) if vgate else 0
     moves = [[0] * 4 for _ in range(N)]
     if scheme.startswith('cmb'):
@@ -208,7 +212,10 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                                 (fgate is None or flow[s][lw[1]] <= fgate *
                                  min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
                             opts.append((1 + dim, lw[0], lw[2]))
+                    recent[s].append(d)
                     w = rnd.randrange(N)
+                    if focus and len(set(recent[s])) > 2:
+                        w = s
                     if vextra is not None:
                         for _ in range(30):
                             if dist[s][w] + dist[w][d] <= dist[s][d] + vextra: break
