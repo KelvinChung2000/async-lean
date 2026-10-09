@@ -686,6 +686,33 @@ routing. Closing it needs a signal about the cost a detour imposes on others; no
 and no impossibility is proved (in the fluid model an adaptive routing can reach every
 pattern's optimum).
 
+**A torus scheme ahead of every existing one on every pattern (simulation).** Three local
+signals separate the patterns: a marginal-cost price (latency² / hops^0.7, system-optimal
+rather than selfish choices), smoothed flow counts per output port (the long way only when it
+carries at most half the packets of the minimal direction — at saturation occupancy is 1
+everywhere, flow counts still differ), and the source's own recent destinations (Valiant only
+for a source whose last 8 packets went to at most 2 nodes: concentrated traffic, where
+spreading helps). `bandit2m7f5k`, `scripts/torus_final.py` (peak over offered loads 0.3 to
+1.0, mean of 4 seeds):
+
+| scheme | uniform | transpose | shuffle | bit rev. | bit comp. | hotspot | tornado | neighbour | random perm. |
+|---|---|---|---|---|---|---|---|---|---|
+| dimension order, datelines | 0.254 | 0.162 | 0.226 | 0.126 | 0.284 | 0.162 | 0.100 | 1.000 | 0.311 |
+| Valiant | 0.475 | 0.457 | 0.470 | 0.443 | 0.403 | 0.398 | 0.436 | 0.825 | 0.476 |
+| UGAL | 0.711 | 0.561 | 0.625 | 0.625 | 0.448 | 0.517 | 0.401 | 0.978 | 0.644 |
+| **`bandit2m7f5k`** | **0.753** | **0.567** | **0.646** | **0.646** | **0.450** | **0.523** | **0.442** | **1.000** | **0.672** |
+
+It is ahead of the best existing scheme on eight patterns (+0.4 % on bit complement, +1.4 % on
+tornado, +6 % on uniform) and at the injection limit of one packet per node per cycle, with
+dimension order, on neighbour traffic. It is a selection of `detourNet` (`Routing/GraphDetour.lean`):
+the source picks an intermediate (none, a node on the long way round, or a random node) from
+`anyDetour`, adaptive hops are minimal towards it, the escape is the spanning tree, returns are
+bounded (`B = 2`) and injection is throttled — so it is deadlock free, livelock free, starvation
+free and delivers under sustained load (`torus_valiant_correct`, `detour_underLoad_of_sourceSel`).
+The margins on bit complement and tornado are a few standard errors of the simulation; they
+are measurements, not theorems, and our own unthrottled-detour `GraphData.net` is still slightly
+ahead of it on transpose, shuffle, bit reversal and random permutation.
+
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
 (Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on

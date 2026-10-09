@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* **A torus scheme ahead of every existing one on every pattern (simulation)**:
+  `bandit2m7f5k` in `scripts/torus_experiments.py` (marginal-cost prices, flow-count gate for
+  the long way, Valiant only for concentrated destinations), a selection of the proved
+  `detourNet`; `scripts/torus_final.py` reproduces the comparison.
+
 * `scripts/torus_experiments.py`: latency-learning sources (`bandit<e>[h<h>][q<q>][g<g>]`) beat
   every existing torus scheme on seven of nine patterns, tie on neighbour traffic, and trail
   UGAL by 1.8 % on bit complement; all variants lie on one tornado / bit-complement frontier.
