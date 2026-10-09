@@ -15,7 +15,11 @@
   `torus_uniform_hop`, `cube_uniform_hop` expose the tight bounds. With integer packets on the
   8 × 8 mesh and torus, backpressure accepts 99 % of the fluid optimum for `m = 1, 2, 4` (mesh
   0.975 per node per connection, against 0.45 to 0.64 for the lane and widened networks), at the
-  cost of unbounded per-destination queues and delays of hundreds of slots.
+  cost of large per-destination queues and delays of hundreds of slots. Finite buffers suffice
+  (`Run.FitsIn`, `Run.backpressure_fitsIn`: at most `driftConst / (2 ε) + ε` per destination;
+  `mesh_buffer`: `145 m k⁷ / (16 δ) + m` on the mesh at `(1 − δ)` times the optimum); in
+  simulation `24 m` packets per destination reach 98 % of the optimum and `16 m` lose up to 30 %
+  (`backpressure_sim.py --buffers [--cap c]`).
 
 * **Routing that scales linearly with the connections** (`Flow/Scaling.lean`,
   `Routing/Lanes.lean`, `Examples/Lanes.lean`, `scripts/lane_scaling.py`). In the fluid model the

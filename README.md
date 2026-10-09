@@ -906,6 +906,28 @@ networks above inject at most one packet per node per cycle and connection, whic
 at 1, half its optimum). The proved guarantees of the packet networks above (deadlock freedom
 with finite buffers) and the throughput of backpressure are not yet one network.
 
+**How much buffer.** Backpressure needs room for backlog differences, and in the queueing model
+that room is finite: started empty, a backpressure run whose load stays `ε` below a routable
+traffic never holds more than `driftConst / (2 ε) + ε` in any per-destination queue
+(`Run.backpressure_fitsIn`), so buffers of that size are never exceeded and the run is exactly
+the finite-buffer one. On the mesh with `m` connections at `(1 − δ)` times the optimum this is
+`145 m k⁷ / (16 δ) + m` packets per destination (`mesh_buffer`): linear in `m` and in `1 / δ`,
+with the loose constant of the drift argument. In simulation (`backpressure_sim.py --buffers`,
+with `--cap c` for blocking buffers of `c · m` packets per destination) the largest queue stays
+near `26 m` for every slack from `δ = 0.4` down to `0.02`, and the threshold is sharp:
+
+| buffer per destination | δ = 0.4 | 0.2 | 0.1 | 0.05 | 0.02 |
+|---|---|---|---|---|---|
+| `4 m` | 0.42 | 0.50 | 0.54 | 0.55 | 0.56 |
+| `16 m` | 0.57 | 0.72 | 0.83 | 0.88 | 0.91 |
+| `24 m` | 0.60 | 0.80 | 0.91 | 0.95 | 0.98 |
+| `48 m` | 0.60 | 0.80 | 0.90 | 0.95 | 0.98 |
+
+(delivered throughput over the fluid optimum, 8 × 8 mesh, `m = 1`, offered `1 − δ`; `m = 2`
+is within 0.01 at `24 m` and above). So about `24 m` packets per destination, some 1 500 per node
+for `m = 1`, reach the optimum within 2 %, and too little buffer loses far more than the shortfall
+in storage would suggest.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
