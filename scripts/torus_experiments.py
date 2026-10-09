@@ -23,7 +23,7 @@ throttle g = 4, return budget B = 2). Schemes:
   without the long-way options; `q<q>`: each option's latency is
   multiplied by (its hops / the minimal hops)^(q/10), a price for the extra links it uses; `g<g>`: the long way
   only when its first hop is less busy than the minimal ones by g/10 (smoothed occupancy);
-  a trailing `m` prices each option by its marginal cost latency^2 / hops (for a queue with
+  `m[r]` prices each option by its marginal cost latency^2 / hops^(r/10), r = 10 by default (for a queue with
   latency L and free-flow latency L0 the marginal cost is about L^2 / L0): system-optimal
   instead of selfish choices.
 The escape always heads to the final destination and drops the intermediate.
@@ -53,12 +53,13 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        bspec = scheme.lstrip('banditx').rstrip('m').split('q')[0].split('g')[0].split('h')
+        bspec = scheme.lstrip('banditx').split('m')[0].split('q')[0].split('g')[0].split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
         hyst = float(bspec[1]) / 100 if len(bspec) > 1 and bspec[1] else 0.0
         qpen = float(scheme.split('q')[1].split('g')[0]) / 10 if 'q' in scheme else 0.0
         bgate = float(scheme.split('g')[1]) / 10 if 'g' in scheme else None
-        marg = scheme.endswith('m')
+        marg = 'm' in scheme[6:]
+        mexp = float(scheme.split('m')[-1]) / 10 if marg and scheme.split('m')[-1] else 1.0
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     if scheme.startswith('cmb'):
@@ -184,7 +185,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                     w = rnd.randrange(N)
                     if w not in (s, d): opts.append((3, w, dist[s][w] + dist[w][d]))
                     if marg:
-                        price = lambda o: est[s][o[0]] ** 2 / o[2]
+                        price = lambda o: est[s][o[0]] ** 2 / o[2] ** mexp
                     else:
                         price = lambda o: est[s][o[0]] * (o[2] / dist[s][d]) ** qpen
                     if rnd.random() < eps: opt, inter, _ = rnd.choice(opts)
