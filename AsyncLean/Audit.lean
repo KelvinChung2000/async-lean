@@ -38,6 +38,8 @@ import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
+import AsyncLean.Flow.Fluid
+import AsyncLean.Flow.MeshWire
 import AsyncLean.AxiomAudit
 
 /-!
@@ -247,5 +249,13 @@ open LTS
 #assert_standard_axioms
   Comb.unique Comb.val_consistent Network.withRtl_eq Network.correct_of_rtl
   Network.hops_of_settled Network.legal_of_coveredBy
+
+-- Fluid model: the mesh per unit of wire
+#assert_standard_axioms
+  Fluid.potential_bound Fluid.wire_bound Fluid.cut_bound
+  Fluid.sum_manhattan Fluid.uniform_dist Fluid.uniform_wire_bound Fluid.throughput_le_wire
+  Fluid.mesh_routable Fluid.mesh_upper Fluid.mesh_opt Fluid.mesh_wire Fluid.mesh_len
+  Fluid.mesh_cap_le Fluid.wire_ceiling Fluid.wire_ceiling_opt Fluid.mesh_per_wire
+  Fluid.ceiling_factor_lt Fluid.mesh_opt_eight Fluid.wire_ceiling_eight
 
 end AsyncLean
