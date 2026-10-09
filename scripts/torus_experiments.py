@@ -17,8 +17,9 @@ throttle g = 4, return budget B = 2). Schemes:
 * `cmb<aL>_<aV>_<g>_<m>`: no detour for routes of at most m hops; otherwise a random
   intermediate weighted by aV, else the long way round a ring weighted by aL, only when the
   long direction is less busy by at least g/10.
-* `bandit<e>`: each source keeps the smoothed in-network latency of its packets per option
-  (minimal, long way in x or y, random intermediate) and picks the fastest, exploring e %.
+* `bandit<e>[h<h>]`: each source keeps the smoothed in-network latency of its packets per option
+  (minimal, long way in x or y, random intermediate) and picks the fastest, exploring e %; with
+  `h`, it switches away from its current option only when another is h % faster.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -46,7 +47,10 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        eps = float(scheme[6:]) / 100 if len(scheme) > 6 else 0.05
+        bspec = scheme[6:].split('h')
+        eps = float(bspec[0]) / 100 if bspec[0] else 0.05
+        hyst = float(bspec[1]) / 100 if len(bspec) > 1 else 0.0
+    cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     if scheme.startswith('cmb'):
         aL, aV, gt, md = scheme[3:].split('_')
@@ -169,7 +173,11 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                     w = rnd.randrange(N)
                     if w not in (s, d): opts.append((3, w))
                     if rnd.random() < eps: opt, inter = rnd.choice(opts)
-                    else: opt, inter = min(opts, key=lambda o: est[s][o[0]])
+                    else:
+                        bo = min(opts, key=lambda o: est[s][o[0]])
+                        co = [o for o in opts if o[0] == cur[s]]
+                        if co and est[s][bo[0]] >= est[s][cur[s]] * (1 - hyst): bo = co[0]
+                        cur[s] = bo[0]; opt, inter = bo
                 if inter in (s, d): inter = -1
                 occ[c] = [d, born, 0, dist[s][d], 0, mis if scheme.startswith('mis') else 0, inter,
                           opt, t, s]
