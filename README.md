@@ -555,6 +555,33 @@ networks is still the fluid optimum. (Simulators count throughput per node and t
 optimum per sending node: for transpose and bit reversal multiply the fluid figures by 56/64,
 for shuffle by 62/64, before comparing.)
 
+### Six ideas from other fields (simulation)
+
+Each idea was tried at equal resources on the 8 × 8 torus and mesh (`scripts/xp_*.py`, 4 seeds,
+peak over offered loads; numbers are packets per node and cycle):
+
+| idea | script | best result | safety |
+|---|---|---|---|
+| ramp metering (traffic engineering) | `xp_ramp.py` | feedback on occupancy fails: the critical occupancy depends on the pattern. A configuration-only throttle switched by the share of escape channels among occupied ones (`lx2_4_36_2`) beats the torus `min` by 2 to 10 % on seven patterns, −1.2 % on shuffle; on the mesh nothing beats `g = 4` | configuration-only, opens when the network is empty: needs a short instance proof |
+| link prices (multiplicative weights) | `xp_prices.py` | converges to the fluid optima (within 0.5 to 5 %); with packets, choosing the adaptive hop by price + propagated route cost (`H`) beats `min` and `bandit2m7f5k` on seven torus patterns by 1.5 to 3.5 %; price-chosen detours (`P`) win tornado and bit complement but lose shuffle; small gains on the mesh | choices covered by `detourNet`; prices are history |
+| backpressure, arbitration (queueing) | `xp_backpressure.py`, `xp_arbiter.py` | in-network packets before the injection lane, then oldest first, looked like +2 to +23 %, but see below | arbitration is the schedule; injection-last is not fair |
+| Physarum (biology) | `xp_physarum.py` | plain dynamics find shortest paths only; a direction-aware saturating variant gets within 0.6 to 2.4 % of the fluid optima; with packets it lands on the tornado / bit-complement frontier | at the source: covered |
+| Braess, tolls (game theory) | `xp_tolls.py` | the M/M/1 Pigou toll is latency² / hops; it lifts tornado to 0.452 to 0.459 (best published 0.436) with bit complement ≥ 0.450; random permutation and shuffle stay 0.8 to 1.7 % below `min`; the fluid-optimal split is the wrong target for packets | covered |
+| exclusion processes (physics) | `xp_ceiling.py` | the packet-level ceiling above | proved for rings |
+
+**A modelling caveat that affects every packet-level number.** The simulators let a packet
+enter a channel vacated earlier in the same cycle (28 to 46 % of moves). `xp_arbiter.py`
+re-runs with no such chaining (a move may only enter a channel free at the start of the cycle,
+as with credits delayed by a cycle) and with maximal chaining. The arbitration gain only partly
+survives (tornado, bit complement, hotspot; on uniform, transpose and random permutation it
+turns into losses of 2 to 9 %), part of the hotspot gain is sources being starved (the worst
+source injects 1 to 2 % of the mean), and when the published schemes get the same arbiter they
+gain as much: without chaining no scheme of ours is ahead on every pattern (torus `min/P/l:io`
+loses transpose by 6 % and tornado by 1.1 %; on the mesh west-first with the same arbiter is
+best on four of six patterns). The packet-level comparisons in this README are therefore
+specific to the sequential-move model; which scheme is best depends on how moves within a
+cycle are resolved, and only the safety results are independent of it.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:

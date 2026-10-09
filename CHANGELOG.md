@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* Six ideas from other fields tried at equal resources (`scripts/xp_ramp.py`, `xp_prices.py`,
+  `xp_backpressure.py`, `xp_physarum.py`, `xp_tolls.py`, `xp_arbiter.py`): price-chosen
+  adaptive hops and Pigou tolls help on the torus; arbitration gains depend on the
+  move model (same-cycle chaining) and on starving sources, and vanish in a fair comparison;
+  every packet-level ranking is specific to the sequential-move model.
+
 * **The packet-level ceiling** (`Packet/Exclusion.lean`, `Packet/Ceiling.lean`,
   `scripts/xp_ceiling.py`): one-packet lanes in a ring carry at most 1/2 packet per lane per
   cycle on average under every configuration (`half_bound`, tight); lanes of depth 2 or more
