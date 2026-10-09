@@ -1,3 +1,5 @@
 /.lake
 /docbuild/.lake
 /docbuild/lake-manifest.json
+/bench/out
+/bench/xfile
