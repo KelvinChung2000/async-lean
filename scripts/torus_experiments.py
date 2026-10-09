@@ -47,6 +47,9 @@ throttle g = 4, return budget B = 2). Schemes:
   fV % of the minimal ones' flow.
 The escape always heads to the final destination and drops the intermediate.
 
+With TOPO=mesh in the environment the same schemes run on the 8 x 8 mesh (same spanning-tree
+escape; no long way round, so only the random intermediate remains as a detour).
+
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
 """
 import random, sys
@@ -62,7 +65,9 @@ def tdest(pattern, s, rnd):
     if pattern == 'randperm': return G.RANDPERM[s]
     return destination(pattern, s, K, rnd)
 
-NET = G.Net(G.torus_adj(K), escape='updown', root=27)
+import os
+TOPO = os.environ.get('TOPO', 'torus')     # TOPO=mesh runs the same schemes on the 8 x 8 mesh
+NET = G.Net(G.mesh_adj(K) if TOPO == 'mesh' else G.torus_adj(K), escape='updown', root=27)
 
 def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, seed=1):
     flagC, flagY, flagA = 'C' in scheme, 'Y' in scheme, 'A' in scheme
@@ -108,6 +113,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     margin = float(spec[1]) / 10 if len(spec) > 1 else 0.0
     useema = scheme.startswith('ring')
     def longway(s, d, dim):
+        if TOPO == 'mesh': return None            # no wrap-around: no long way round
         x, dx = (s % K, d % K) if dim == 0 else (s // K, d // K)
         r = (dx - x) % K
         if r == 0 or 2*r == K: return None
