@@ -652,6 +652,27 @@ to the middle trades, like moving wire there: large gains under uniform, shuffle
 and hotspot traffic, losses under transpose and bit reversal. Only more storage gains
 everywhere. No equal-storage allocation tried beats the existing schemes on every pattern.
 
+**Detours on the torus with packets (simulation).** `scripts/torus_experiments.py`, 8 × 8
+torus, 2 virtual channels of one-packet buffers, peak accepted throughput (mean of 2 seeds):
+
+| scheme | uniform | transpose | shuffle | bit rev. | bit comp. | hotspot | tornado | neighbour | random perm. |
+|---|---|---|---|---|---|---|---|---|---|
+| dimension order, dateline VCs | 0.249 | 0.162 | 0.226 | 0.126 | 0.284 | 0.162 | 0.099 | **1.000** | 0.311 |
+| Valiant | 0.476 | 0.457 | 0.470 | 0.442 | 0.402 | 0.397 | **0.436** | 0.826 | 0.475 |
+| UGAL | 0.711 | 0.562 | 0.625 | 0.626 | 0.448 | 0.514 | 0.400 | 0.978 | 0.643 |
+| `GraphData.net` (minimal adaptive, tree escape) | 0.752 | 0.569 | **0.651** | 0.657 | 0.445 | 0.522 | 0.371 | **1.000** | **0.684** |
+| + source picks minimal / Valiant (`ringvx10`) | **0.753** | **0.572** | 0.643 | **0.659** | **0.449** | 0.525 | 0.411 | 0.992 | 0.674 |
+| + long way round a ring (`ringvd30`) | 0.751 | 0.571 | 0.634 | 0.658 | 0.443 | **0.528** | 0.431 | 0.990 | 0.668 |
+
+Dimension order with datelines uses one virtual channel per hop, which halves its lanes;
+the tree-escape schemes use both. The minimal adaptive network already beats the existing
+schemes on every pattern but tornado (Valiant +17 %) and bit complement (UGAL +0.7 %). Letting
+the source pick a detour by congestion recovers tornado to within 1 % of Valiant (`ringvd30`)
+at a cost of about 1 % on bit complement and neighbour traffic, or keeps every pattern but
+tornado and neighbour at or above the existing schemes (`ringvx10`). No variant tried is at least as good as every
+existing scheme on every pattern: the detours that tornado needs cost a little where none are
+needed, the same trade-off as on the mesh, now at the 1 % level.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* `scripts/torus_experiments.py`: torus routing with packets — dimension order with datelines,
+  Valiant, UGAL, the proved minimal adaptive tree-escape network, and source-chosen detours
+  (long way round a ring or a random intermediate, by smoothed congestion). The detour variants
+  come within 1 % of the best existing scheme on every pattern and beat it on most; none is at
+  least as good on all.
+
 * `scripts/flow_control_experiments.py`: flow control at equal storage on the 8 × 8 mesh. Shared
   slots and deeper single lanes lose; lanes moved to the middle of the mesh trade gains on
   uniform, shuffle, bit-complement and hotspot traffic for losses on transpose and bit
