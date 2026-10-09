@@ -49,9 +49,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        bspec = scheme.lstrip('banditx').split('h')
+        bspec = scheme.lstrip('banditx').split('q')[0].split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
-        hyst = float(bspec[1].split('q')[0]) / 100 if len(bspec) > 1 and bspec[1].split('q')[0] else 0.0
+        hyst = float(bspec[1]) / 100 if len(bspec) > 1 and bspec[1] else 0.0
         qpen = float(scheme.split('q')[1]) / 10 if 'q' in scheme else 0.0
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
