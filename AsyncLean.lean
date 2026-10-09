@@ -74,6 +74,7 @@ import AsyncLean.Flow.Certificate
 import AsyncLean.Flow.MeshPatterns
 import AsyncLean.Flow.Topologies
 import AsyncLean.Flow.Valiant
+import AsyncLean.Flow.Tree
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
