@@ -36,7 +36,8 @@ throttle g = 4, return budget B = 2). Schemes:
   (less noise when a source's destinations vary); a trailing `k` offers the random intermediate
   only to a source whose last 8 destinations include at most 2 distinct nodes (concentrated
   traffic, where Valiant spreads load; under spread-out traffic it only adds hops); `kr<r>`:
-  a detour only when its price is at least r % below the minimal route's.
+  a detour only when its price is at least r % below the minimal route's (`w<w>`: w % for the
+  random intermediate).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -79,8 +80,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     vgate = 'v' in scheme[6:]
     vnodisc = scheme.endswith('u')
     perhop = scheme.startswith('bandit') and scheme.endswith('n')
-    focus = scheme.startswith('bandit') and scheme.rstrip('0123456789').rstrip('r').endswith('k')
-    rmarg = float(scheme.split('r')[-1]) / 100 if scheme.startswith('bandit') and 'kr' in scheme else 0.0
+    focus = scheme.startswith('bandit') and ('kr' in scheme or scheme.endswith('k'))
+    rmarg = float(scheme.split('kr')[-1].split('w')[0]) / 100 if scheme.startswith('bandit') and 'kr' in scheme else 0.0
+    vmarg = float(scheme.split('w')[-1]) / 100 if scheme.startswith('bandit') and 'kr' in scheme and 'w' in scheme.split('kr')[-1] else rmarg
     recent = [deque(maxlen=8) for _ in range(N)]   # the last destinations of each source
     vextra = int(scheme.split('kr')[0].rstrip('nk').split('e')[-1]) if scheme.startswith('bandit') and 'e' in scheme[6:] else None
     vtail = scheme.split('kr')[0].rstrip('nk').split('e')[0].split('v')[-1] if vgate else ''
@@ -237,7 +239,8 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                     if rnd.random() < eps: opt, inter, _ = rnd.choice(opts)
                     else:
                         bo = min(opts, key=price)
-                        if bo[0] != 0 and price(bo) > (1 - rmarg) * price(opts[0]): bo = opts[0]
+                        if bo[0] != 0 and price(bo) > (1 - (vmarg if bo[0] == 3 else rmarg)) * price(opts[0]):
+                            bo = opts[0]
                         co = [o for o in opts if o[0] == cur[s]]
                         if co and price(bo) >= price(co[0]) * (1 - hyst): bo = co[0]
                         cur[s] = bo[0]; opt, inter, _ = bo
