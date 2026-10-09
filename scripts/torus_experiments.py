@@ -25,7 +25,9 @@ throttle g = 4, return budget B = 2). Schemes:
   only when its first hop is less busy than the minimal ones by g/10 (smoothed occupancy);
   `m[r]` prices each option by its marginal cost latency^2 / hops^(r/10), r = 10 by default (for a queue with
   latency L and free-flow latency L0 the marginal cost is about L^2 / L0): system-optimal
-  instead of selfish choices.
+  instead of selfish choices; `f<f>`: the long way only when the packets leaving the source
+  in the long direction are at most f/10 of those leaving in the minimal direction (smoothed
+  flow counts, which unlike occupancy still differ at saturation).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -53,15 +55,19 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        bspec = scheme.lstrip('banditx').split('m')[0].split('q')[0].split('g')[0].split('h')
+        bspec = scheme.lstrip('banditx').split('f')[0].split('m')[0].split('q')[0].split('g')[0].split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
         hyst = float(bspec[1]) / 100 if len(bspec) > 1 and bspec[1] else 0.0
         qpen = float(scheme.split('q')[1].split('g')[0]) / 10 if 'q' in scheme else 0.0
         bgate = float(scheme.split('g')[1]) / 10 if 'g' in scheme else None
-        marg = 'm' in scheme[6:]
-        mexp = float(scheme.split('m')[-1]) / 10 if marg and scheme.split('m')[-1] else 1.0
+        marg = 'm' in scheme[6:].split('f')[0]
+        mtail = scheme.split('f')[0].split('m')[-1]
+        mexp = float(mtail) / 10 if marg and mtail else 1.0
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
+    flow = [[0.0] * 4 for _ in range(N)]    # smoothed packets per cycle through each output port
+    fgate = float(scheme.split('f')[1]) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    moves = [[0] * 4 for _ in range(N)]
     if scheme.startswith('cmb'):
         aL, aV, gt, md = scheme[3:].split('_')
         aL, aV, gt, md = float(aL), float(aV), float(gt) / 10, int(md)
@@ -123,6 +129,11 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
             pk[2] += 1
             if onesc and q % 2 == 1: pk[4] += 1
             occ[q] = occ.pop(c); moved.add(q)
+            if fgate is not None and (q // 2) % 5 < 4: moves[q // 10][(q // 2) % 5] += 1
+        if fgate is not None:
+            for u in range(N):
+                for p in range(4):
+                    flow[u][p] = 0.98 * flow[u][p] + 0.02 * moves[u][p]; moves[u][p] = 0
         for s in range(N):
             if rnd.random() < rate:
                 d = tdest(pattern, s, rnd)
@@ -180,7 +191,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                     for dim in ((0, 1) if not scheme.startswith('banditx') else ()):
                         lw = longway(s, d, dim)
                         if lw and (bgate is None or ema[s][lw[1]] + bgate <=
-                                   min(ema[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
+                                   min(ema[s][(c2 // 2) % 5] for c2 in vc1[s][d])) and \
+                                (fgate is None or flow[s][lw[1]] <= fgate *
+                                 min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
                             opts.append((1 + dim, lw[0], lw[2]))
                     w = rnd.randrange(N)
                     if w not in (s, d): opts.append((3, w, dist[s][w] + dist[w][d]))
@@ -230,6 +243,11 @@ def sim_dor(rate, pattern, cycles=4000, warmup=1000, seed=1):
             if q in occ: continue
             pk[2] = 1 if crossed else 0
             occ[q] = occ.pop(c); moved.add(q)
+            if fgate is not None and (q // 2) % 5 < 4: moves[q // 10][(q // 2) % 5] += 1
+        if fgate is not None:
+            for u in range(N):
+                for p in range(4):
+                    flow[u][p] = 0.98 * flow[u][p] + 0.02 * moves[u][p]; moves[u][p] = 0
         for s in range(N):
             if rnd.random() < rate:
                 d = tdest(pattern, s, rnd)
