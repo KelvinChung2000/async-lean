@@ -455,13 +455,18 @@ theorem sum_fst {k : ℕ} (g : Fin k → ℚ) : ∑ s : Fin k × Fin k, g s.1 = 
   rw [Fintype.sum_prod_type]
   simp only [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, ← mul_sum]
 
-/-- **Upper bound** (even `k ≥ 2`, any routing): by the cut bound for the left half of the mesh,
-uniform traffic is routable in the `k × k` mesh only at `θ ≤ 8 (k² - 1) / k³`. -/
-theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
-    (h : Routable (meshNet k) (uniform k) θ) : θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 := by
+/-- The arithmetic of the cut bound for the left half of the mesh (even `k ≥ 2`): if `θ` times
+the uniform traffic across the cut is at most the capacity of the cut, then
+`θ ≤ 8 (k² - 1) / k³`.  (Used by `mesh_upper`, and by the queueing ceiling in
+`AsyncLean.Flow.Backpressure`.) -/
+theorem mesh_upper_of_cut (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
+    (key : θ * ∑ s : Fin k × Fin k, ∑ d : Fin k × Fin k,
+        (if 2 * (s.1 : ℕ) < k ∧ ¬ 2 * (d.1 : ℕ) < k then uniform k s d else 0) ≤
+      ∑ u : Fin k × Fin k, ∑ v : Fin k × Fin k,
+        (if 2 * (u.1 : ℕ) < k ∧ ¬ 2 * (v.1 : ℕ) < k then (meshNet k).cap u v else 0)) :
+    θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 := by
   obtain ⟨m, hm⟩ := he
   have hmk : m < k := by omega
-  have key := cut_bound h (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k)
   -- the traffic across the cut
   have hA : ∑ s : Fin k × Fin k, (if 2 * (s.1 : ℕ) < k then (1 : ℚ) else 0) = k * m := by
     rw [sum_fst (fun i : Fin k => if 2 * (i : ℕ) < k then (1 : ℚ) else 0)]
@@ -543,6 +548,12 @@ theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
   have k3 : 4 * m * (θ * m ^ 3) ≤ 4 * m * ((m + m) ^ 2 - 1) := by nlinarith
   have k4 := le_of_mul_le_mul_left k3 (by linarith)
   nlinarith
+
+/-- **Upper bound** (even `k ≥ 2`, any routing): by the cut bound for the left half of the mesh,
+uniform traffic is routable in the `k × k` mesh only at `θ ≤ 8 (k² - 1) / k³`. -/
+theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
+    (h : Routable (meshNet k) (uniform k) θ) : θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 :=
+  mesh_upper_of_cut k hk he (cut_bound h (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k))
 
 /-- **The mesh's exact fluid throughput** (even `k ≥ 2`): the largest throughput at which uniform
 traffic is routable in the `k × k` mesh is `8 (k² - 1) / k³`. -/
