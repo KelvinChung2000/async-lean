@@ -42,6 +42,8 @@ import AsyncLean.Flow.MeshPatterns
 import AsyncLean.Flow.Valiant
 import AsyncLean.Flow.Tree
 import AsyncLean.Flow.Symmetric
+import AsyncLean.Flow.GraphCert
+import AsyncLean.Flow.GraphPatterns
 import AsyncLean.AxiomAudit
 
 /-!
@@ -284,5 +286,19 @@ open LTS
   Fluid.torus_uniform_opt Fluid.torus_uniform_opt_eight Fluid.torus_self_opt
   Fluid.torus_self_routable Fluid.cube_uniform_opt Fluid.cube_uniform_opt_six Fluid.cube_self_opt
   Fluid.cube_self_routable Fluid.torus_worst_opt' Fluid.cube_worst_opt'
+
+-- Fluid model: exact optima on the 8 x 8 torus and the 6-cube (kernel-checked certificates)
+#assert_standard_axioms
+  Fluid.torusTornado_opt Fluid.torusTornado_minimal_opt Fluid.torusTornado_detour_gain
+  Fluid.torusShuffle_opt Fluid.torusShuffle_minimal_opt Fluid.torusShuffle_detour_gain
+  Fluid.torusTranspose_opt Fluid.torusTranspose_minimal_opt Fluid.torusTranspose_detour_gain
+  Fluid.torusNeighbor_opt Fluid.torusNeighbor_minimal_opt Fluid.torusNeighbor_detour_gain
+  Fluid.torusBitrev_opt Fluid.torusBitrev_minimal_opt Fluid.torusBitrev_detour_gain
+  Fluid.cubeShuffle_opt Fluid.cubeShuffle_minimal_opt Fluid.cubeShuffle_detour_gain
+  Fluid.torusBitcomp_opt Fluid.torusBitcomp_minimal Fluid.torusBitcomp_minimal_opt
+  Fluid.cubeTranspose_opt Fluid.cubeTranspose_minimal Fluid.cubeTranspose_minimal_opt
+  Fluid.cubeBitrev_opt Fluid.cubeBitrev_minimal Fluid.cubeBitrev_minimal_opt Fluid.cubeBitcomp_opt
+  Fluid.cubeBitcomp_minimal Fluid.cubeBitcomp_minimal_opt Fluid.cubeTornado_opt
+  Fluid.cubeTornado_minimal Fluid.cubeTornado_minimal_opt
 
 end AsyncLean

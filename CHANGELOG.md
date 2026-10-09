@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+* **Beyond the mesh: which topologies need detours** (`Flow/Topologies.lean`, `Flow/Tree.lean`,
+  `Flow/Symmetric.lean`, `Flow/Valiant.lean`, `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean`,
+  `scripts/graph_certificates.py`). Minimal routing is optimal for every traffic matrix iff the
+  network is a tree (`minimal_optimal_iff_isTree`); for uniform traffic on every arc-transitive
+  network (`symmetric_opt`; torus and hypercube optima in closed form). Valiant's bound on every
+  network with symmetric capacities (`valiant`) gives the exact worst case of the mesh (4/k),
+  the torus (8/k) and the hypercube (2). Exact optima on the 8 × 8 torus and the 6-cube by
+  kernel-checked certificates: detours gain up to 60 % on the torus (tornado, shuffle,
+  transpose, neighbour, bit reversal) and 45 % on the hypercube (shuffle).
+
 * **Routing on the mesh has no room left, proved in the fluid model** (`Flow/MeshOdd.lean`,
   `Flow/MeshWorst.lean`, `Flow/Certificate.lean`, `Flow/MeshPatterns.lean`,
   `scripts/fluid_certificates.py`). `Flow.Minimal` and `Flow.potential_bound_on` (the dual bound

@@ -596,6 +596,44 @@ whose potential bound (`Flow.potential_bound_on` for the minimal-only hotspot bo
 (`Flow/Certificate.lean`, `Flow/MeshPatterns.lean`). What remains between these optima and the
 simulated throughput (35 to 60 %) is flow control, not routing.
 
+**Other topologies: when detours help is a property of the topology and the traffic together.**
+The bounds above hold on every network; what is special about the mesh is that minimal routing
+already meets them. In general (`Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean`,
+`Flow/GraphPatterns.lean`):
+
+* **For every traffic matrix: only trees.** On a connected network, minimal routing reaches the
+  optimum for every traffic matrix iff the network is a tree (`minimal_optimal_iff_isTree`): on a
+  tree every link is a cut that the unique route crosses; on any edge of a cycle, traffic between
+  its ends gets twice as much with the detour (`detour_helps`). So a topology class without
+  detours has to be stated for a traffic class.
+* **Uniform traffic: every arc-transitive network.** If automorphisms preserving the traffic map
+  every link to every other, averaging any minimal routing over them loads all links equally, so
+  minimal routing is optimal at `∑ cap / ∑ traffic × distance` (`symmetric_opt`). Instances: the
+  torus, 16(k² − 1)/k³ for even k ≥ 4 and 16/k for odd k (`torus_uniform_opt`), and the
+  n-cube, 4(2ⁿ − 1)/2ⁿ (`cube_uniform_opt`).
+* **Worst case over admissible traffic: Valiant on every symmetric network.** If uniform traffic
+  (including each node itself) is routable at θ, every admissible matrix is routable at θ/2 by
+  routing through a random intermediate node (`valiant`). With the bisection cut this is exact
+  on the mesh (4/k, `valiant_mesh_opt`), the torus (8/k for even k ≥ 4, `torus_worst_opt'`) and
+  the hypercube (2, `cube_worst_opt'`). On the mesh minimal routing (O1TURN) also reaches it; on
+  the 8 × 8 torus it cannot: tornado traffic allows only 2/3 to minimal flows against 16/15 with
+  detours, below the worst-case optimum 1 (`torusTornado_minimal_opt`).
+
+Exact optima on 64 routers (kernel-checked LP certificates, `scripts/graph_certificates.py`):
+
+| traffic | 8 × 8 torus: minimal / any | 6-cube: minimal / any |
+|---|---|---|
+| tornado | 2/3 / 16/15 (+60 %) | 2 / 2 |
+| shuffle | 1 / 8/5 (+60 %) | 12/5 / 108/31 (+45 %) |
+| transpose | 4/3 / 20/11 (+36 %) | 4 / 4 |
+| neighbour | 2 / 16/7 (+14 %) | — |
+| bit reversal | 16/9 / 40/21 (+7 %) | 4 / 4 |
+| bit complement | 1 / 1 | 2 / 2 |
+
+On the torus and the hypercube there is room left for routing: a deadlock-free routing that
+takes bounded non-minimal hops (as `Routing/GraphBudget.lean` allows) could gain up to 60 % in
+the fluid model where every minimal scheme is stuck.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -814,6 +852,8 @@ The network properties are listed in section 7.
 | `Flow/Fluid.lean`, `Flow/MeshWire.lean` | fluid throughput bounds: weak duality, the wire and cut bounds; the mesh's optimum and the wire ceiling on the k × k grid |
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
+| `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |

@@ -65,6 +65,8 @@ import AsyncLean.Flow.Topologies
 import AsyncLean.Flow.Valiant
 import AsyncLean.Flow.Tree
 import AsyncLean.Flow.Symmetric
+import AsyncLean.Flow.GraphCert
+import AsyncLean.Flow.GraphPatterns
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
