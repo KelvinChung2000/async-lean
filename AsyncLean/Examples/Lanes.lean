@@ -3,6 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.Examples.GraphRouting
 import AsyncLean.Routing.Lanes
+import AsyncLean.Routing.SharedLanes
 import AsyncLean.Flow.Scaling
 import AsyncLean.AxiomAudit
 
@@ -25,6 +26,10 @@ every number of lanes `m` and every budget `B`**:
   delivers `m` times the packets;
 * `torusLanes_reachable` : the reachable configurations are exactly the `m`-tuples of reachable
   configurations of one lane.
+
+`torusShared k m B` shares the lanes (`GraphData.sharedNet`): escapes per lane, adaptive hops on
+the adaptive channels of every lane; `torusShared_correct` proves it deadlock, livelock and
+starvation free and delivering under saturation for every `k`, `m` and `B`.
 
 With `Fluid.torus_copies_worst` (the best worst case of `m` connections on the torus of even
 side `k ≥ 4` is `m · 8 / k`, reached by Valiant in every lane) this is the scheme that scales
@@ -84,6 +89,18 @@ theorem torusLanes_reachable (k m B : ℕ) {f : Config (Fin m × GChan (TV k)) (
   rw [lanes_reachable_iff]
   simp [List.mem_finRange]
 
+/-- **The torus with `m` shared lanes**: escape hops in the packet's lane, adaptive hops on the
+adaptive channels of every lane, at most `B` returns. -/
+abbrev torusShared (k m B : ℕ) := GraphData.sharedNet (List.finRange m) (fun _ => torus k) B
+
+/-- **The torus with `m` shared lanes is correct** for every size, number of lanes and budget. -/
+theorem torusShared_correct (k m B : ℕ) :
+    (torusShared k m B).Correct ∧ (torusShared k m B).StarvationFree ∧
+      ∀ sel, (torusShared k m B).ValidSel sel →
+        (torusShared k m B).StarvationFreeUnderLoad sel (fun _ => False) :=
+  GraphData.shared_correct _ _ B
+
+#assert_standard_axioms torusShared_correct
 #assert_standard_axioms torusLanes_correct torusLanes_sourceSel torusLanes_parallel
 #assert_standard_axioms torusLanes_reachable
 
