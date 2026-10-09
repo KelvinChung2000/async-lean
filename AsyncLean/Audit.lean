@@ -35,6 +35,7 @@ import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
 import AsyncLean.Routing.Lanes
+import AsyncLean.Routing.SharedLanes
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -130,6 +131,8 @@ open LTS
   Network.lanes_path Network.ejections_flatMap Network.copies_path Network.lanes_reachable_iff
   Network.lanes_reachable_lane GraphData.lanes_correct GraphData.lanes_budget_correct
   GraphData.lanes_detour_correct GraphData.lanes_detour_sourceSel
+  GraphData.shared_closed GraphData.shared_dep GraphData.shared_esc_wf GraphData.shared_correct
+  GraphData.shared_sourceSel GraphData.lanes_route_sub
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
