@@ -31,7 +31,9 @@ throttle g = 4, return budget B = 2). Schemes:
   random intermediate the same way (its first hop against the minimal first hops; `v<n>`
   with its own threshold n/10); a trailing
   `u` instead prices the random intermediate with the minimal hop count (no discount for its
-  extra hops); `e<n>`: the random intermediate adds at most n hops to the route.
+  extra hops); `e<n>`: the random intermediate adds at most n hops to the route; a trailing
+  `n` learns the latency per hop and predicts each option's latency as that times its hops
+  (less noise when a source's destinations vary).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -70,11 +72,12 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     flow = [[0.0] * 4 for _ in range(N)]    # smoothed packets per cycle through each output port
-    fgate = float(scheme.split('e')[0].split('f')[1].split('v')[0].rstrip('u')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    fgate = float(scheme.rstrip('n').split('e')[0].split('f')[1].split('v')[0].rstrip('u')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
     vgate = 'v' in scheme[6:]
     vnodisc = scheme.endswith('u')
-    vextra = int(scheme.split('e')[-1]) if scheme.startswith('bandit') and 'e' in scheme[6:] else None
-    vtail = scheme.split('e')[0].split('v')[-1] if vgate else ''
+    perhop = scheme.startswith('bandit') and scheme.endswith('n')
+    vextra = int(scheme.rstrip('n').split('e')[-1]) if scheme.startswith('bandit') and 'e' in scheme[6:] else None
+    vtail = scheme.rstrip('n').split('e')[0].split('v')[-1] if vgate else ''
     vthr = (float(vtail) / 10 if vtail else (fgate or 0)) if vgate else 0
     moves = [[0] * 4 for _ in range(N)]
     if scheme.startswith('cmb'):
@@ -106,7 +109,8 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
             if t >= warmup: lat.append(t-pk[1]); hopsum += pk[2]
             if len(pk) > 9:
                 e0 = est[pk[9]][pk[7]]
-                est[pk[9]][pk[7]] = 0.9 * e0 + 0.1 * (t - pk[8]) if e0 else float(t - pk[8])
+                x = (t - pk[8]) / max(1, pk[2]) if perhop else t - pk[8]
+                est[pk[9]][pk[7]] = 0.9 * e0 + 0.1 * x if e0 else float(x)
         moved = set(); pks = list(occ); rnd.shuffle(pks)
         for c in pks:
             if c in moved: continue
@@ -215,7 +219,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][w]) > vthr *
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
                         opts.append((3, w, dist[s][w] + dist[w][d]))
-                    if marg:
+                    if perhop:
+                        price = lambda o: (est[s][o[0]] * o[2]) ** 2 / o[2] ** mexp
+                    elif marg:
                         price = lambda o: est[s][o[0]] ** 2 / (dist[s][d] if vnodisc and o[0] == 3 else o[2]) ** mexp
                     else:
                         price = lambda o: est[s][o[0]] * (o[2] / dist[s][d]) ** qpen
