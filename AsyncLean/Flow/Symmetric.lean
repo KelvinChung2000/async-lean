@@ -961,6 +961,23 @@ theorem torus_hop_self :
       2 * k ^ 3 * ringTotal k / (k : ℚ) ^ 2 := by
   rw [hopDemand_const, torus_sum_dist, one_div_mul_eq_div]
 
+/-- The optimum of uniform traffic on the torus (`k ≥ 3`) times its hop demand is the total
+capacity: the hop bound is tight. -/
+theorem torus_uniform_hop (k : ℕ) (hk : 3 ≤ k) :
+    (if Even k then 16 * ((k : ℚ) ^ 2 - 1) / k ^ 3 else 16 / (k : ℚ)) *
+        hopDemand (uniform k) torusDist = 4 * (k : ℚ) ^ 2 * (if k = 2 then 1 else 2) := by
+  have hk' : (3 : ℚ) ≤ k := by exact_mod_cast hk
+  have hK : (0 : ℚ) < (k : ℚ) ^ 2 - 1 := by nlinarith
+  rw [torus_hop_uniform, ite_eq_right (show k ≠ 2 by omega)]
+  split_ifs with he
+  · obtain ⟨m, rfl⟩ := he
+    rw [ringTotal_even, div_mul_div_comm, div_eq_iff (mul_ne_zero (by positivity) hK.ne')]
+    push_cast; ring
+  · obtain ⟨m, rfl⟩ := Nat.not_even_iff_odd.1 he
+    rw [show 2 * m + 1 = m + m + 1 by ring, ringTotal_odd] at *
+    rw [div_mul_div_comm, div_eq_iff (mul_ne_zero (by positivity) hK.ne')]
+    push_cast; ring
+
 /-- **Uniform traffic on the torus** (`k ≥ 3`): the optimal throughput, over all routings, is
 `16 (k² - 1) / k³` for even `k` and `16 / k` for odd `k`, and it is reached by a minimal flow
 (no detours) loading every link to exactly its capacity. -/
@@ -974,19 +991,10 @@ theorem torus_uniform_opt (k : ℕ) (hk : 3 ≤ k) :
   have hD : 0 < hopDemand (uniform k) torusDist := by
     rw [torus_hop_uniform]
     exact div_pos (mul_pos (by positivity) (ringTotal_pos (by omega))) hK
-  refine torus_opt_of (by omega) _ (fun s d => by
+  exact torus_opt_of (by omega) _ (fun s d => by
       unfold uniform; split_ifs
       · exact le_rfl
-      · exact div_nonneg zero_le_one hK.le) uniform_perm hD _ ?_
-  rw [torus_hop_uniform, ite_eq_right (show k ≠ 2 by omega)]
-  split_ifs with he
-  · obtain ⟨m, rfl⟩ := he
-    rw [ringTotal_even, div_mul_div_comm, div_eq_iff (mul_ne_zero (by positivity) hK.ne')]
-    push_cast; ring
-  · obtain ⟨m, rfl⟩ := Nat.not_even_iff_odd.1 he
-    rw [show 2 * m + 1 = m + m + 1 by ring, ringTotal_odd] at *
-    rw [div_mul_div_comm, div_eq_iff (mul_ne_zero (by positivity) hK.ne')]
-    push_cast; ring
+      · exact div_nonneg zero_le_one hK.le) uniform_perm hD _ (torus_uniform_hop k hk)
 
 /-- **Uniform traffic on the `2 × 2` torus**: the optimum is `3` (the two links between two
 positions of a ring of length `2` coincide, so the torus has only half the links). -/
@@ -1336,6 +1344,18 @@ theorem cube_hop_self :
       n * 2 ^ n * 2 ^ n / (2 * (2 : ℚ) ^ n) := by
   rw [hopDemand_const, cube_sum_dist, one_div_mul_eq_div, div_div, mul_comm (2 : ℚ)]
 
+/-- The optimum of uniform traffic on the `n`-cube times its hop demand is the total
+capacity: the hop bound is tight. -/
+theorem cube_uniform_hop (n : ℕ) (hn : 1 ≤ n) :
+    4 * (2 ^ n - 1) / 2 ^ n * hopDemand (cubeUniform n) cubeDist = 2 * n * 2 ^ n := by
+  have hP : (2 : ℚ) ≤ 2 ^ n := by
+    calc (2 : ℚ) = 2 ^ 1 := by norm_num
+      _ ≤ 2 ^ n := pow_le_pow_right₀ (by norm_num) hn
+  have hP1 : (0 : ℚ) < 2 ^ n - 1 := by linarith
+  have hn' : (1 : ℚ) ≤ n := by exact_mod_cast hn
+  rw [cube_hop_uniform, div_mul_div_comm, div_eq_iff (by positivity)]
+  ring
+
 /-- **Uniform traffic on the hypercube** (`n ≥ 1`): the optimal throughput, over all routings,
 is `4 (2ⁿ - 1) / 2ⁿ`, reached by a minimal flow (no detours) loading every link to exactly its
 capacity. -/
@@ -1354,9 +1374,8 @@ theorem cube_uniform_opt (n : ℕ) (hn : 1 ≤ n) :
       unfold cubeUniform; split_ifs
       · exact le_rfl
       · exact div_nonneg zero_le_one hP1.le)
-    (fun σ s d => by unfold cubeUniform; simp only [σ.injective.eq_iff]) hD _ ?_
-  rw [cube_hop_uniform, div_mul_div_comm, div_eq_iff (by positivity)]
-  ring
+    (fun σ s d => by unfold cubeUniform; simp only [σ.injective.eq_iff]) hD _
+    (cube_uniform_hop n hn)
 
 /-- **The `6`-cube under uniform traffic**: the optimum is `63/16`. -/
 theorem cube_uniform_opt_six :

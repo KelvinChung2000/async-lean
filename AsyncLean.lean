@@ -72,6 +72,7 @@ import AsyncLean.Flow.Symmetric
 import AsyncLean.Flow.GraphCert
 import AsyncLean.Flow.GraphPatterns
 import AsyncLean.Flow.Scaling
+import AsyncLean.Flow.Backpressure
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing

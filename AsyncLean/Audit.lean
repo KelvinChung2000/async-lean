@@ -49,6 +49,7 @@ import AsyncLean.Flow.Symmetric
 import AsyncLean.Flow.GraphCert
 import AsyncLean.Flow.GraphPatterns
 import AsyncLean.Flow.Scaling
+import AsyncLean.Flow.Backpressure
 import AsyncLean.AxiomAudit
 
 /-!
@@ -298,6 +299,19 @@ open LTS
   Fluid.opt_copies Fluid.worstOpt_copies Fluid.opt_superadditive Fluid.mesh_copies_worst
   Fluid.torus_copies_worst Fluid.cube_copies_worst Fluid.mesh_copies_uniform
   Fluid.torus_copies_uniform Fluid.cube_copies_uniform Fluid.torus_eight_copies_worst
+
+-- Fluid model: backpressure is stable below the fluid optimum, no scheduler above it
+#assert_standard_axioms
+  Fluid.weight_eq Fluid.Flow.weight_eq Fluid.energy_le_backlog_sq Fluid.backlog_le_energy
+  Fluid.queue_sq Fluid.exists_nat_gt_rat Fluid.Run.bounded_of_drift Fluid.Flow.mix
+  Fluid.Run.Q_nonneg Fluid.Run.backlog_succ Fluid.Run.delivered_sum Fluid.Run.drift
+  Fluid.Run.energy_bounded Fluid.Run.backpressure_stable Fluid.Run.backpressure_optimal
+  Fluid.Run.totalFlow Fluid.Run.potential_ceiling Fluid.Run.cut_ceiling Fluid.Run.hop_ceiling
+  Fluid.IsHopDistance.copies Fluid.Run.copies_hop_ceiling Fluid.bpRates_maxWeight
+  Fluid.bpRates_feasible Fluid.sendAll_sum Fluid.Run.ofArrivals
+  Fluid.Run.ofArrivals_backpressure Fluid.mesh_backpressure Fluid.torus_backpressure
+  Fluid.cube_backpressure Fluid.mesh_backpressure_exists Fluid.mesh_upper_of_cut
+  Fluid.torus_uniform_hop Fluid.cube_uniform_hop
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms
