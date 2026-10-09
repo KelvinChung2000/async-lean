@@ -14,6 +14,9 @@ throttle g = 4, return budget B = 2). Schemes:
 * `ringv<a>`, `ringvx<a>`, `ringvd<a>`: the source picks the minimal route, the long way round
   a ring (not in `ringvx`; in `ringvd` only when the long direction is clearly less busy), or a
   random intermediate, by hops x (1 + a * smoothed occupancy of the first hop).
+* `cmb<aL>_<aV>_<g>_<m>`: no detour for routes of at most m hops; otherwise a random
+  intermediate weighted by aV, else the long way round a ring weighted by aL, only when the
+  long direction is less busy by at least g/10.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -40,6 +43,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     allvc1 = [[(u*5+p)*2+1 for p in range(4) if adj[u][p] >= 0] for u in range(N)]
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
+    if scheme.startswith('cmb'):
+        aL, aV, gt, md = scheme[3:].split('_')
+        aL, aV, gt, md = float(aL), float(aV), float(gt) / 10, int(md)
     spec = scheme.lstrip('ringvxd').split('m') if scheme.startswith('ring') else ['3']
     alpha = float(spec[0]) if spec[0] else 3.0
     margin = float(spec[1]) / 10 if len(spec) > 1 else 0.0
@@ -55,7 +61,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
         port = (1 if short == 1 else 0) if dim == 0 else (3 if short == 1 else 2)
         return w, port, K - delta + (dist[s][d] - delta)
     for t in range(cycles):
-        if scheme.startswith('ring'):
+        if scheme.startswith('ring') or scheme.startswith('cmb'):
             for u in range(N):
                 for p in range(4):
                     if adj[u][p] >= 0:
@@ -131,6 +137,21 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                         mpw = [(c2 // 2) % 5 for c2 in vc1[s][w]]
                         cost = (dist[s][w] + dist[w][d]) * (1 + alpha*min(ema[s][p] for p in mpw))
                         if cost < best: best, inter = cost, w
+                elif scheme.startswith('cmb') and dist[s][d] > md:
+                    mp = [(c2 // 2) % 5 for c2 in vc1[s][d]]
+                    em = min(ema[s][p] for p in mp)
+                    best = dist[s][d] * (1 + aV*em); bestL = dist[s][d] * (1 + aL*em)
+                    w = rnd.randrange(N)
+                    if w not in (s, d):
+                        mpw = [(c2 // 2) % 5 for c2 in vc1[s][w]]
+                        cost = (dist[s][w] + dist[w][d]) * (1 + aV*min(ema[s][p] for p in mpw))
+                        if cost < best: inter = w
+                    if inter < 0:
+                        for dim in (0, 1):
+                            lw = longway(s, d, dim)
+                            if lw and ema[s][lw[1]] + gt <= em:
+                                cost = lw[2] * (1 + aL*ema[s][lw[1]])
+                                if cost < bestL: bestL, inter = cost, lw[0]
                 if inter in (s, d): inter = -1
                 occ[c] = [d, born, 0, dist[s][d], 0, mis if scheme.startswith('mis') else 0, inter]
     return len(lat)/((cycles-warmup)*N), hopsum/max(1,len(lat))
