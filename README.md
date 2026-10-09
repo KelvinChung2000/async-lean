@@ -893,9 +893,9 @@ per connection, as a fraction of the fluid optimum, and the mean delay (Little's
 | mesh, optimum 0.984 | 1 | 0.500 | 0.894 | 0.950 | 0.980 | 0.990 | 1.004 | 1.016 | 662 |
 | mesh | 4 | 0.500 | 0.902 | 0.950 | 0.980 | 0.990 | 1.004 | 1.016 | 723 |
 | torus, optimum 1.969 | 1 | 0.499 | 0.899 | 0.950 | 0.980 | 0.990 | 1.002 | 1.007 | 271 |
-| torus | 4 | 0.500 | 0.899 | 0.950 | 0.980 | 0.990 | 1.001 | 1.007 | 302 |
+| torus | 4 | 0.500 | 0.899 | 0.950 | 0.980 | 0.990 | 1.002 | 1.007 | 302 |
 
-Every load up to 99 % of the optimum is accepted in full, for every `m`: on the mesh 0.975
+Every load up to 99 % of the optimum is accepted, to within 1 % (sampling noise), for every `m`: on the mesh 0.975
 packets per node per connection against 0.453 (lanes) and 0.643 (widening), linearly in `m`.
 Above the optimum the backlog grows without bound (and the accepted mix stops being uniform,
 which is why it can exceed the uniform optimum slightly). The price is the storage and the delay:
