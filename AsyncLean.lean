@@ -72,6 +72,7 @@ import AsyncLean.Flow.MeshOdd
 import AsyncLean.Flow.MeshWorst
 import AsyncLean.Flow.Certificate
 import AsyncLean.Flow.MeshPatterns
+import AsyncLean.Flow.Topologies
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
