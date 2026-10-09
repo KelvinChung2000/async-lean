@@ -582,6 +582,24 @@ best on four of six patterns). The packet-level comparisons in this README are t
 specific to the sequential-move model; which scheme is best depends on how moves within a
 cycle are resolved, and only the safety results are independent of it.
 
+With random arbitration for every scheme, the torus ranking does survive the no-chaining model
+(`xp_arbiter.py run torus ... none`, 4 seeds, peak over offered 0.2 to 1.0):
+
+| no chaining | uniform | transpose | shuffle | bit rev. | bit comp. | hotspot | tornado | neighbour | random perm. |
+|---|---|---|---|---|---|---|---|---|---|
+| dimension order | 0.1998 | 0.1230 | 0.1884 | 0.1002 | 0.2134 | 0.1342 | 0.0783 | 1.0 | 0.2521 |
+| Valiant | 0.3484 | 0.3467 | 0.3503 | 0.3296 | 0.2914 | 0.2962 | 0.3106 | 0.7115 | 0.3518 |
+| UGAL | 0.5288 | 0.4244 | 0.4696 | 0.4622 | 0.3092 | 0.4150 | 0.2982 | 0.9531 | 0.4714 |
+| `min` | 0.5763 | 0.4318 | 0.4959 | 0.4999 | 0.3026 | 0.4355 | 0.2545 | 1.0 | 0.5112 |
+| **`bandit2m7f5k`** | **0.5757** | **0.4299** | **0.4828** | **0.4843** | **0.3145** | **0.4339** | **0.3187** | 1.0 | **0.4952** |
+
+`bandit2m7f5k` is ahead of the best published scheme on every pattern but neighbour (tied at
+the injection limit) in this model too, by 1.7 % (bit complement) to 10 % (uniform), and
+2.6 % on tornado (Valiant). Throughput is about 20 to 30 % lower than with chaining for every
+scheme. What does not survive is a comparison in which the arbitration order is also a design
+choice for everyone: with injection-last arbitration the published schemes gain more on some
+patterns than ours (above).
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
