@@ -594,7 +594,7 @@ With random arbitration for every scheme, the torus ranking does survive the no-
 | **`bandit2m7f5k`** | **0.5757** | **0.4299** | **0.4828** | **0.4843** | **0.3145** | **0.4339** | **0.3187** | 1.0 | **0.4952** |
 
 `bandit2m7f5k` is ahead of the best published scheme on every pattern but neighbour (tied at
-the injection limit) in this model too, by 1.7 % (bit complement) to 10 % (uniform), and
+the injection limit) in this model too, by 1.3 % (transpose) to 9 % (uniform), and
 2.6 % on tornado (Valiant). Throughput is about 20 to 30 % lower than with chaining for every
 scheme. What does not survive is a comparison in which the arbitration order is also a design
 choice for everyone: with injection-last arbitration the published schemes gain more on some
