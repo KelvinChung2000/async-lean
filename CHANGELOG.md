@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+* **The wire ceiling, proved** (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model over ℚ).
+  `Fluid.potential_bound` (weak duality for multicommodity flow) gives the wire bound
+  (`wire_bound`: traffic × distance ≤ capacity × wire, every topology and routing) and the cut
+  bound (`cut_bound`). On the k × k grid under uniform traffic: `throughput_le_wire`
+  (θ ≤ 6 · wire / k³), `mesh_opt` (the mesh's optimum is exactly 8(k² − 1)/k³ for even k; an
+  explicit XY flow reaches it for every k), and `wire_ceiling` (no network with the mesh's wire
+  beats it by more than 3k / (2(k + 1)) < 3/2).
+
 * `scripts/routing_graph_sim.py`: the cycle-level simulator for arbitrary graphs (same mechanics
   as `routing_sim.py`, spanning-tree or XY escape, bounded returns) and the wire-budget designs
   `CA_112`, `D_128`, `DF_156`; README "Beyond the mesh": at equal radix and wire, no topology
