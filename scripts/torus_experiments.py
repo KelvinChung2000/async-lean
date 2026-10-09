@@ -27,7 +27,8 @@ throttle g = 4, return budget B = 2). Schemes:
   latency L and free-flow latency L0 the marginal cost is about L^2 / L0): system-optimal
   instead of selfish choices; `f<f>`: the long way only when the packets leaving the source
   in the long direction are at most f/10 of those leaving in the minimal direction (smoothed
-  flow counts, which unlike occupancy still differ at saturation).
+  flow counts, which unlike occupancy still differ at saturation); a trailing `v` gates the
+  random intermediate the same way (its first hop against the minimal first hops).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -66,7 +67,8 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     flow = [[0.0] * 4 for _ in range(N)]    # smoothed packets per cycle through each output port
-    fgate = float(scheme.split('f')[1]) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    fgate = float(scheme.split('f')[1].rstrip('v')) / 10 if scheme.startswith('bandit') and 'f' in scheme else None
+    vgate = scheme.endswith('v')
     moves = [[0] * 4 for _ in range(N)]
     if scheme.startswith('cmb'):
         aL, aV, gt, md = scheme[3:].split('_')
@@ -196,7 +198,10 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                                  min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
                             opts.append((1 + dim, lw[0], lw[2]))
                     w = rnd.randrange(N)
-                    if w not in (s, d): opts.append((3, w, dist[s][w] + dist[w][d]))
+                    if w not in (s, d) and not (vgate and fgate is not None and
+                            min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][w]) > fgate *
+                            min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
+                        opts.append((3, w, dist[s][w] + dist[w][d]))
                     if marg:
                         price = lambda o: est[s][o[0]] ** 2 / o[2] ** mexp
                     else:
