@@ -634,6 +634,24 @@ On the torus and the hypercube there is room left for routing: a deadlock-free r
 takes bounded non-minimal hops (as `Routing/GraphBudget.lean` allows) could gain up to 60 % in
 the fluid model where every minimal scheme is stuck.
 
+**Flow control at equal storage (simulation).** The gap between these fluid optima and the
+packet throughput comes from one-packet channels. `scripts/flow_control_experiments.py` keeps
+the mesh's 2 slots per directed link and reallocates them (8 × 8, offered 0.8, Duato's
+routing):
+
+| slots | uniform | transpose | shuffle | bit reversal | bit complement | hotspot |
+|---|---|---|---|---|---|---|
+| one per virtual channel (baseline) | 0.449 | 0.420 | 0.528 | 0.327 | 0.180 | 0.373 |
+| shared, escape may take both | 0.391 | 0.399 | 0.476 | 0.292 | 0.147 | 0.323 |
+| moved to the middle (1,2,2,4,2,2,1 lanes per position) | 0.526 | 0.390 | 0.593 | 0.261 | 0.325 | 0.464 |
+| 3 per link (+50 % storage) | 0.660 | 0.478 | 0.634 | 0.437 | 0.269 | 0.440 |
+
+Sharing slots or deepening one lane (one lane of depth 2 under XY: 0.353 against 0.493 for
+two lanes) loses: head-of-line blocking, and escape packets hold the shared slots. Moving lanes
+to the middle trades, like moving wire there: large gains under uniform, shuffle, bit complement
+and hotspot traffic, losses under transpose and bit reversal. Only more storage gains
+everywhere. No equal-storage allocation tried beats the existing schemes on every pattern.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* `scripts/flow_control_experiments.py`: flow control at equal storage on the 8 × 8 mesh. Shared
+  slots and deeper single lanes lose; lanes moved to the middle of the mesh trade gains on
+  uniform, shuffle, bit-complement and hotspot traffic for losses on transpose and bit
+  reversal; only more storage wins on every pattern.
+
 * **Beyond the mesh: which topologies need detours** (`Flow/Topologies.lean`, `Flow/Tree.lean`,
   `Flow/Symmetric.lean`, `Flow/Valiant.lean`, `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean`,
   `scripts/graph_certificates.py`). Minimal routing is optimal for every traffic matrix iff the
