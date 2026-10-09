@@ -717,7 +717,12 @@ and a larger margin for the random intermediate do not close that last gap (at b
 0.651 / 0.656 / 0.679 against 0.570 / 0.652 / 0.658 / 0.684) without giving up tornado: under
 those permutations the learning sources still send 2 to 4 % of packets on detours, about the
 1 % of throughput that minimal routing keeps. Being ahead of the existing schemes and also of
-our own minimal network on every pattern remains open.
+our own minimal network on every pattern remains open. Picking, among the free minimal hops,
+the one into the router with the most free channels (`C`) helps the minimal network a little
+(transpose 0.573, bit reversal 0.660, random permutation 0.686) and the detour scheme on bit
+complement and tornado (0.454, 0.445), but not enough on shuffle, bit reversal, hotspot and
+random permutation; dropping the random intermediate (`Y`) keeps the permutations at the
+minimal network's level but loses tornado (0.400) and bit complement (0.444).
 
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
