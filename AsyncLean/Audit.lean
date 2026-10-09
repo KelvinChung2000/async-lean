@@ -37,6 +37,8 @@ import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
 import AsyncLean.Flow.MeshWorst
+import AsyncLean.Flow.Certificate
+import AsyncLean.Flow.MeshPatterns
 import AsyncLean.AxiomAudit
 
 /-!
@@ -252,5 +254,11 @@ open LTS
   Fluid.bitcomp_admissible Fluid.bitcomp_upper Fluid.worst_opt Fluid.bitcomp_opt
   Fluid.bitcomp_minimal Fluid.xy_admissible Fluid.xyWorst_admissible Fluid.xy_worst
   Fluid.xy_worst_opt Fluid.o1turn_xy_ratio Fluid.worst_opt_eight Fluid.xy_worst_opt_eight
+
+-- Fluid model: exact optima of the standard patterns on the 8 x 8 mesh (kernel-checked certificates)
+#assert_standard_axioms
+  Fluid.transpose8_opt Fluid.transpose8_minimal Fluid.shuffle8_opt Fluid.shuffle8_minimal
+  Fluid.bitrev8_opt Fluid.bitrev8_minimal Fluid.hotspot8_opt Fluid.hotspot8_minimal_opt
+  Fluid.hotspot8_detour_gain
 
 end AsyncLean

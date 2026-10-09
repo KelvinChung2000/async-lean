@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+* **Routing on the mesh has no room left, proved in the fluid model** (`Flow/MeshOdd.lean`,
+  `Flow/MeshWorst.lean`, `Flow/Certificate.lean`, `Flow/MeshPatterns.lean`,
+  `scripts/fluid_certificates.py`). `Flow.Minimal` and `Flow.potential_bound_on` (the dual bound
+  for a flow restricted to some links). Uniform traffic: the optimum for every k (8/k for odd k,
+  `mesh_opt_all`), reached by XY without detours (`uniform_minimal_opt`). Worst case over
+  admissible traffic: O1TURN routes every admissible matrix at 4/k (`o1turn_admissible`) and no
+  routing does better (`worst_opt`, even k); XY's worst case is exactly 2/(k − 1)
+  (`xy_worst_opt`); bit complement's optimum is 4/k (`bitcomp_opt`). On the 8 × 8 mesh, exact
+  optima by kernel-checked LP certificates: transpose 10/11, shuffle 1, bit reversal 20/21 —
+  all reached by minimal flows — and hotspot 40/67 against 840/1471 for minimal flows.
+
 * **The wire ceiling, proved** (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model over ℚ).
   `Fluid.potential_bound` (weak duality for multicommodity flow) gives the wire bound
   (`wire_bound`: traffic × distance ≤ capacity × wire, every topology and routing) and the cut

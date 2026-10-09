@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Throughput bounds for routing on the k x k mesh (fluid model; nothing here is proved).
+"""Throughput bounds for routing on the k x k mesh (fluid model).
+
+The 8 x 8 optima and the worst-case bounds below are proved in Lean (`Flow/MeshPatterns.lean`,
+`Flow/MeshWorst.lean`, `Flow/MeshOdd.lean`); this script computes them numerically.
 
 Every directed link carries at most 2 packets per cycle (two virtual channels, one packet each).
 

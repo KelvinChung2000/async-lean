@@ -517,7 +517,7 @@ that is not proved. Seeing the whole network does not help (the global-view row 
 are not for lack of information. Under bit-complement traffic every packet crosses both
 bisections; XY on both virtual channels pushes about 0.6 packets per cycle through each
 bisection channel, which is what a saturated chain of one-packet channels carries in this model
-(0.50 to 0.57), so in this model it is at the limit (a simulation measurement and a bisection argument, not a theorem) and can be matched but not beaten, and every deviation
+(0.50 to 0.57), so in this model it is at the limit (a simulation measurement; in the fluid model the bisection bound 4/k is a theorem for every even k, `bitcomp_opt`) and can be matched but not beaten, and every deviation
 from XY loses there. Transpose traffic needs the deviations and no throttling. Rules that trade
 between the two (waiting before deviating, choosing the mode by distance, a controller
 switching modes) move along that trade-off without reaching both ends.
@@ -572,6 +572,29 @@ even k (`mesh_opt`: an XY flow reaches it for every k, the cut through the middl
 routing); so no network with the mesh's wire beats it by more than `3k / (2(k + 1)) < 3/2`
 (`wire_ceiling`; 4/3 on the 8 × 8 grid, `wire_ceiling_eight`). Both bounds come from one weak
 duality argument, `Fluid.potential_bound`.
+
+**Routing on the mesh has no room left (fluid model, proved).** In the fluid model routing is a
+choice of flow, so the optimum below bounds every routing — oblivious, adaptive, with detours,
+with global knowledge — and a minimal flow (`Flow.Minimal`: every hop gets closer) reaching it
+shows that detours add nothing:
+
+| traffic | optimum (per source) | reached without detours | theorem |
+|---|---|---|---|
+| uniform, every k ≥ 2 | 8(k² − 1)/k³ (even k), 8/k (odd k) | yes, XY | `uniform_minimal_opt`, `mesh_opt_all` |
+| bit complement, every even k | 4/k | yes, XY or O1TURN | `bitcomp_opt`, `bitcomp_minimal` |
+| transpose, 8 × 8 | 10/11 | yes | `transpose8_opt`, `transpose8_minimal` |
+| shuffle, 8 × 8 | 1 | yes | `shuffle8_opt`, `shuffle8_minimal` |
+| bit reversal, 8 × 8 | 20/21 | yes | `bitrev8_opt`, `bitrev8_minimal` |
+| hotspot, 8 × 8 | 40/67 (the hotspot's four input links) | no: minimal flows reach 840/1471, 4.5 % less | `hotspot8_opt`, `hotspot8_minimal_opt` |
+| worst case over admissible traffic, every even k | 4/k | yes, O1TURN (XY: 2/(k − 1), `xy_worst_opt`) | `worst_opt`, `o1turn_admissible` |
+
+Admissible traffic (`Admissible`) is every matrix in which no node sends or receives more than 1,
+permutations included: O1TURN routes all of them at 4/k without detours, and the bit complement
+shows no routing does better (`Flow/MeshWorst.lean`). The 8 × 8 rows are exact LP solutions
+(`scripts/fluid_certificates.py`) checked by the kernel: a flow at the optimum, and link lengths
+whose potential bound (`Flow.potential_bound_on` for the minimal-only hotspot bound) matches it
+(`Flow/Certificate.lean`, `Flow/MeshPatterns.lean`). What remains between these optima and the
+simulated throughput (35 to 60 %) is flow control, not routing.
 
 ## 8. Which tactic when?
 
@@ -789,6 +812,8 @@ The network properties are listed in section 7.
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
 | `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape layer: a packet may leave the escape layer `B` times |
 | `Flow/Fluid.lean`, `Flow/MeshWire.lean` | fluid throughput bounds: weak duality, the wire and cut bounds; the mesh's optimum and the wire ceiling on the k × k grid |
+| `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
+| `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
