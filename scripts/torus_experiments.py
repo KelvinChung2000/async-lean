@@ -21,7 +21,8 @@ throttle g = 4, return budget B = 2). Schemes:
   (minimal, long way in x or y, random intermediate) and picks the fastest, exploring e %; with
   `h`, it switches away from its current option only when another is h % faster; `banditx`
   without the long-way options; `q<q>`: each option's latency is
-  multiplied by (its hops / the minimal hops)^(q/10), a price for the extra links it uses.
+  multiplied by (its hops / the minimal hops)^(q/10), a price for the extra links it uses; `g<g>`: the long way
+  only when its first hop is less busy than the minimal ones by g/10 (smoothed occupancy).
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -49,10 +50,11 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
     hopsum = 0
     ema = [[0.0]*4 for _ in range(N)]
     if scheme.startswith('bandit'):
-        bspec = scheme.lstrip('banditx').split('q')[0].split('h')
+        bspec = scheme.lstrip('banditx').split('q')[0].split('g')[0].split('h')
         eps = float(bspec[0]) / 100 if bspec[0] else 0.05
         hyst = float(bspec[1]) / 100 if len(bspec) > 1 and bspec[1] else 0.0
-        qpen = float(scheme.split('q')[1]) / 10 if 'q' in scheme else 0.0
+        qpen = float(scheme.split('q')[1].split('g')[0]) / 10 if 'q' in scheme else 0.0
+        bgate = float(scheme.split('g')[1]) / 10 if 'g' in scheme else None
     cur = [0] * N                            # bandit: the option each source currently uses
     est = [[0.0] * 4 for _ in range(N)]     # bandit: smoothed network latency per source and option
     if scheme.startswith('cmb'):
@@ -73,7 +75,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
         port = (1 if short == 1 else 0) if dim == 0 else (3 if short == 1 else 2)
         return w, port, K - delta + (dist[s][d] - delta)
     for t in range(cycles):
-        if scheme.startswith('ring') or scheme.startswith('cmb'):
+        if scheme.startswith('ring') or scheme.startswith('cmb') or 'g' in scheme[6:]:
             for u in range(N):
                 for p in range(4):
                     if adj[u][p] >= 0:
@@ -172,7 +174,9 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                     opts = [(0, -1, dist[s][d])]
                     for dim in ((0, 1) if not scheme.startswith('banditx') else ()):
                         lw = longway(s, d, dim)
-                        if lw: opts.append((1 + dim, lw[0], lw[2]))
+                        if lw and (bgate is None or ema[s][lw[1]] + bgate <=
+                                   min(ema[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
+                            opts.append((1 + dim, lw[0], lw[2]))
                     w = rnd.randrange(N)
                     if w not in (s, d): opts.append((3, w, dist[s][w] + dist[w][d]))
                     price = lambda o: est[s][o[0]] * (o[2] / dist[s][d]) ** qpen
