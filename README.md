@@ -673,6 +673,19 @@ tornado and neighbour at or above the existing schemes (`ringvx10`). No variant 
 existing scheme on every pattern: the detours that tornado needs cost a little where none are
 needed, the same trade-off as on the mesh, now at the 1 % level.
 
+Sources that learn the in-network latency of each option (`bandit2`: minimal, long way in x
+or y, random intermediate; 2 % exploration) do better (4 seeds): tornado 0.441 (Valiant 0.436),
+transpose 0.569, shuffle 0.650, bit reversal 0.651, hotspot 0.521, random permutation 0.678,
+uniform 0.746, neighbour 1.000 — ahead of every existing scheme on seven patterns and tied on
+neighbour — but bit complement 0.440 against UGAL's 0.448. Every rule tried (congestion
+weights, gates, hysteresis, pricing extra hops) moves along one frontier between tornado and
+bit complement (for example 0.404 / 0.447 with hop pricing): latency-greedy sources reach an
+equilibrium in which the long way is as slow as the short one, which is right for tornado and
+slightly too much detouring for bit complement — the gap between selfish and system-optimal
+routing. Closing it needs a signal about the cost a detour imposes on others; none was found,
+and no impossibility is proved (in the fluid model an adaptive routing can reach every
+pattern's optimum).
+
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
 (Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on

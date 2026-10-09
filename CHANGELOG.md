@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `scripts/torus_experiments.py`: latency-learning sources (`bandit<e>[h<h>][q<q>][g<g>]`) beat
+  every existing torus scheme on seven of nine patterns, tie on neighbour traffic, and trail
+  UGAL by 1.8 % on bit complement; all variants lie on one tornado / bit-complement frontier.
+
 * **Detours, proved safe** (`Routing/GraphDetour.lean`, `Examples/GraphDetour.lean`). The header
   `(d, w, b)` adds a source-chosen intermediate node to `GraphBudget`; for every finite connected
   graph, budget and choice of intermediates the network is deadlock free, livelock free with an
