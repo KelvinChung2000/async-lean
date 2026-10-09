@@ -848,6 +848,64 @@ of its fluid optimum (flow control), and more channels recover some of it; no sc
 `m` times the fluid optimum of one connection. Hotspot traffic is limited by the links into the
 hotspot and scales linearly under every scheme. A spanning tree per lane changes little.
 
+On the 8 × 8 mesh (`--topology mesh` with the up*/down* escape, `mesh_xy` with XY), one seed,
+the same holds: lanes stay within 0.01 of one connection per connection (uniform 0.453 / 0.495,
+bit complement 0.187 / 0.248 for `m = 1`), widening reaches 0.643 / 0.644 uniform and 0.350 /
+0.352 bit complement per connection at `m = 4`.
+
+### Reaching the fluid optimum: backpressure
+
+With packets, one connection reaches only part of its fluid optimum: on the 8 × 8 mesh under
+uniform traffic the optimum is `63/64 ≈ 0.98` packets per node per cycle (`mesh_opt`) and the
+schemes above reach 0.45 to 0.64. The gap is flow control, not routing (on bit complement XY
+already reaches 99 % of its bisection bound). `Flow/Backpressure.lean` proves that one scheduler
+closes it completely, in a queueing model of the fluid network:
+
+* **The model** (`Fluid.Run`): discrete slots; every vertex keeps a backlog per destination; a
+  scheduler offers every commodity a rate on every link within the capacities, a vertex sends
+  at most its backlog, traffic arrives at the sources. Quantities are rational (the traffic is as
+  divisible as the fluid's); buffers are unbounded.
+* **Backpressure** (`Run.Backpressure`): max-weight rates (maximise
+  `∑ rate × backlog difference`) and work-conserving sends. Giving every link, in full, to a
+  destination of largest backlog difference across it is such a scheduler (`bpRates_maxWeight`);
+  for every arrival sequence it yields a run (`Run.ofArrivals`).
+* **Stable below the optimum** (`Run.backpressure_optimal`): if `dem` is routable at `θ`, every
+  load `ρ · dem` with `ρ < θ` keeps the backlog bounded and is delivered in full, up to a
+  constant. The proof is the quadratic drift bound (`Run.drift`): the energy `∑ Q²` falls by
+  `2 ε` times the backlog, up to a constant, because the max-weight rates beat any flow of the
+  traffic. The scheduler knows nothing of `dem`, `θ` or the flow.
+* **No scheduler above it** (`Run.potential_ceiling`, `cut_ceiling`, `hop_ceiling`): the traffic
+  a run carries in `T` slots is a flow in `T` copies of the network (`Run.totalFlow`), so a run
+  with a bounded backlog respects every bound of the fluid model.
+* **With `m` connections per link**: `mesh_backpressure`, `torus_backpressure`,
+  `cube_backpressure`: under uniform traffic backpressure is stable at every load below `m` times
+  the fluid optimum of one connection, and no scheduler is stable above it; on the mesh such a
+  stable run exists for every load (`mesh_backpressure_exists`). So the throughput of
+  backpressure is exactly the fluid optimum, and it scales exactly linearly with the connections.
+
+**With integer packets (simulation).** `scripts/backpressure_sim.py`: integer packets, a queue
+per destination at every node, every link carrying `2m` packets per slot to a destination of
+largest backlog difference, Poisson arrivals, 40 000 slots. Offered and accepted load per node
+per connection, as a fraction of the fluid optimum, and the mean delay (Little's law):
+
+| network | `m` | 0.50 | 0.90 | 0.95 | 0.98 | 0.99 | 1.01 | 1.05 | delay at 0.95 |
+|---|---|---|---|---|---|---|---|---|---|
+| mesh, optimum 0.984 | 1 | 0.500 | 0.894 | 0.950 | 0.980 | 0.990 | 1.004 | 1.016 | 662 |
+| mesh | 4 | 0.500 | 0.902 | 0.950 | 0.980 | 0.990 | 1.004 | 1.016 | 723 |
+| torus, optimum 1.969 | 1 | 0.499 | 0.899 | 0.950 | 0.980 | 0.990 | 1.002 | 1.007 | 271 |
+| torus | 4 | 0.500 | 0.899 | 0.950 | 0.980 | 0.990 | 1.001 | 1.007 | 302 |
+
+Every load up to 99 % of the optimum is accepted in full, for every `m`: on the mesh 0.975
+packets per node per connection against 0.453 (lanes) and 0.643 (widening), linearly in `m`.
+Above the optimum the backlog grows without bound (and the accepted mix stops being uniform,
+which is why it can exceed the uniform optimum slightly). The price is the storage and the delay:
+about 600 packets queued per node per connection on the mesh (some 10 per destination) and
+delays of 650 slots, where the packet networks above keep two one-packet buffers per link and
+deliver in tens of cycles; and backpressure's nodes inject and eject without limit (the packet
+networks above inject at most one packet per node per cycle and connection, which caps the torus
+at 1, half its optimum). The proved guarantees of the packet networks above (deadlock freedom
+with finite buffers) and the throughput of backpressure are not yet one network.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -1073,6 +1131,7 @@ The network properties are listed in section 7.
 | `Flow/Scaling.lean` | throughput scales exactly linearly with the connections: flows scale and add, the layered scheme, exact optima with `m` connections per link on the mesh, torus and hypercube |
 | `Routing/Lanes.lean` | the lane network: `m` copies of a network side by side; safety certificates and their transfer to every number of lanes; lanes run in parallel and deliver the sum of their packets |
 | `Routing/SharedLanes.lean`, `Routing/Widen.lean` | sharing the connections: escapes per lane with adaptive hops on every lane; widening any network to any number of copies of every channel, every copy usable, with every guarantee kept |
+| `Flow/Backpressure.lean` | backpressure (max-weight) scheduling in a queueing model of the fluid network: stable at every load below the fluid optimum, no scheduler stable above it; the mesh, torus and hypercube with `m` connections per link |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |

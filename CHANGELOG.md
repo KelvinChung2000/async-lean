@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+* **Backpressure reaches the fluid optimum** (`Flow/Backpressure.lean`,
+  `scripts/backpressure_sim.py`). A discrete-time queueing model of the fluid network
+  (`Fluid.Run`); max-weight, work-conserving scheduling (`Run.Backpressure`) keeps the backlog
+  bounded and delivers everything at every load below the fluid optimum (`Run.drift`,
+  `Run.backpressure_stable`, `Run.backpressure_optimal`); no scheduler keeps a bounded backlog
+  above any fluid bound (`Run.potential_ceiling`, `cut_ceiling`, `hop_ceiling`); the greedy
+  scheduler is max-weight and yields a run for every arrival sequence (`bpRates_maxWeight`,
+  `Run.ofArrivals`). With `m` connections per link under uniform traffic the threshold is exactly
+  `m` times the optimum on the mesh, torus and hypercube (`mesh_backpressure`,
+  `torus_backpressure`, `cube_backpressure`, `mesh_backpressure_exists`). `mesh_upper_of_cut`,
+  `torus_uniform_hop`, `cube_uniform_hop` expose the tight bounds. With integer packets on the
+  8 × 8 mesh and torus, backpressure accepts 99 % of the fluid optimum for `m = 1, 2, 4` (mesh
+  0.975 per node per connection, against 0.45 to 0.64 for the lane and widened networks), at the
+  cost of unbounded per-destination queues and delays of hundreds of slots.
+
 * **Routing that scales linearly with the connections** (`Flow/Scaling.lean`,
   `Routing/Lanes.lean`, `Examples/Lanes.lean`, `scripts/lane_scaling.py`). In the fluid model the
   best throughput of `m` connections per link is exactly `m` times that of one
