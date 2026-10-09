@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* **The packet-level ceiling** (`Packet/Exclusion.lean`, `Packet/Ceiling.lean`,
+  `scripts/xp_ceiling.py`): one-packet lanes in a ring carry at most 1/2 packet per lane per
+  cycle on average under every configuration (`half_bound`, tight); lanes of depth 2 or more
+  carry 1. Fluid optima at half capacity on the 8 × 8 mesh and torus; depth-N simulations.
+
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
   injection limit with them on neighbour traffic.

@@ -45,6 +45,8 @@ import AsyncLean.Flow.Tree
 import AsyncLean.Flow.Symmetric
 import AsyncLean.Flow.GraphCert
 import AsyncLean.Flow.GraphPatterns
+import AsyncLean.Packet.Exclusion
+import AsyncLean.Packet.Ceiling
 import AsyncLean.AxiomAudit
 
 /-!
@@ -291,6 +293,12 @@ open LTS
   Fluid.torus_uniform_opt Fluid.torus_uniform_opt_eight Fluid.torus_self_opt
   Fluid.torus_self_routable Fluid.cube_uniform_opt Fluid.cube_uniform_opt_six Fluid.cube_self_opt
   Fluid.cube_self_routable Fluid.torus_worst_opt' Fluid.cube_worst_opt'
+
+-- Packet level: one cycle of a ring of lanes; one-packet lanes carry at most 1/2 on average
+#assert_standard_axioms
+  Packet.Ring.cnt_add_moved Packet.Ring.moved_of_room Packet.Ring.all_move Packet.Ring.all_move_cnt
+  Packet.Ring.half_bound Packet.Ring.half_bound_rat Packet.Ring.alternating_moves
+  Packet.routable_scale Packet.isGreatest_scale Packet.mesh8_half Packet.torus8_half
 
 -- Fluid model: exact optima on the 8 x 8 torus and the 6-cube (kernel-checked certificates)
 #assert_standard_axioms

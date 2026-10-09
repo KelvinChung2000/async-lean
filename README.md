@@ -522,6 +522,39 @@ from XY loses there. Transpose traffic needs the deviations and no throttling. R
 between the two (waiting before deviating, choosing the mode by distance, a controller
 switching modes) move along that trade-off without reaching both ends.
 
+### The packet-level ceiling
+
+Why do packets reach only about half of the fluid optimum? A chain of one-packet lanes under
+our update (every packet tries one hop per cycle, in random order) is an exclusion process
+(TASEP with shuffled update). `Packet/Exclusion.lean` models one cycle on a ring of lanes of
+depth `N` for every order of moves and proves: for one-packet lanes the expected number of
+moves per lane per cycle is at most 1/2 for every ring length and every configuration
+(`half_bound`, tight: `alternating_moves`); with lanes of depth `N ≥ 2` holding 1 to `N − 1`
+packets every lane moves every cycle (`all_move`). `scripts/xp_ceiling.py` computes the current
+exactly (rings of 4 to 8 lanes) and by simulation:
+
+| update rule | N = 1 | N = 2 | N = 4 | N = 8 |
+|---|---|---|---|---|
+| random order (ours), parallel | 1/2 | 1 | 1 | 1 |
+| random sequential (one attempt per lane) | 0.25 | 0.42 | 0.60 | 0.76 |
+
+An open chain fed and drained every cycle carries 1, 2/3, 0.566, 0.512 and 0.500 with 2, 3, 4,
+8 and 64 lanes (the 0.50 to 0.57 measured earlier); above half occupancy the current falls
+(0.42 at 0.69), so a throttle should keep lanes about half full — which is what `g = 4` does.
+`Packet/Ceiling.lean` scales the fluid optima: with half capacity they are exactly 63/128,
+5/11, 1/2, 10/21, 20/67, 1/4 on the 8 × 8 mesh (`mesh8_half`) and 63/64, 10/11, 4/5, 20/21,
+1/2, 8/15 on the 8 × 8 torus (`torus8_half`).
+
+Half the fluid optimum is an estimate, not a theorem for networks: lanes that feed an ejection
+port or have several successors are not in a saturated ring and beat 1/2 (the busiest 10 % of
+lanes carry 0.53 to 0.75). The best mesh schemes are at or 3 to 30 % above it; on the torus
+packets reach 71 to 90 % of it, so there is room. Deeper lanes remove the exclusion limit
+altogether (8 × 8 mesh, uniform: 0.495, 0.752, 0.838, 0.880 for N = 1, 2, 4, 8; the busiest lanes
+then run at 1 and what remains is load balance). The only proved packet-level bound for whole
+networks is still the fluid optimum. (Simulators count throughput per node and the fluid
+optimum per sending node: for transpose and bit reversal multiply the fluid figures by 56/64,
+for shuffle by 62/64, before comparing.)
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
@@ -981,6 +1014,7 @@ The network properties are listed in section 7.
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
+| `Packet/Exclusion.lean`, `Packet/Ceiling.lean` | one cycle of a ring of depth-N lanes under every move order; one-packet lanes carry at most 1/2 on average; fluid optima at scaled capacity |
 | `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
