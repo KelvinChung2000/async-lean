@@ -232,7 +232,7 @@ open LTS
 
 -- Fluid model: the mesh per unit of wire
 #assert_standard_axioms
-  Fluid.potential_bound Fluid.wire_bound Fluid.cut_bound
+  Fluid.potential_bound Fluid.Flow.potential_bound_on Fluid.wire_bound Fluid.cut_bound
   Fluid.sum_manhattan Fluid.uniform_dist Fluid.uniform_wire_bound Fluid.throughput_le_wire
   Fluid.mesh_routable Fluid.mesh_upper Fluid.mesh_opt Fluid.mesh_wire Fluid.mesh_len
   Fluid.mesh_cap_le Fluid.wire_ceiling Fluid.wire_ceiling_opt Fluid.mesh_per_wire
