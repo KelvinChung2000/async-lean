@@ -41,6 +41,7 @@ import AsyncLean.Flow.Certificate
 import AsyncLean.Flow.MeshPatterns
 import AsyncLean.Flow.Valiant
 import AsyncLean.Flow.Tree
+import AsyncLean.Flow.Symmetric
 import AsyncLean.AxiomAudit
 
 /-!
@@ -275,5 +276,13 @@ open LTS
   Fluid.UGraph.IsHopDist.detour_helps Fluid.UGraph.IsHopDist.not_minimal_optimal
   Fluid.UGraph.IsHopDist.minimal_optimal_iff Fluid.UGraph.minimal_optimal_iff_isTree
   Fluid.pathGraph_isTree Fluid.path_minimal_optimal Fluid.cycle4_not_isTree Fluid.cycle4_detour
+
+-- Fluid model: uniform traffic on arc-transitive networks; the torus and the hypercube
+#assert_standard_axioms
+  Fluid.hop_bound Fluid.minimal_load_total Fluid.balanced_opt Fluid.symmetric_balanced
+  Fluid.symmetric_opt Fluid.torus_symmetric_opt Fluid.cube_symmetric_opt
+  Fluid.torus_uniform_opt Fluid.torus_uniform_opt_eight Fluid.torus_self_opt
+  Fluid.torus_self_routable Fluid.cube_uniform_opt Fluid.cube_uniform_opt_six Fluid.cube_self_opt
+  Fluid.cube_self_routable Fluid.torus_worst_opt' Fluid.cube_worst_opt'
 
 end AsyncLean
