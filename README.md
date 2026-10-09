@@ -739,6 +739,17 @@ minimal network beats its congestion-aware version on hotspot, 0.5231 against 0.
 on transpose, 0.5684 against 0.5716), so no scheme can be expected to be ahead of every variant;
 the bar is the published schemes.
 
+How much of the torus's lead over the mesh is the scheme and how much the links? In the fluid
+model the torus's optimum is 1.6 to 2 times the mesh's (1.0 under hotspot traffic); with packets
+the torus scheme reaches 1.2 to 1.6 times the best mesh scheme, i.e. 31 to 45 % of the torus's
+fluid optimum against 42 to 65 % on the mesh (88 % against 65 % under hotspot traffic). The
+torus's lead is the extra links, and less than they allow; the detour scheme itself adds over
+minimal routing on the same torus only under tornado (+19 %) and bit complement (+1 %). On the
+mesh (`TOPO=mesh`, same tree escape, 4 seeds) the same scheme matches minimal routing under
+uniform, hotspot and tornado traffic (+1 %) and loses 4 to 5 % under shuffle, bit reversal and
+random permutation: the fluid model leaves the mesh no room for detours, and the learning
+still takes some.
+
 These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
 (Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on
