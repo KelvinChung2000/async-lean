@@ -274,11 +274,6 @@ def sim_dor(rate, pattern, cycles=4000, warmup=1000, seed=1):
             if q in occ: continue
             pk[2] = 1 if crossed else 0
             occ[q] = occ.pop(c); moved.add(q)
-            if fgate is not None and (q // 2) % 5 < 4: moves[q // 10][(q // 2) % 5] += 1
-        if fgate is not None:
-            for u in range(N):
-                for p in range(4):
-                    flow[u][p] = 0.98 * flow[u][p] + 0.02 * moves[u][p]; moves[u][p] = 0
         for s in range(N):
             if rnd.random() < rate:
                 d = tdest(pattern, s, rnd)
