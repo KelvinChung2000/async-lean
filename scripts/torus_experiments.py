@@ -37,7 +37,8 @@ throttle g = 4, return budget B = 2). Schemes:
   only to a source whose last 8 destinations include at most 2 distinct nodes (concentrated
   traffic, where Valiant spreads load; under spread-out traffic it only adds hops); `kr<r>`:
   a detour only when its price is at least r % below the minimal route's (`w<w>`: w % for the
-  random intermediate).
+  random intermediate). Anywhere in the name: `C` picks, among the free hops of a tier, those
+  into the router with the most free output channels; `Y` drops the random-intermediate option.
 The escape always heads to the final destination and drops the intermediate.
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
@@ -58,6 +59,8 @@ def tdest(pattern, s, rnd):
 NET = G.Net(G.torus_adj(K), escape='updown', root=27)
 
 def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, seed=1):
+    flagC, flagY = 'C' in scheme, 'Y' in scheme
+    scheme = scheme.replace('C', '').replace('Y', '')
     net = NET; head, esc, vc1, out, dist, adj = net.head, net.esc, net.vc1, net.out, net.dist, net.adj
     rnd = random.Random(seed); occ = {}; queues = [deque() for _ in range(N)]; lat = []
     thr = [g * 2 * net.deg[v] / 8 for v in range(N)]
@@ -141,6 +144,10 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                 free = [x for x in tier if x not in occ]
                 if g and src: free = [x for x in free if sum(1 for o in out[head[x]] if o not in occ) >= thr[head[x]]]
                 if free:
+                    if flagC and len(free) > 1:
+                        score = lambda x: sum(1 for o in out[head[x]] if o not in occ)
+                        top = max(score(x) for x in free)
+                        free = [x for x in free if score(x) == top]
                     q = rnd.choice(free)
                     if scheme.startswith('mis') and canret and ti == 1 and pk[5] > 0 and q % 2 == 1 and q not in vc1[u][tgt]:
                         pk[5] -= 1
@@ -226,6 +233,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                             w = rnd.randrange(N)
                         else:
                             w = s
+                    if flagY: w = s
                     if w not in (s, d) and not (vgate and fgate is not None and
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][w]) > vthr *
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
@@ -294,6 +302,7 @@ def job(a):
     scheme, rate, p, seed = a
     if scheme == 'dor': return sim_dor(rate, p, seed=seed)[0]
     if scheme == 'min0': return sim('min', rate, p, g=0, seed=seed)[0]
+    if scheme == 'minC': return sim('minC', rate, p, seed=seed)[0]
     return sim(scheme, rate, p, seed=seed)[0]
 
 if __name__ == '__main__':
