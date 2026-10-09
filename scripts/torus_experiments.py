@@ -38,7 +38,8 @@ throttle g = 4, return budget B = 2). Schemes:
   traffic, where Valiant spreads load; under spread-out traffic it only adds hops); `kr<r>`:
   a detour only when its price is at least r % below the minimal route's (`w<w>`: w % for the
   random intermediate). Anywhere in the name: `C` picks, among the free hops of a tier, those
-  into the router with the most free output channels; `Y` drops the random-intermediate option.
+  into the router with the most free output channels; `Y` drops the random-intermediate option;
+  `A` offers it only when a long-way option passed its gate (a lopsided ring).
 * `fg<pL>_<pV>_<fL>_<fV>` (percentages): no learning. The long way with probability pL when the
   smoothed flow out of the source in the long direction is at most fL % of the minimal
   direction's; otherwise, for a source whose last 8 destinations include at most 2 nodes, a
@@ -64,8 +65,8 @@ def tdest(pattern, s, rnd):
 NET = G.Net(G.torus_adj(K), escape='updown', root=27)
 
 def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, seed=1):
-    flagC, flagY = 'C' in scheme, 'Y' in scheme
-    scheme = scheme.replace('C', '').replace('Y', '')
+    flagC, flagY, flagA = 'C' in scheme, 'Y' in scheme, 'A' in scheme
+    scheme = scheme.replace('C', '').replace('Y', '').replace('A', '')
     net = NET; head, esc, vc1, out, dist, adj = net.head, net.esc, net.vc1, net.out, net.dist, net.adj
     rnd = random.Random(seed); occ = {}; queues = [deque() for _ in range(N)]; lat = []
     thr = [g * 2 * net.deg[v] / 8 for v in range(N)]
@@ -256,7 +257,7 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
                             w = rnd.randrange(N)
                         else:
                             w = s
-                    if flagY: w = s
+                    if flagY or (flagA and len(opts) == 1): w = s
                     if w not in (s, d) and not (vgate and fgate is not None and
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][w]) > vthr *
                             min(flow[s][(c2 // 2) % 5] for c2 in vc1[s][d])):
