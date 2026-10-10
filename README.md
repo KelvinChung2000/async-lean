@@ -765,7 +765,15 @@ its modes route around the hotspot worse than Duato's fully adaptive channel) an
 `fd = 10`, `fs = 6`, it edges XY on both lanes in a quick check); its learning epochs are also too
 short for 16 × 16 latencies, and at saturation it is less even than published schemes at their
 knees. A 16 × 16 torus screen was not conclusive. So the all-pattern results hold at 8 × 8; at
-16 × 16 the parameters need to scale with the network size before the claim can be made.
+16 × 16 the parameters need to scale with the network size before the claim can be made. A first scaling
+(`scripts/xp_scale.py`: Duato's mesh added as a mode — on the west-first mesh, whose second
+virtual channel allows every productive hop, it is a tier list; the XY mode's thresholds scaled
+`fd = 5k/8`, `fs = 3k/8`; learning epochs and settle times scaled with k) keeps the 8 × 8 result
+(ahead on all sixteen pattern/model cells, fresh seeds) and at 16 × 16 is ahead on six of eight
+patterns in both models, bit complement included (+0.8 % / +1.5 %), but loses hotspot (−2.4 % /
+−4.3 %: every mode switch leaves tree saturation for thousands of cycles, so the learner
+misjudges the price mode, which alone beats Duato there) and uniform (−2.3 % / −4.2 %: the scaled
+gate makes it explore below saturation). At 16 × 16 the all-pattern claim does not yet hold.
 
 ### Beyond the mesh
 
