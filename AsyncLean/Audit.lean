@@ -327,6 +327,10 @@ open LTS
   Fluid.torus_uniform_hop Fluid.cube_uniform_hop Fluid.Run.queue_le_of_energy
   Fluid.Run.backpressure_fitsIn Fluid.Flow.normalize Fluid.meshAdj_symm Fluid.mesh_out_cap
   Fluid.mesh_in_cap Fluid.mesh_buffer
+  Fluid.Run.drift_gen Fluid.Run.step_change Fluid.Run.frame_change Fluid.Run.frame_drift
+  Fluid.Run.backpressure_stable_bursty Fluid.clamp_eq Fluid.seqPre_total Fluid.sendSeq_sum
+  Fluid.Run.ofArrivalsSeq Fluid.Run.ofArrivalsSeq_backpressure Fluid.Run.ofArrivalsSeq_int
+  Fluid.mesh_backpressure_packets
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms

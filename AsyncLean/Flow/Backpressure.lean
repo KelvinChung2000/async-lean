@@ -50,6 +50,12 @@ with packets as divisible as the fluid's.  The backpressure scheduler (`Run.Back
   are never exceeded; the size grows like `1 / ε` as the load approaches the optimum.
   `mesh_buffer` : on the mesh with `m` connections per link, under a load `(1 - δ)` times the
   optimum, buffers of `145 m k⁷ / (16 δ) + m` packets per destination suffice (a loose constant).
+* `Run.backpressure_stable_bursty` : **bursty arrivals**: the same for arrivals within a leaky
+  bucket (at most `W (dem - ε) + σ` over every window of `W` slots), by the drift over frames
+  (`Run.frame_drift`); this covers whole packets arriving at fractional rates.
+  `Run.ofArrivalsSeq` : backpressure with sequential sends (`sendSeq`), which moves whole packets
+  only (`Run.ofArrivalsSeq_int`); `mesh_backpressure_packets` : on the mesh with `m` connections
+  it is stable for whole packets at every leaky-bucket rate below `m` times the optimum.
 * `Run.potential_ceiling` : **the ceiling**, for every scheduler: a run that keeps its backlog
   bounded under the load `ρ * dem` respects every potential bound of the fluid model
   (`potential_bound`); `Run.cut_ceiling`, `Run.hop_ceiling` are the cut and hop forms.
@@ -480,6 +486,271 @@ theorem backpressure_fitsIn (hr : r.Backpressure) {dem : V → V → ℚ} (F : F
   have h2 : backlog (r.Q 0) = 0 := by simp [backlog, h0]
   linarith
 
+/-! ### Bursty arrivals: integer packets at fractional rates -/
+
+/-- **The drift for arbitrary arrivals** (at most `A` per queue and slot): the energy of a
+backpressure run grows by at most a constant less twice the backlog times the slack
+`dem - a` of the slot. -/
+theorem drift_gen (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1) {A : ℚ}
+    (t : ℕ) (hA : ∀ v d, r.a t v d ≤ A) :
+    energy (r.Q (t + 1)) ≤ energy (r.Q t) + driftConst N (fun _ _ => A) -
+      2 * ∑ d, ∑ v, r.Q t v d * (dem v d - r.a t v d) := by
+  set Q := r.Q t with hQdef
+  set μ := r.μ t
+  have hb : ∀ d v, ∑ w, μ d v w ≤ ∑ w, N.cap v w := fun d v =>
+    sum_le_sum fun w _ => (single_le_sum (f := fun d => μ d v w)
+      (fun d _ => (r.μ_feasible t).1 d v w) (mem_univ d)).trans ((r.μ_feasible t).2 v w)
+  have hc : ∀ d v, ∑ u, μ d u v ≤ ∑ u, N.cap u v := fun d v =>
+    sum_le_sum fun u _ => (single_le_sum (f := fun d => μ d u v)
+      (fun d _ => (r.μ_feasible t).1 d u v) (mem_univ d)).trans ((r.μ_feasible t).2 u v)
+  have hb0 : ∀ d v, 0 ≤ ∑ w, μ d v w := fun d v =>
+    sum_nonneg fun w _ => (r.μ_feasible t).1 d v w
+  have hc0 : ∀ d v, 0 ≤ ∑ u, μ d u v := fun d v =>
+    sum_nonneg fun u _ => (r.μ_feasible t).1 d u v
+  have hq : ∀ d v, r.Q (t + 1) v d ^ 2 ≤
+      Q v d ^ 2 + ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + A) ^ 2) -
+        2 * Q v d * (∑ w, μ d v w - ∑ u, μ d u v) + 2 * Q v d * r.a t v d := by
+    intro d v
+    have hbb : (∑ w, μ d v w) ^ 2 ≤ (∑ w, N.cap v w) ^ 2 :=
+      pow_le_pow_left₀ (hb0 d v) (hb d v) 2
+    have hcc : (∑ u, μ d u v + r.a t v d) ^ 2 ≤ (∑ u, N.cap u v + A) ^ 2 :=
+      pow_le_pow_left₀ (add_nonneg (hc0 d v) (r.a_nonneg t v d))
+        (add_le_add (hc d v) (hA v d)) 2
+    by_cases h : v = d
+    · subst h
+      rw [r.Q_dest, hQdef, r.Q_dest]
+      nlinarith [sq_nonneg (∑ w, μ v v w), sq_nonneg (∑ u, μ v u v + r.a t v v)]
+    · rw [r.update t v d h]
+      have key := queue_sq (Q := Q v d) (b := ∑ w, μ d v w) (out := ∑ w, r.x t d v w)
+        (inn := ∑ u, r.x t d u v) (c := ∑ u, μ d u v) (a := r.a t v d)
+        (r.Q_nonneg t v d) (hb0 d v) (r.x_avail t d v) (hr.2 t d v)
+        (sum_nonneg fun u _ => r.x_nonneg t d u v)
+        (sum_le_sum fun u _ => r.x_le t d u v) (r.a_nonneg t v d)
+      nlinarith
+  have hw : weight Q F.f ≤ weight Q μ := hr.1 t F.f F.feasible
+  rw [F.weight_eq Q (r.Q_dest t), weight_eq] at hw
+  calc energy (r.Q (t + 1)) = ∑ d, ∑ v, r.Q (t + 1) v d ^ 2 := rfl
+    _ ≤ ∑ d, ∑ v, (Q v d ^ 2 + ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + A) ^ 2) -
+        2 * Q v d * (∑ w, μ d v w - ∑ u, μ d u v) + 2 * Q v d * r.a t v d) :=
+        sum_le_sum fun d _ => sum_le_sum fun v _ => hq d v
+    _ = energy Q + driftConst N (fun _ _ => A) -
+        2 * ∑ d, ∑ u, Q u d * (∑ w, μ d u w - ∑ x, μ d x u) +
+        2 * ∑ d, ∑ v, Q v d * r.a t v d := by
+        rw [show energy Q + driftConst N (fun _ _ => A) = ∑ d, ∑ v, (Q v d ^ 2 +
+            ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + A) ^ 2)) by
+          simp only [energy, driftConst, ← sum_add_distrib]]
+        simp only [mul_sum, ← sum_sub_distrib, ← sum_add_distrib]
+        refine sum_congr rfl fun d _ => sum_congr rfl fun v _ => ?_
+        ring_nf
+    _ ≤ energy Q + driftConst N (fun _ _ => A) - 2 * ∑ d, (1 : ℚ) * ∑ s, dem s d * Q s d +
+        2 * ∑ d, ∑ v, Q v d * r.a t v d := by linarith
+    _ = energy Q + driftConst N (fun _ _ => A) -
+        2 * ∑ d, ∑ v, Q v d * (dem v d - r.a t v d) := by
+        simp only [one_mul, mul_sub, sum_sub_distrib]
+        have : ∑ d, ∑ s, dem s d * Q s d = ∑ d, ∑ v, Q v d * dem v d :=
+          sum_congr rfl fun d _ => sum_congr rfl fun v _ => mul_comm _ _
+        rw [this]; ring
+
+/-- The total capacity of the network. -/
+def capTot (N : Net V) : ℚ := ∑ u, ∑ w, N.cap u w
+
+omit [DecidableEq V] in
+theorem capTot_nonneg (N : Net V) : 0 ≤ capTot N :=
+  sum_nonneg fun u _ => sum_nonneg fun w _ => N.cap_nonneg u w
+
+/-- In one slot a queue changes by at most twice the total capacity plus the arrivals. -/
+theorem step_change {A : ℚ} (hA0 : 0 ≤ A) (hA : ∀ t v d, r.a t v d ≤ A) (t : ℕ) (v d : V) :
+    |r.Q (t + 1) v d - r.Q t v d| ≤ 2 * capTot N + A := by
+  by_cases h : v = d
+  · subst h; rw [r.Q_dest, r.Q_dest, sub_zero, abs_zero]
+    linarith [capTot_nonneg N]
+  · rw [r.update t v d h]
+    have hout0 : 0 ≤ ∑ w, r.x t d v w := sum_nonneg fun w _ => r.x_nonneg t d v w
+    have hin0 : 0 ≤ ∑ u, r.x t d u v := sum_nonneg fun u _ => r.x_nonneg t d u v
+    have ha0 := r.a_nonneg t v d
+    have hrow : ∀ u, ∑ w, N.cap u w ≤ capTot N := fun u =>
+      single_le_sum (f := fun u => ∑ w, N.cap u w)
+        (fun u _ => sum_nonneg fun w _ => N.cap_nonneg u w) (mem_univ u)
+    have hout : ∑ w, r.x t d v w ≤ capTot N :=
+      (sum_le_sum fun w _ => (r.x_le t d v w).trans ((single_le_sum (f := fun d => r.μ t d v w)
+        (fun d _ => (r.μ_feasible t).1 d v w) (mem_univ d)).trans
+          ((r.μ_feasible t).2 v w))).trans (hrow v)
+    have hin : ∑ u, r.x t d u v ≤ capTot N := by
+      calc ∑ u, r.x t d u v ≤ ∑ u, N.cap u v :=
+            sum_le_sum fun u _ => (r.x_le t d u v).trans ((single_le_sum
+              (f := fun d => r.μ t d u v) (fun d _ => (r.μ_feasible t).1 d u v)
+                (mem_univ d)).trans ((r.μ_feasible t).2 u v))
+        _ ≤ ∑ u, ∑ w, N.cap u w :=
+            sum_le_sum fun u _ => single_le_sum (f := fun w => N.cap u w)
+              (fun w _ => N.cap_nonneg u w) (mem_univ v)
+    rw [abs_le]
+    constructor <;> linarith [hA t v d]
+
+/-- Over `s` slots a queue changes by at most `s` times the one-slot bound. -/
+theorem frame_change {A : ℚ} (hA0 : 0 ≤ A) (hA : ∀ t v d, r.a t v d ≤ A) (t s : ℕ) (v d : V) :
+    |r.Q (t + s) v d - r.Q t v d| ≤ s * (2 * capTot N + A) := by
+  induction s with
+  | zero => simp
+  | succ s ih =>
+    have h1 := r.step_change hA0 hA (t + s) v d
+    have h2 : r.Q (t + (s + 1)) v d - r.Q t v d =
+        (r.Q (t + s + 1) v d - r.Q (t + s) v d) + (r.Q (t + s) v d - r.Q t v d) := by
+      rw [← add_assoc]; ring
+    rw [h2]
+    calc |(r.Q (t + s + 1) v d - r.Q (t + s) v d) + (r.Q (t + s) v d - r.Q t v d)|
+        ≤ |r.Q (t + s + 1) v d - r.Q (t + s) v d| + |r.Q (t + s) v d - r.Q t v d| :=
+          abs_add_le _ _
+      _ ≤ (2 * capTot N + A) + s * (2 * capTot N + A) := add_le_add h1 ih
+      _ = ((s + 1 : ℕ) : ℚ) * (2 * capTot N + A) := by push_cast; ring
+
+/-- **The drift over a frame** of `W` slots, for arrivals within a leaky bucket: at most
+`W ε - σ` below the demand on average, with bursts of at most `σ`. -/
+theorem frame_drift (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1)
+    (hdem : ∀ v d, 0 ≤ dem v d) {D : ℚ} (hD0 : 0 ≤ D) (hD : ∀ v d, dem v d ≤ D) {A : ℚ}
+    (hA0 : 0 ≤ A) (hA : ∀ t v d, r.a t v d ≤ A) {ε σ : ℚ}
+    (hburst : ∀ t W v d, v ≠ d → ∑ s ∈ range W, r.a (t + s) v d ≤ W * (dem v d - ε) + σ)
+    (t W : ℕ) :
+    energy (r.Q (t + W)) ≤ energy (r.Q t) +
+      (W * driftConst N (fun _ _ => A) +
+        2 * (Fintype.card V : ℚ) ^ 2 * W ^ 2 * ((2 * capTot N + A) * (D + A))) -
+      2 * (W * ε - σ) * backlog (r.Q t) := by
+  set Δ := 2 * capTot N + A
+  have hΔ : 0 ≤ Δ := by have := capTot_nonneg N; positivity
+  have hDA : 0 ≤ D + A := by linarith
+  -- one slot at a time, comparing the backlogs with those at the start of the frame
+  have hslot : ∀ s, energy (r.Q (t + s + 1)) ≤ energy (r.Q (t + s)) +
+      driftConst N (fun _ _ => A) - 2 * ∑ d, ∑ v, r.Q t v d * (dem v d - r.a (t + s) v d) +
+      2 * (Fintype.card V : ℚ) ^ 2 * (s * Δ * (D + A)) := by
+    intro s
+    have h1 := r.drift_gen hr F (t + s) (fun v d => hA (t + s) v d)
+    have h2 : ∀ d v, r.Q t v d * (dem v d - r.a (t + s) v d) - s * Δ * (D + A) ≤
+        r.Q (t + s) v d * (dem v d - r.a (t + s) v d) := fun d v => by
+      have hc := r.frame_change hA0 hA t s v d
+      have hx : |dem v d - r.a (t + s) v d| ≤ D + A := by
+        rw [abs_le]; constructor <;> linarith [hdem v d, hD v d, hA (t + s) v d,
+          r.a_nonneg (t + s) v d]
+      obtain ⟨hc1, hc2⟩ := abs_le.1 hc
+      obtain ⟨hx1, hx2⟩ := abs_le.1 hx
+      have hsΔ : 0 ≤ (s : ℚ) * Δ := by positivity
+      nlinarith [mul_nonneg (sub_nonneg.2 hc2) (sub_nonneg.2 hx2),
+        mul_nonneg (by linarith : (0 : ℚ) ≤ s * Δ + (r.Q (t + s) v d - r.Q t v d))
+          (by linarith : (0 : ℚ) ≤ D + A + (dem v d - r.a (t + s) v d))]
+    have h3 : ∑ d, ∑ v, r.Q t v d * (dem v d - r.a (t + s) v d) -
+        (Fintype.card V : ℚ) ^ 2 * (s * Δ * (D + A)) ≤
+        ∑ d, ∑ v, r.Q (t + s) v d * (dem v d - r.a (t + s) v d) := by
+      have e : (Fintype.card V : ℚ) ^ 2 * (s * Δ * (D + A)) =
+          ∑ _d : V, ∑ _v : V, (s * Δ * (D + A)) := by
+        simp only [sum_const, card_univ, nsmul_eq_mul]; ring
+      rw [e, ← sum_sub_distrib]
+      exact sum_le_sum fun d _ => by rw [← sum_sub_distrib]; exact sum_le_sum fun v _ => h2 d v
+    rw [show t + s + 1 = t + s + 1 from rfl]
+    linarith
+  -- the frame
+  have hsum : energy (r.Q (t + W)) ≤ energy (r.Q t) + W * driftConst N (fun _ _ => A) -
+      2 * ∑ d, ∑ v, r.Q t v d * (W * dem v d - ∑ s ∈ range W, r.a (t + s) v d) +
+      2 * (Fintype.card V : ℚ) ^ 2 * (W ^ 2 * Δ * (D + A)) := by
+    induction W with
+    | zero => simp
+    | succ W ih =>
+      have h := hslot W
+      rw [← add_assoc]
+      have e : ∑ d, ∑ v, r.Q t v d * (((W + 1 : ℕ) : ℚ) * dem v d -
+          ∑ s ∈ range (W + 1), r.a (t + s) v d) =
+          ∑ d, ∑ v, r.Q t v d * (W * dem v d - ∑ s ∈ range W, r.a (t + s) v d) +
+          ∑ d, ∑ v, r.Q t v d * (dem v d - r.a (t + W) v d) := by
+        rw [← sum_add_distrib]
+        refine sum_congr rfl fun d _ => ?_
+        rw [← sum_add_distrib]
+        refine sum_congr rfl fun v _ => ?_
+        rw [sum_range_succ]; push_cast; ring
+      rw [e]
+      have hW : (W : ℚ) * Δ * (D + A) ≤ ((W : ℚ) + 1) ^ 2 * Δ * (D + A) -
+          (W : ℚ) ^ 2 * Δ * (D + A) := by
+        have : (0 : ℚ) ≤ Δ * (D + A) := mul_nonneg hΔ hDA
+        nlinarith
+      have hc0 : (0 : ℚ) ≤ (Fintype.card V : ℚ) ^ 2 := by positivity
+      have hp := mul_le_mul_of_nonneg_left hW hc0
+      push_cast at h ⊢
+      linarith
+  -- the slack over the frame
+  have hslack : (W * ε - σ) * backlog (r.Q t) ≤
+      ∑ d, ∑ v, r.Q t v d * (W * dem v d - ∑ s ∈ range W, r.a (t + s) v d) := by
+    rw [backlog, mul_sum]
+    refine sum_le_sum fun d _ => ?_
+    rw [mul_sum]
+    refine sum_le_sum fun v _ => ?_
+    by_cases h : v = d
+    · subst h; rw [r.Q_dest]; simp
+    · have := hburst t W v d h
+      have := r.Q_nonneg t v d
+      nlinarith
+  have e2 : 2 * (Fintype.card V : ℚ) ^ 2 * (W ^ 2 * Δ * (D + A)) =
+      2 * (Fintype.card V : ℚ) ^ 2 * W ^ 2 * ((2 * capTot N + A) * (D + A)) := by ring
+  linarith
+
+/-- **Backpressure is stable under bursty arrivals**, in particular for whole packets arriving
+at fractional rates.  If `dem` is routable at throughput `1`, the arrivals are at most `A` per
+queue and slot, and over every window of `W` slots at most `W (dem - ε) + σ` (a leaky bucket:
+rate `ε` below the demand, bursts up to `σ`), the backlog of a backpressure run stays bounded
+and the run delivers everything that arrives, up to a constant. -/
+theorem backpressure_stable_bursty (hr : r.Backpressure) {dem : V → V → ℚ}
+    (hR : Routable N dem 1) (hdem : ∀ v d, 0 ≤ dem v d) {D : ℚ} (hD0 : 0 ≤ D)
+    (hD : ∀ v d, dem v d ≤ D) {A : ℚ} (hA0 : 0 ≤ A) (hA : ∀ t v d, r.a t v d ≤ A) {ε σ : ℚ} (hε : 0 < ε) (hσ : 0 ≤ σ)
+    (hburst : ∀ t W v d, v ≠ d → ∑ s ∈ range W, r.a (t + s) v d ≤ W * (dem v d - ε) + σ) :
+    r.Stable := by
+  obtain ⟨F⟩ := hR
+  -- a frame long enough for the slack to beat the bursts
+  obtain ⟨W, hW⟩ := exists_nat_gt_rat ((σ + ε) / ε)
+  have hWε : ε < W * ε - σ := by
+    rw [div_lt_iff₀ hε] at hW; linarith
+  set ε' := W * ε - σ
+  have hε' : 0 < ε' := by linarith
+  set B := (W : ℚ) * driftConst N (fun _ _ => A) +
+    2 * (Fintype.card V : ℚ) ^ 2 * W ^ 2 * ((2 * capTot N + A) * (D + A))
+  -- the energy at the frame boundaries
+  have hframe : ∀ j, energy (r.Q (j * W)) ≤ max (energy (r.Q 0)) ((B / (2 * ε')) ^ 2 + B) := by
+    intro j
+    have := bounded_of_drift (E := fun j => energy (r.Q (j * W)))
+      (S := fun j => backlog (r.Q (j * W))) (B := B) hε'
+      (fun j => r.backlog_nonneg _) (fun j => energy_le_backlog_sq fun v d => r.Q_nonneg _ v d)
+      (fun j => by
+        have h := r.frame_drift hr F hdem hD0 hD hA0 hA hburst (j * W) W
+        show energy (r.Q ((j + 1) * W)) ≤ energy (r.Q (j * W)) + B - 2 * ε' * backlog (r.Q (j * W))
+        rw [show (j + 1) * W = j * W + W by ring]
+        exact h) j
+    simpa using this
+  set K := max (energy (r.Q 0)) ((B / (2 * ε')) ^ 2 + B)
+  set Δ := 2 * capTot N + A
+  have hΔ : 0 ≤ Δ := by have := capTot_nonneg N; positivity
+  have hb : ∀ t, backlog (r.Q t) ≤ (Fintype.card V : ℚ) ^ 2 + K +
+      (Fintype.card V : ℚ) ^ 2 * (W * Δ) := by
+    intro t
+    have hWpos : 0 < W := by
+      have : (0 : ℚ) < W := lt_of_le_of_lt (div_nonneg (by linarith) hε.le) hW
+      exact_mod_cast this
+    obtain ⟨j, s, hs, rfl⟩ : ∃ j s, s < W ∧ t = j * W + s :=
+      ⟨t / W, t % W, Nat.mod_lt _ hWpos, by rw [mul_comm]; exact (Nat.div_add_mod t W).symm⟩
+    have h1 : backlog (r.Q (j * W)) ≤ (Fintype.card V : ℚ) ^ 2 + K :=
+      (backlog_le_energy _).trans (by linarith [hframe j])
+    have h2 : backlog (r.Q (j * W + s)) ≤ backlog (r.Q (j * W)) +
+        (Fintype.card V : ℚ) ^ 2 * (W * Δ) := by
+      have e : (Fintype.card V : ℚ) ^ 2 * (W * Δ) = ∑ _d : V, ∑ _v : V, (W * Δ) := by
+        simp only [sum_const, card_univ, nsmul_eq_mul]; ring
+      rw [e, backlog, backlog, ← sum_add_distrib]
+      refine sum_le_sum fun d _ => ?_
+      rw [← sum_add_distrib]
+      refine sum_le_sum fun v _ => ?_
+      have hc := r.frame_change hA0 hA (j * W) s v d
+      have hsW : (s : ℚ) * Δ ≤ W * Δ :=
+        mul_le_mul_of_nonneg_right (by exact_mod_cast hs.le) hΔ
+      have := (abs_le.1 hc).2
+      linarith
+    linarith
+  refine ⟨(Fintype.card V : ℚ) ^ 2 + K + (Fintype.card V : ℚ) ^ 2 * (W * Δ), fun t =>
+    ⟨hb t, ?_⟩⟩
+  rw [r.delivered_sum t]
+  linarith [r.backlog_nonneg 0, hb t]
+
 end Run
 
 /-- A flow of `θ * dem` is a flow of the traffic `θ * dem` at throughput `1`. -/
@@ -890,6 +1161,215 @@ theorem Run.ofArrivals_backpressure (ha : ∀ t v d, 0 ≤ a t v d) (had : ∀ t
     rw [sendAll_sum (bpQ_nonneg N ha hQ₀ t u d)]
     exact le_rfl⟩
 
+
+/-! ### Whole packets: the sequential backpressure scheduler -/
+
+omit [Nonempty V] in
+/-- The rate a vertex offers the `j`-th of its out-links (in a fixed numbering of the vertices)
+for commodity `d`. -/
+noncomputable def seqRate (μ : V → V → V → ℚ) (d u : V) (j : ℕ) : ℚ :=
+  if h : j < Fintype.card V then μ d u ((Fintype.equivFin V).symm ⟨j, h⟩) else 0
+
+omit [Nonempty V] in
+/-- The rate offered to the out-links numbered below `k`. -/
+noncomputable def seqPre (μ : V → V → V → ℚ) (d u : V) (k : ℕ) : ℚ :=
+  ∑ j ∈ range k, seqRate μ d u j
+
+omit [Nonempty V] in
+/-- **Sequential sends**: a vertex serves its out-links one after the other, in a fixed order,
+each with its full rate until its backlog is used up.  With whole-packet backlogs and rates, it
+sends whole packets. -/
+noncomputable def sendSeq (Q : V → V → ℚ) (μ : V → V → V → ℚ) : V → V → V → ℚ :=
+  fun d u v => min (μ d u v) (max 0 (Q u d - seqPre μ d u (Fintype.equivFin V v)))
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+/-- The share of a link in sequential service is a difference of the served amounts. -/
+theorem clamp_eq {Q P m : ℚ} (hm : 0 ≤ m) :
+    min m (max 0 (Q - P)) = min Q (P + m) - min Q P := by
+  rcases le_total Q P with h1 | h1
+  · rw [max_eq_left (by linarith), min_eq_right hm, min_eq_left (by linarith), min_eq_left h1]
+    ring
+  · rw [max_eq_right (by linarith), min_eq_right h1]
+    rcases le_total Q (P + m) with h2 | h2
+    · rw [min_eq_right (by linarith), min_eq_left h2]
+    · rw [min_eq_left (by linarith), min_eq_right h2]; ring
+
+section
+
+omit [Nonempty V]
+
+variable {Q : V → V → ℚ} {μ : V → V → V → ℚ}
+
+omit [DecidableEq V] in
+theorem seqPre_nonneg (hμ : ∀ d u v, 0 ≤ μ d u v) (d u : V) (k : ℕ) : 0 ≤ seqPre μ d u k :=
+  sum_nonneg fun j _ => by
+    unfold seqRate; split_ifs
+    · exact hμ _ _ _
+    · exact le_rfl
+
+omit [DecidableEq V] in
+theorem seqPre_total (d u : V) : seqPre μ d u (Fintype.card V) = ∑ v, μ d u v := by
+  unfold seqPre
+  rw [← Fin.sum_univ_eq_sum_range (fun j => seqRate μ d u j)]
+  rw [← (Fintype.equivFin V).symm.sum_comp]
+  refine sum_congr rfl fun i _ => ?_
+  simp [seqRate, i.isLt]
+
+omit [DecidableEq V] in
+theorem sendSeq_nonneg (hμ : ∀ d u v, 0 ≤ μ d u v) (d u v : V) : 0 ≤ sendSeq Q μ d u v :=
+  le_min (hμ d u v) (le_max_left _ _)
+
+omit [DecidableEq V] in
+theorem sendSeq_le (d u v : V) : sendSeq Q μ d u v ≤ μ d u v := min_le_left _ _
+
+omit [DecidableEq V] in
+/-- **Sequential sends serve `min (backlog, offered rate)`.** -/
+theorem sendSeq_sum (hμ : ∀ d u v, 0 ≤ μ d u v) {d u : V} (hQ : 0 ≤ Q u d) :
+    ∑ v, sendSeq Q μ d u v = min (Q u d) (∑ v, μ d u v) := by
+  set g := fun y : ℚ => min (Q u d) y
+  have hpt : ∀ v, sendSeq Q μ d u v =
+      g (seqPre μ d u ((Fintype.equivFin V v : ℕ) + 1)) -
+        g (seqPre μ d u (Fintype.equivFin V v)) := fun v => by
+    have e : seqPre μ d u ((Fintype.equivFin V v : ℕ) + 1) =
+        seqPre μ d u (Fintype.equivFin V v) + μ d u v := by
+      unfold seqPre
+      rw [sum_range_succ]
+      simp [seqRate, (Fintype.equivFin V v).isLt]
+    rw [e]
+    exact clamp_eq (hμ d u v)
+  simp only [hpt]
+  rw [(Fintype.equivFin V).sum_comp (fun i => g (seqPre μ d u ((i : ℕ) + 1)) -
+    g (seqPre μ d u i))]
+  rw [Fin.sum_univ_eq_sum_range (fun j => g (seqPre μ d u (j + 1)) - g (seqPre μ d u j)),
+    sum_range_sub (fun j => g (seqPre μ d u j)), seqPre_total]
+  simp [g, seqPre, min_eq_right hQ]
+
+end
+
+/-- A rational is a whole number. -/
+def IsInt (q : ℚ) : Prop := ∃ z : ℤ, q = z
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+theorem IsInt.add {p q : ℚ} : IsInt p → IsInt q → IsInt (p + q) := by
+  rintro ⟨a, rfl⟩ ⟨b, rfl⟩; exact ⟨a + b, by push_cast; ring⟩
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+theorem IsInt.sub {p q : ℚ} : IsInt p → IsInt q → IsInt (p - q) := by
+  rintro ⟨a, rfl⟩ ⟨b, rfl⟩; exact ⟨a - b, by push_cast; ring⟩
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+theorem IsInt.min {p q : ℚ} : IsInt p → IsInt q → IsInt (min p q) := by
+  rintro ⟨a, rfl⟩ ⟨b, rfl⟩; exact ⟨Min.min a b, by push_cast; rfl⟩
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+theorem IsInt.max {p q : ℚ} : IsInt p → IsInt q → IsInt (max p q) := by
+  rintro ⟨a, rfl⟩ ⟨b, rfl⟩; exact ⟨Max.max a b, by push_cast; rfl⟩
+
+omit [Fintype V] [DecidableEq V] [Nonempty V] in
+theorem IsInt.zero : IsInt 0 := ⟨0, by simp⟩
+
+omit [DecidableEq V] [Nonempty V] in
+theorem IsInt.sum {ι : Type*} (s : Finset ι) {f : ι → ℚ} (h : ∀ i ∈ s, IsInt (f i)) :
+    IsInt (∑ i ∈ s, f i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simpa using IsInt.zero
+  | insert i s hi ih =>
+    rw [sum_insert hi]
+    exact (h i (mem_insert_self i s)).add (ih fun j hj => h j (mem_insert_of_mem hj))
+
+variable (a Q₀) in
+/-- The backlogs of the backpressure run with sequential sends. -/
+noncomputable def bpQSeq : ℕ → V → V → ℚ
+  | 0 => Q₀
+  | t + 1 => fun v d =>
+    if v = d then 0 else
+      bpQSeq t v d - ∑ w, sendSeq (bpQSeq t) (bpRates N (bpQSeq t)) d v w +
+        ∑ u, sendSeq (bpQSeq t) (bpRates N (bpQSeq t)) d u v + a t v d
+
+theorem bpQSeq_nonneg (ha : ∀ t v d, 0 ≤ a t v d) (hQ₀ : ∀ v d, 0 ≤ Q₀ v d) :
+    ∀ t v d, 0 ≤ bpQSeq N a Q₀ t v d
+  | 0, v, d => hQ₀ v d
+  | t + 1, v, d => by
+    have ih := bpQSeq_nonneg ha hQ₀ t
+    have hμ := (bpRates_feasible N (bpQSeq N a Q₀ t)).1
+    simp only [bpQSeq]
+    split_ifs
+    · exact le_rfl
+    · have h1 := sendSeq_sum (Q := bpQSeq N a Q₀ t) hμ (ih v d)
+      have h2 : 0 ≤ ∑ u, sendSeq (bpQSeq N a Q₀ t) (bpRates N (bpQSeq N a Q₀ t)) d u v :=
+        sum_nonneg fun u _ => sendSeq_nonneg hμ d u v
+      have h3 := min_le_left (bpQSeq N a Q₀ t v d) (∑ w, bpRates N (bpQSeq N a Q₀ t) d v w)
+      have h4 := ha t v d
+      linarith
+
+/-- **A backpressure run with sequential sends exists** for every arrival sequence and initial
+backlog. -/
+noncomputable def Run.ofArrivalsSeq (ha : ∀ t v d, 0 ≤ a t v d) (had : ∀ t d, a t d d = 0)
+    (hQ₀ : ∀ v d, 0 ≤ Q₀ v d) (hQ₀d : ∀ d, Q₀ d d = 0) : Run N where
+  Q := bpQSeq N a Q₀
+  a := a
+  μ t := bpRates N (bpQSeq N a Q₀ t)
+  x t := sendSeq (bpQSeq N a Q₀ t) (bpRates N (bpQSeq N a Q₀ t))
+  Q_zero_nonneg := hQ₀
+  Q_dest t d := by
+    cases t with
+    | zero => exact hQ₀d d
+    | succ t => simp [bpQSeq]
+  a_nonneg := ha
+  a_dest := had
+  μ_feasible t := bpRates_feasible N _
+  x_nonneg t d u v := sendSeq_nonneg (bpRates_feasible N _).1 d u v
+  x_le t d u v := sendSeq_le d u v
+  x_avail t d u := by
+    rw [sendSeq_sum (bpRates_feasible N _).1 (bpQSeq_nonneg N ha hQ₀ t u d)]
+    exact min_le_left _ _
+  update t v d h := by
+    show (if v = d then _ else _) = _
+    rw [ite_eq_right h]
+
+theorem Run.ofArrivalsSeq_backpressure (ha : ∀ t v d, 0 ≤ a t v d) (had : ∀ t d, a t d d = 0)
+    (hQ₀ : ∀ v d, 0 ≤ Q₀ v d) (hQ₀d : ∀ d, Q₀ d d = 0) :
+    (Run.ofArrivalsSeq N ha had hQ₀ hQ₀d).Backpressure :=
+  ⟨fun t μ' hμ' => bpRates_maxWeight N _ μ' hμ', fun t d u => by
+    show _ ≤ ∑ v, sendSeq _ _ d u v
+    rw [sendSeq_sum (bpRates_feasible N _).1 (bpQSeq_nonneg N ha hQ₀ t u d)]
+    exact le_rfl⟩
+
+/-- **Whole packets**: with whole-number capacities, initial backlogs and arrivals, every backlog
+and every transmission of the sequential backpressure run is a whole number of packets. -/
+theorem Run.ofArrivalsSeq_int (ha : ∀ t v d, 0 ≤ a t v d) (had : ∀ t d, a t d d = 0)
+    (hQ₀ : ∀ v d, 0 ≤ Q₀ v d) (hQ₀d : ∀ d, Q₀ d d = 0) (hcap : ∀ u v, IsInt (N.cap u v))
+    (haI : ∀ t v d, IsInt (a t v d)) (hQ₀I : ∀ v d, IsInt (Q₀ v d)) :
+    ∀ t, (∀ v d, IsInt ((Run.ofArrivalsSeq N ha had hQ₀ hQ₀d).Q t v d)) ∧
+      ∀ d u v, IsInt ((Run.ofArrivalsSeq N ha had hQ₀ hQ₀d).x t d u v) := by
+  have hrate : ∀ Q : V → V → ℚ, ∀ d u v, IsInt (bpRates N Q d u v) := fun Q d u v => by
+    unfold bpRates; split_ifs
+    · exact hcap u v
+    · exact IsInt.zero
+  have hsend : ∀ Q : V → V → ℚ, (∀ v d, IsInt (Q v d)) →
+      ∀ d u v, IsInt (sendSeq Q (bpRates N Q) d u v) := fun Q hQ d u v => by
+    unfold sendSeq
+    refine (hrate Q d u v).min (IsInt.zero.max ((hQ u d).sub ?_))
+    unfold seqPre
+    refine IsInt.sum _ fun j _ => ?_
+    unfold seqRate; split_ifs
+    · exact hrate Q _ _ _
+    · exact IsInt.zero
+  intro t
+  induction t with
+  | zero => exact ⟨hQ₀I, hsend _ hQ₀I⟩
+  | succ t ih =>
+    have hQ : ∀ v d, IsInt ((Run.ofArrivalsSeq N ha had hQ₀ hQ₀d).Q (t + 1) v d) := by
+      intro v d
+      show IsInt (bpQSeq N a Q₀ (t + 1) v d)
+      simp only [bpQSeq]
+      split_ifs
+      · exact IsInt.zero
+      · exact (((ih.1 v d).sub (IsInt.sum _ fun w _ => ih.2 d v w)).add
+          (IsInt.sum _ fun u _ => ih.2 d u v)).add (haI t v d)
+    exact ⟨hQ, hsend _ hQ⟩
+
 end Construct
 
 end General
@@ -1169,6 +1649,59 @@ theorem mesh_buffer (k : ℕ) (hk : 2 ≤ k) {m : ℕ} (hm : 0 < m) {δ : ℚ} (
   rw [hc] at h
   have := mul_le_mul_of_nonneg_left hb (show (0 : ℚ) ≤ (k : ℚ) ^ 4 by positivity)
   linarith
+
+/-- **Whole packets on the mesh with `m` connections per link** (`k ≥ 2`, uniform traffic).
+Let `θ = m · 8 (k² - 1) / k³`.  For every arrival sequence of whole packets at most `A` per
+queue and slot, within a leaky bucket of rate `ρ < θ` times the uniform traffic and burst `σ`
+(over every window of `W` slots at most `W ρ / (k² - 1) + σ` packets from `v` for `d`), the
+backpressure run with sequential sends moves whole packets only, keeps its backlog bounded and
+delivers everything that arrives, up to a constant. -/
+theorem mesh_backpressure_packets (k : ℕ) (hk : 2 ≤ k) {m : ℕ} (hm : 0 < m)
+    (a : ℕ → Fin k × Fin k → Fin k × Fin k → ℚ) (ha : ∀ t v d, 0 ≤ a t v d)
+    (had : ∀ t d, a t d d = 0) (haI : ∀ t v d, IsInt (a t v d)) {A : ℚ}
+    (hA : ∀ t v d, a t v d ≤ A) {ρ σ : ℚ} (hρθ : ρ < m * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3))
+    (hσ : 0 ≤ σ)
+    (hburst : ∀ t W v d, v ≠ d → ∑ s ∈ range W, a (t + s) v d ≤ W * ρ * uniform k v d + σ) :
+    ∃ r : Run ((meshNet k).copies m), r.Backpressure ∧ (∀ t v d, r.a t v d = a t v d) ∧
+      (∀ t, (∀ v d, IsInt (r.Q t v d)) ∧ ∀ d u v, IsInt (r.x t d u v)) ∧ r.Stable := by
+  have : Nonempty (Fin k × Fin k) := ⟨(⟨0, by omega⟩, ⟨0, by omega⟩)⟩
+  have hk' : (2 : ℚ) ≤ k := by exact_mod_cast hk
+  have hK : (0 : ℚ) < (k : ℚ) ^ 2 - 1 := by nlinarith
+  have hm' : (0 : ℚ) < m := by exact_mod_cast hm
+  set θ := (m : ℚ) * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3) with hθdef
+  have hθ0 : 0 ≤ θ := by
+    rw [hθdef]; exact mul_nonneg hm'.le (div_nonneg (by linarith) (by positivity))
+  obtain ⟨hunn, -⟩ := uniform_props hk
+  have hA0 : 0 ≤ A := (ha 0 (⟨0, by omega⟩, ⟨0, by omega⟩) (⟨0, by omega⟩, ⟨0, by omega⟩)).trans
+    (hA _ _ _)
+  let r := Run.ofArrivalsSeq ((meshNet k).copies m) (a := a) (Q₀ := fun _ _ => 0) ha had
+    (fun _ _ => le_rfl) (fun _ => rfl)
+  have hr := Run.ofArrivalsSeq_backpressure ((meshNet k).copies m) (a := a) (Q₀ := fun _ _ => 0)
+    ha had (fun _ _ => le_rfl) (fun _ => rfl)
+  have hint := Run.ofArrivalsSeq_int ((meshNet k).copies m) (a := a) (Q₀ := fun _ _ => 0) ha had
+    (fun _ _ => le_rfl) (fun _ => rfl) (fun u v => by
+      show IsInt ((m : ℚ) * (if MeshAdj u v then 2 else 0))
+      split_ifs
+      · exact ⟨2 * m, by push_cast; ring⟩
+      · exact ⟨0, by simp⟩) haI (fun _ _ => IsInt.zero)
+  refine ⟨r, hr, fun _ _ _ => rfl, hint, ?_⟩
+  obtain ⟨F⟩ := (mesh_routable k hk).copies m
+  have hu : ∀ v d : Fin k × Fin k, v ≠ d → uniform k v d = 1 / ((k : ℚ) ^ 2 - 1) :=
+    fun v d hvd => by unfold uniform; rw [ite_eq_right hvd]
+  refine r.backpressure_stable_bursty hr (dem := fun v d => θ * uniform k v d) ⟨F.normalize⟩
+    (fun v d => mul_nonneg hθ0 (hunn v d)) (D := θ / ((k : ℚ) ^ 2 - 1))
+    (div_nonneg hθ0 hK.le) (fun v d => ?_) hA0 hA (ε := (θ - ρ) / ((k : ℚ) ^ 2 - 1))
+    (div_pos (by linarith) hK) hσ (fun t W v d hvd => ?_)
+  · by_cases hvd : v = d
+    · subst hvd; simp only [uniform, ite_true, mul_zero]; exact div_nonneg hθ0 hK.le
+    · rw [hu v d hvd, mul_one_div]
+  · have h := hburst t W v d hvd
+    rw [hu v d hvd] at h
+    show ∑ s ∈ range W, a (t + s) v d ≤ W * (θ * uniform k v d - (θ - ρ) / ((k : ℚ) ^ 2 - 1)) + σ
+    rw [hu v d hvd]
+    have e : (W : ℚ) * (θ * (1 / ((k : ℚ) ^ 2 - 1)) - (θ - ρ) / ((k : ℚ) ^ 2 - 1)) =
+        W * ρ * (1 / ((k : ℚ) ^ 2 - 1)) := by ring
+    linarith
 
 /-- **Not vacuous**: on the mesh with `m` connections per link, for every load
 `0 ≤ ρ < m · 8 (k² - 1) / k³` there is a backpressure run, from the empty network, with
