@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `scripts/xp_validate.py`: the 8 × 8 torus result holds at 10000 cycles; fairness checks and a
+  fairer tornado mode; at 16 × 16 with 8 × 8 settings the mesh learner loses hotspot and bit
+  complement (parameters must scale with size).
+
 * **A mesh scheme ahead of every published one on every pattern (simulation)**: the mode-switching
   learner `PX:t5b` over five proved west-first modes (`scripts/xp_transpose.py`) is strictly
   ahead of XY on both virtual channels, west-first random, Duato's mesh and O1TURN on all eight

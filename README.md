@@ -750,6 +750,23 @@ worst-served source is not worse off (0.66 against 0.60 of the mean). Safety:
 `westFirstMesh_modes_safe` (any history-dependent switching among west-first tier lists
 containing the throttled escape tier, `g ≤ 8`).
 
+**Validation (`scripts/xp_validate.py`).** *8 × 8 torus, 10000 cycles:* the combined scheme's
+throughputs match the shorter runs within 0.1 % and it is ahead of dimension order, Valiant and
+UGAL on eight patterns by 3 to 13 % in both move models (tied on neighbour). *Fairness, 8 × 8:* the
+mesh learner is as fair as or fairer than the best published scheme on most patterns; under
+tornado a `g = 5` mode in place of `g = 6` keeps the lead (+1.1 %) and is fairer than XY on both
+virtual channels with sequential moves, while without chaining no variant is both ahead and at
+least as even as XY at its own (sub-saturation) peak unless loads are restricted to equally fair
+ones (+1.0 to +1.3 %). *16 × 16 (3 seeds, settings tuned for 8 × 8, as a generalisation test):* the
+mesh learner is ahead of every published scheme on transpose, shuffle, bit reversal, tornado and
+random permutation (+0.7 to +29 %), ties uniform without chaining, but loses hotspot (−14 to −15 %:
+its modes route around the hotspot worse than Duato's fully adaptive channel) and bit complement
+(−1.6 to −4.2 %: the XY mode's distance thresholds were tuned for 8 × 8; scaled to the network,
+`fd = 10`, `fs = 6`, it edges XY on both lanes in a quick check); its learning epochs are also too
+short for 16 × 16 latencies, and at saturation it is less even than published schemes at their
+knees. A 16 × 16 torus screen was not conclusive. So the all-pattern results hold at 8 × 8; at
+16 × 16 the parameters need to scale with the network size before the claim can be made.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
