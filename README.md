@@ -823,6 +823,24 @@ against the simulator (up iff lower (level, index); the escape hop is the first 
 legal path; the centre root is node 27 at 8 × 8 and 119 at 16 × 16), giving `simUD_detour_correct`,
 `simUD_throttle_safe` and `simUD_combo_safe` for exactly the simulated escape.
 
+**The simulators' cycle models and the injection limit, proved.** `Routing/Cycle.lean` defines a
+cycle (ejections, hops, injections) in both simulated move models: sequential moves (`seq`) and
+no chaining (`none`: simultaneous hops into channels free at the start of the move phase, distinct
+sources and targets). Every no-chaining cycle is a sequence of single steps of the step semantics
+(moves into channels free at the start commute: `NoChainCycle.path`), so for every network and
+strategy covered above, runs of cycles keep legal configurations and the hop bounds, never
+deadlock (a work-conserving cycle in a non-empty legal configuration moves a packet), and drain
+once injections stop (`cycleSafe`; mesh `westFirstMesh_modes_cycles`, torus `simUD_combo_cycles`).
+Delivery while injections continue needs fairness: the step-level theorems apply to sequential
+cycles (`seq_delivered_of_*`), and without chaining a cycle-level fairness hypothesis gives
+delivery outside the injection channels (`CycleRun.delivered_of_channelFair`). The injection
+limit: in either model a channel injects at most once per cycle, so a node injects at most K
+packets in K cycles and the network delivers at most (number of nodes) × K
+(`sum_count_inject_le`, `throughput_le`, `westFirstMesh_throughput`, `simUD_throughput`), and
+the bound is reached (`SatCycle.run`). So under neighbour traffic, where dimension order and our
+schemes reach one packet per node per cycle in simulation, no scheme can do better: that tie is
+an optimum.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
@@ -1281,6 +1299,7 @@ The network properties are listed in section 7.
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Routing/Cycle.lean` | the simulators' cycle models (sequential, no chaining) as sequences of steps; safety per cycle; the injection limit of one packet per node per cycle |
 | `Routing/EscapeLayer.lean`, `Routing/UpDown.lean` | the detour network for any escape layer; up*/down* escape on any finite connected graph, as simulated |
 | `Routing/Strategy.lean`, `Routing/StrategyDetour.lean` | history-dependent strategies (any state, a selection per step): deadlock, livelock, starvation freedom and delivery under load; throttles on any graph |
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |

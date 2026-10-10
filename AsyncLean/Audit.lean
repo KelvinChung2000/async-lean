@@ -38,6 +38,7 @@ import AsyncLean.Routing.Strategy
 import AsyncLean.Routing.StrategyDetour
 import AsyncLean.Routing.EscapeLayer
 import AsyncLean.Routing.UpDown
+import AsyncLean.Routing.Cycle
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd

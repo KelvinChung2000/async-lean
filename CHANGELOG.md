@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* **Cycle models and the injection limit** (`Routing/Cycle.lean`, `Examples/Cycle.lean`): both
+  simulated move models are sequences of single steps, so safety carries over cycle by cycle;
+  no scheme delivers more than one packet per node per cycle (`throughput_le`), which makes the
+  neighbour-traffic tie an optimum.
+
 * **The simulated up*/down* escape, proved** (`Routing/EscapeLayer.lean`, `Routing/UpDown.lean`,
   `Examples/UpDown.lean`): detour networks, throttles and history-dependent strategies are safe for
   any escape layer; the up*/down* escape of the simulators is one on every finite connected graph;
