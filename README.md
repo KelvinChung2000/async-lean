@@ -725,6 +725,31 @@ north and south lanes stay free); detours lose (Valiant, UGAL, row spreading on 
 differ (with unequal rates a row carries 3 packets per cycle without chaining, against 8/3 with
 equal rates) — throughput bought with unfairness between sources.
 
+**A mesh scheme ahead of every published one on every pattern (simulation).** Adding the
+`g = 6` mode to that learner (`PX:t5b:th=0.7:d=2:elim=0.1`: the best configuration, the
+transpose mode, the new XY mode, price-chosen hops and the `g = 6` mode, all tier lists of the
+west-first mesh with the throttled escape tier) gives, against every published mesh scheme at its
+own peak (12000 cycles, fresh seeds 1401 to 1412; O1TURN was never within 6 % of the best):
+
+| | uniform | transpose | shuffle | bit rev. | hotspot | bit comp. | tornado | random perm. |
+|---|---|---|---|---|---|---|---|---|
+| sequential: learner | **0.5217** | **0.4972** | **0.6765** | **0.4322** | **0.3931** | **0.3026** | **0.4296** | **0.4783** |
+| best published | 0.5037 | 0.4819 | 0.5907 | 0.3626 | 0.3799 | 0.3004 | 0.4269 | 0.4652 |
+| lead (z) | +3.6 % (37) | +3.2 % (84) | +14.5 % (102) | +19.2 % | +3.5 % (13) | +0.7 % (7.8) | +0.6 % (16) | +2.8 % (42) |
+| no chaining: learner | **0.3836** | **0.3693** | **0.5276** | **0.3218** | **0.3026** | **0.2296** | **0.3315** | **0.3906** |
+| best published | 0.3729 | 0.3643 | 0.4363 | 0.2693 | 0.2921 | 0.2254 | 0.3180 | 0.3604 |
+| lead (z) | +2.9 % (22) | +1.4 % (37) | +20.9 % (126) | +19.5 % | +3.6 % (14) | +1.8 % (21) | +4.3 % (80) | +8.4 % (56) |
+
+(The best published scheme per pattern is XY on both virtual channels, west-first random, or
+Duato's mesh random or throttled.) It is strictly ahead on all eight patterns in both move
+models. The `g = 6` mode is used 56 to 88 % of the time under tornado, 5 to 7 % under hotspot,
+never otherwise. Per-source fairness (min / mean injection rate, Jain's index) is comparable to
+the best published scheme on most patterns; under tornado without chaining it is less even than
+XY on both virtual channels at that scheme's own peak (Jain 0.92 against 0.98), though its
+worst-served source is not worse off (0.66 against 0.60 of the mean). Safety:
+`westFirstMesh_modes_safe` (any history-dependent switching among west-first tier lists
+containing the throttled escape tier, `g ≤ 8`).
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:

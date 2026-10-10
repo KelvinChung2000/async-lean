@@ -66,6 +66,14 @@ used, so an escape threshold g <= 4 never binds (the next router's 4 N/S lanes a
 gives 0.4359 / 0.3226 (+2.1 % / +1.4 %), g = 6 0.4317 / 0.3345 (+1.1 % / +5.1 %): a throttle that
 favours some sources over others (with unequal rates a row can carry 3 instead of 8/3 packets per
 cycle without chaining).  Learner t5b (t4 plus the g = 6 mode): tornado +0.6 % / +4.2 %.
+Learner t5b on all 8 patterns (`fairrep`; seeds 1401-1408, 1401-1412 for transpose / tornado /
+bit complement; published schemes as bit-identical msim specs `F:X:...` with fairness): strictly
+ahead of every published scheme on every pattern in both models (smallest: bit complement +0.73 %
+z = 7.8 seq, tornado +0.62 % z = 16 seq, transpose +1.38 % z = 37 none).  Fairness (min/mean
+per-source injections, Jain) at the peaks is comparable to the best published scheme's except
+tornado without chaining (Jain 0.92 against 0.98 for dualXY at its sub-saturation peak 0.34; at
+offered 1.0 dualXY is 0.43 / 0.88, the g = 6 mode 0.67 / 0.92) and bit reversal (0.26-0.35 min/mean
+against 0.35-0.47 for west-first at its lower peak load).
 """
 import inspect
 import json
@@ -341,10 +349,41 @@ def _src():
     return src.replace(old, new)
 
 
+# per-source injection counts (after warmup) and generated packets (any time), for fairness
+_FAIR = [
+    ("                    queues[s].append((d, t))\n",
+     "                    queues[s].append((d, t))\n"
+     "                    _GEN[s] += 1\n"),
+    ("                put(ch(s, 4, 0), queues[s].popleft())\n",
+     "                put(ch(s, 4, 0), queues[s].popleft())\n"
+     "                if t >= warmup:\n"
+     "                    _INJ[s] += 1\n"),
+]
+
+
 def _build(extra, name):
     fn, ns = P2._patched(_src(), [(_SETUP_OLD, _SETUP_NEW), (_TIER_OLD, _TIER_NEW),
-                                  (_SEL_OLD, _SEL_NEW)] + _DIAG + extra, name)
+                                  (_SEL_OLD, _SEL_NEW)] + _DIAG + _FAIR + extra, name)
+    ns.update(_INJ=[0] * N, _GEN=[0] * N)
     return fn, ns
+
+
+def fairness(ns):
+    """(min / mean, Jain's index) of the per-source injections after warmup, over the sources
+    that generated traffic"""
+    v = [i for i, g in zip(ns['_INJ'], ns['_GEN']) if g > 0]
+    m = sum(v) / len(v)
+    return min(v) / max(1e-9, m), sum(v) ** 2 / max(1e-9, len(v) * sum(x * x for x in v))
+
+
+def run_fair(spec, rate, pattern, seed, chain, cycles):
+    """F:X:<msim spec> or F:PX:<learner>: the result plus [min/mean, Jain]"""
+    kind, _, sp = spec.partition(':')
+    ns = (pxsim_fn() if kind == 'PX' else xsim_fn())[1]
+    ns['_INJ'][:] = [0] * N
+    ns['_GEN'][:] = [0] * N
+    r = list(run_one(spec, rate, pattern, seed, chain, cycles))
+    return r + list(fairness(ns))
 
 
 _X = None
@@ -562,6 +601,8 @@ def run_one(spec, rate, pattern, seed, chain='seq', cycles=2000):
         return list(xsim(sp, rate, pattern, seed=seed, chain=chain, cycles=cycles))
     if kind == 'PX':
         return pm_run(sp, rate, pattern, seed, chain, cycles)
+    if kind == 'F':
+        return run_fair(sp, rate, pattern, seed, chain, cycles)
     if kind in ('G', 'GX'):
         return grun(spec, rate, pattern, seed, chain, cycles)
     return P2.run_one(spec, rate, pattern, seed, chain, cycles)
@@ -721,6 +762,73 @@ def learn_report(main, cycles=12000):
                           f'{100 * (m[0] / b[0] - 1):+6.2f}% {z(m, b):+6.1f}z{sh}')
 
 
+# the t5b evaluation (seeds 1401-1408; 1401-1412 for transpose, tornado, bit complement):
+# pattern -> chain -> [(spec, rates, cycles)], the learner first
+_FL = 'F:PX:t5b:th=0.7:d=2:elim=0.1'
+_FDX, _FWF = 'F:X:route=wf:tiers=xy+esc:thr=g0', 'F:X:route=wf:tiers=all+esc:thr=g0'
+_FDR, _FT4 = 'F:X:route=duato:tiers=all+esc:thr=g0', 'F:X:route=duato:tiers=all+esc:thr=g4'
+PUBNAME = {_FDX: 'dualXY', _FWF: 'westFirstMesh', _FDR: 'duatoMesh rand', _FT4: 'duatoMesh T4'}
+FPLAN = {
+    'uniform': {'seq': [(_FL, [1.0], 12000), (_FDX, [0.75, 1.0], 6000), (_FDR, [0.46, 0.48, 0.5], 6000),
+                        (_FT4, [0.75, 1.0], 6000)],
+                'none': [(_FL, [0.75, 1.0], 12000), (_FDX, [0.75, 1.0], 6000),
+                         (_FDR, [0.33, 0.35, 0.37], 6000), (_FT4, [0.75, 1.0], 6000)]},
+    'transpose': {c: [(_FL, [0.75, 1.0], 12000), (_FWF, [0.75, 1.0], 12000)] for c in ('seq', 'none')},
+    'shuffle': {c: [(_FL, [1.0], 12000), (_FWF, [0.75, 1.0], 6000)] for c in ('seq', 'none')},
+    'bitrev': {'seq': [(_FL, [0.75], 12000), (_FWF, [0.4, 0.42, 0.44, 0.46], 6000),
+                       (_FDR, [0.38, 0.4], 6000), (_FT4, [0.75, 1.0], 6000)],
+               'none': [(_FL, [0.4, 0.45], 12000), (_FWF, [0.28, 0.3, 0.32, 0.34, 0.36], 6000),
+                        (_FDR, [0.28, 0.3], 6000), (_FT4, [0.75, 1.0], 6000)]},
+    'hotspot': {'seq': [(_FL, [0.6, 1.0], 12000), (_FDR, [0.44, 0.46, 0.48, 0.5], 6000),
+                        (_FT4, [0.6, 1.0], 6000)],
+                'none': [(_FL, [0.45, 1.0], 12000), (_FDR, [0.32, 0.34, 0.36, 0.38], 6000),
+                         (_FT4, [0.6, 1.0], 6000)]},
+    'bitcomp': {'seq': [(_FL, [0.31, 0.32], 12000), (_FDX, [0.31, 0.32, 0.33], 6000)],
+                'none': [(_FL, [0.24, 0.25], 12000), (_FDX, [0.23, 0.24, 0.25], 6000)]},
+    'tornado': {'seq': [(_FL, [0.7, 1.0], 12000), (_FDX, [0.43, 0.7], 12000)],
+                'none': [(_FL, [0.33, 0.34, 1.0], 12000), (_FDX, [0.33, 0.34, 0.35], 12000)]},
+    'randperm': {c: [(_FL, [1.0], 12000), (_FDX, [0.75, 1.0], 6000)] for c in ('seq', 'none')},
+}
+
+
+def fair_report():
+    res = load()
+    z = lambda a, b: (a[0] - b[0]) / max(1e-12, (a[1] ** 2 + b[1] ** 2) ** .5)
+    for ch in ('seq', 'none'):
+        print(f'\n== {ch}: learner t5b (12000 cycles) vs every published scheme at its peak; '
+              'fairness = min/mean per-source injections, Jain (mean over seeds, at the peak)')
+        for p, d in FPLAN.items():
+            seeds = list(range(1401, 1413 if p in ('transpose', 'tornado', 'bitcomp') else 1409))
+            rows = []
+            for sp, rs, cyc in d[ch]:
+                c = cell(res, sp, p, rs, seeds, ch, cyc)
+                if c is None:
+                    rows.append(None)
+                    continue
+                v = [res[(sp, c[2], p, sd, ch, cyc)] for sd in seeds]
+                fm = sum(x[-2] for x in v) / len(v)
+                fj = sum(x[-1] for x in v) / len(v)
+                sh = ''
+                if sp.startswith('F:PX'):
+                    nm = len(v[0]) - 7
+                    sh = ' modes ' + '/'.join(f'{100 * sum(x[5 + i] for x in v) / len(v):.0f}'
+                                              for i in range(nm))
+                rows.append((c, fm, fj, sh))
+            L = rows[0]
+            if L is None:
+                print(f'{p:<10} (incomplete)')
+                continue
+            print(f'{p:<10} t5b {L[0][0]:.4f}±{L[0][1] * 1e4:<3.0f}@{L[0][2]:<5g} '
+                  f'fair {L[1]:.2f}/{L[2]:.3f}{L[3]}')
+            for (sp, rs, cyc), r in zip(d[ch][1:], rows[1:]):
+                if r is None:
+                    print(f'{"":<10}   {PUBNAME[sp]:<15} (incomplete)')
+                    continue
+                print(f'{"":<10}   {PUBNAME[sp]:<15} {r[0][0]:.4f}±{r[0][1] * 1e4:<3.0f}@{r[0][2]:<5g}'
+                      f' fair {r[1]:.2f}/{r[2]:.3f}   t5b {100 * (L[0][0] / r[0][0] - 1):+6.2f}% '
+                      f'{z(L[0], r[0]):+6.1f}z')
+
+
 if __name__ == '__main__':
     cmd = sys.argv[1]
     if cmd == 'check':
@@ -733,6 +841,8 @@ if __name__ == '__main__':
             linkmap(dg, DIRN.index(dr), what)
     elif cmd == 'run':
         run_cmd(sys.argv[2:])
+    elif cmd == 'fairrep':
+        fair_report()
     elif cmd == 'learnrep':
         learn_report(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 12000)
     elif cmd == 'jobs':          # jobs FILE: lines 'specs|pats|rates|seeds|chains|cycles'

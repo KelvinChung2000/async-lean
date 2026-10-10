@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* **A mesh scheme ahead of every published one on every pattern (simulation)**: the mode-switching
+  learner `PX:t5b` over five proved west-first modes (`scripts/xp_transpose.py`) is strictly
+  ahead of XY on both virtual channels, west-first random, Duato's mesh and O1TURN on all eight
+  patterns, with sequential moves and without chaining (+0.7 % to +21 %); switching proved safe by
+  `westFirstMesh_modes_safe`.
+
 * `scripts/xp_portfolio2.py`: the mesh mode-switching learner with the new XY mode is ahead of
   every published mesh scheme on six of eight patterns in both move models, ties tornado and
   trails west-first on transpose at offered load 1.0. Correction: west-first with a weak
