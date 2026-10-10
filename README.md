@@ -808,9 +808,20 @@ past saturation where the published schemes peak at their knees, so its injectio
 on most patterns (bit complement Jain 0.75 against UGAL's 0.997); parameters were chosen on one
 seed at the evaluated loads; runs are short. Safety: price and toll choices and throttles with
 thresholds up to 8 are covered by `torus_choice_safe`, `torus_combo_safe` and
-`torus_throttle_safe`; but the simulator's escape is up*/down* routing over all links from a
-central root, while the Lean torus instances use a tree escape rooted at a corner — a gap that
-applies to every torus result here.
+`torus_throttle_safe`, and for the simulator's own escape by the up*/down* results below.
+
+**The simulated escape, proved.** The torus simulations escape by up*/down* routing over all
+links from a central root (BFS levels, the first hop of a shortest legal path), not by the tree
+escape of `Routing/Graph.lean`. `Routing/EscapeLayer.lean` abstracts the escape of the detour
+network (a next hop, legality, an acyclicity order and a ranking) and re-proves every result of
+`GraphDetour.lean`, the throttles and the history-dependent strategies for any escape layer, with
+the tree escape as an instance; `Routing/UpDown.lean` builds the up*/down* layer on any finite
+connected graph (connectivity up the tree and down, acyclicity of the phased escape dependencies,
+any shortest legal next hop including the lowest-port tie-break; `exists_updown_correct`);
+`Examples/UpDown.lean` instantiates it on the torus of every size with any root and checks it
+against the simulator (up iff lower (level, index); the escape hop is the first hop of a shortest
+legal path; the centre root is node 27 at 8 × 8 and 119 at 16 × 16), giving `simUD_detour_correct`,
+`simUD_throttle_safe` and `simUD_combo_safe` for exactly the simulated escape.
 
 ### Beyond the mesh
 
@@ -1270,6 +1281,7 @@ The network properties are listed in section 7.
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Routing/EscapeLayer.lean`, `Routing/UpDown.lean` | the detour network for any escape layer; up*/down* escape on any finite connected graph, as simulated |
 | `Routing/Strategy.lean`, `Routing/StrategyDetour.lean` | history-dependent strategies (any state, a selection per step): deadlock, livelock, starvation freedom and delivery under load; throttles on any graph |
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Packet/Exclusion.lean`, `Packet/Ceiling.lean` | one cycle of a ring of depth-N lanes under every move order; one-packet lanes carry at most 1/2 on average; fluid optima at scaled capacity |

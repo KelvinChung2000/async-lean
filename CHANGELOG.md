@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* **The simulated up*/down* escape, proved** (`Routing/EscapeLayer.lean`, `Routing/UpDown.lean`,
+  `Examples/UpDown.lean`): detour networks, throttles and history-dependent strategies are safe for
+  any escape layer; the up*/down* escape of the simulators is one on every finite connected graph;
+  the torus instances (`simUD_combo_safe` and others) match the simulated escape exactly.
+
 * `scripts/xp_torus16.py`: the torus combined scheme scaled to 16 × 16 is ahead of dimension
   order, Valiant and UGAL on eight patterns in both move models and tied on neighbour traffic
   (simulation; less even injection at its peak; simulated escape differs from the proved one).

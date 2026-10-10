@@ -58,6 +58,8 @@ import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
 import AsyncLean.Routing.Strategy
 import AsyncLean.Routing.StrategyDetour
+import AsyncLean.Routing.EscapeLayer
+import AsyncLean.Routing.UpDown
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -101,4 +103,5 @@ import AsyncLean.Examples.Saturation
 import AsyncLean.Examples.GraphBudget
 import AsyncLean.Examples.GraphDetour
 import AsyncLean.Examples.Strategy
+import AsyncLean.Examples.UpDown
 import AsyncLean.Tutorial
