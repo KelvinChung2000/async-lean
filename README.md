@@ -773,7 +773,26 @@ virtual channel allows every productive hop, it is a tier list; the XY mode's th
 patterns in both models, bit complement included (+0.8 % / +1.5 %), but loses hotspot (−2.4 % /
 −4.3 %: every mode switch leaves tree saturation for thousands of cycles, so the learner
 misjudges the price mode, which alone beats Duato there) and uniform (−2.3 % / −4.2 %: the scaled
-gate makes it explore below saturation). At 16 × 16 the all-pattern claim does not yet hold.
+gate makes it explore below saturation). At 16 × 16 that version did not yet make the all-pattern claim.
+
+**16 × 16 mesh: ahead of every published scheme on every pattern (simulation,
+`scripts/xp_scale2.py`).** The learner `SQX:s6:d=2:elim=0.1:xs=1` keeps the scaled thresholds and
+timing, keeps the congestion gate at 0.7, and adds two rules that read only history: if one
+destination receives at least 10 % of the injected packets (hotspot; under any permutation the
+largest share stays below 0.07 at the benchmark loads) it locks the price mode, and if most
+sources send to more than one destination it starts from the best configuration instead of the
+XY mode. At 16 × 16 (learner 18000 cycles, published schemes at their own peaks, fresh seeds) it
+is ahead on all eight patterns in both move models — uniform +5.1 % / +2.3 %, transpose +2.3 % /
++0.9 %, shuffle +26 % / +30 %, bit reversal +13 % / +21 %, hotspot +5.1 % / +5.0 %, bit complement
++1.1 % / +1.6 % (8 seeds), tornado +6.5 % / +5.9 %, random permutation +18 % / +19 % (z ≥ 10
+everywhere) — and at 8 × 8 still on all sixteen cells (smallest lead tornado +0.42 %, z = 7). Its
+fairness at the peak is better than XY's under uniform traffic and comparable elsewhere. Caveats:
+the two new rules detect traffic signatures rather than learn; one timing fix (`xs=1`) was added
+after a first run on the same seeds; the destination lock assumes stationary traffic; the
+learner runs 18000 cycles against 6000 for the published schemes; three far-behind published
+schemes keep 3 seeds. Safety: every mode is a west-first tier list with the throttled escape
+tier and the rules read only deliveries, occupancy and injected destinations, so
+`westFirstMesh_modes_safe` covers it.
 
 ### Beyond the mesh
 
