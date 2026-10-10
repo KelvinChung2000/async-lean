@@ -23,6 +23,17 @@ below the optimum.
   at every load below `16/15`; no scheduler moving traffic only along shortest paths keeps a
   bounded backlog above `2/3`.  Between `2/3` and `16/15` only adaptive, non-minimal scheduling
   is stable.
+* `Run.backpressure_progress` : **backpressure never deadlocks**: on a network where every
+  destination is reachable, whenever traffic is queued some traffic moves.
+  `mesh_finite_buffer_network` : on the mesh with `m` connections, under a load `(1 - δ)` times
+  the optimum, backpressure from empty fits in buffers of `145 m k⁷ / (16 δ) + m` packets per
+  destination, never deadlocks, and is stable: a finite-buffer network near the optimum without
+  deadlock.
+* `Run.singleHead_ceiling`, `mesh_headOfLine` : **head-of-line blocking**: a vertex with one
+  first-in first-out queue sends at most one packet per slot, so no such run is stable above one
+  packet per vertex and slot, whatever the capacities; on the mesh with `m` connections,
+  backpressure with a queue per destination is stable up to `m` times the optimum.  Per
+  destination queues are necessary for linear scaling.
 -/
 
 namespace AsyncLean
@@ -111,6 +122,273 @@ theorem torusTornado_adaptivity (r : Run (torusNet 8)) {ρ : ℚ} :
 
 /-- Between `2/3` and `16/15` only non-minimal scheduling is stable. -/
 theorem torusTornado_gap : (2 / 3 : ℚ) < 16 / 15 := by norm_num
+
+
+/-! ### Finite buffers, no deadlock, near the optimum -/
+
+section Progress
+
+variable {V : Type*} [Fintype V] [DecidableEq V]
+
+/-- `d` is reachable from `v` along links of positive capacity. -/
+inductive Net.Reach (N : Net V) (d : V) : V → Prop
+  | here : Net.Reach N d d
+  | step {v w : V} : 0 < N.cap v w → Net.Reach N d w → Net.Reach N d v
+
+namespace Run
+
+variable {N : Net V} (r : Run N)
+
+/-- **No deadlock**: whenever the network holds traffic, some traffic moves. -/
+def Progress : Prop := ∀ t, 0 < backlog (r.Q t) → ∃ d u v, 0 < r.x t d u v
+
+omit [DecidableEq V] in
+/-- Along a path to `d`, a positive backlog for `d` drops across some link. -/
+theorem descent (t : ℕ) {d v : V} (hreach : N.Reach d v) (hpos : 0 < r.Q t v d) :
+    ∃ u w, 0 < N.cap u w ∧ r.Q t w d < r.Q t u d := by
+  induction hreach with
+  | here => rw [r.Q_dest] at hpos; exact absurd hpos (lt_irrefl 0)
+  | @step v w hcap _ ih =>
+    by_cases h : r.Q t w d < r.Q t v d
+    · exact ⟨v, w, hcap, h⟩
+    · exact ih (lt_of_lt_of_le hpos (not_lt.1 h))
+
+/-- **Backpressure never deadlocks** on a network in which every destination is reachable from
+every vertex: whenever traffic is queued, some traffic moves.  (Across some link of a path to
+its destination the backlog drops; that link has positive weight, so the max-weight rates are
+positive somewhere with a positive backlog difference, and work conservation sends.) -/
+theorem backpressure_progress (hr : r.Backpressure) (hconn : ∀ v d, N.Reach d v) :
+    r.Progress := by
+  intro t hb
+  -- a positive backlog
+  obtain ⟨d₀, v₀, hpos⟩ : ∃ d v, 0 < r.Q t v d := by
+    by_contra hn
+    simp only [not_exists, not_lt] at hn
+    have : backlog (r.Q t) ≤ 0 := sum_nonpos fun d _ => sum_nonpos fun v _ => hn d v
+    linarith
+  have : Nonempty V := ⟨v₀⟩
+  obtain ⟨u₀, w₀, hcap, hdrop⟩ := r.descent t (hconn v₀ d₀) hpos
+  -- the backpressure rates have positive weight
+  have hbp : 0 < weight (r.Q t) (bpRates N (r.Q t)) := by
+    rw [weight_comm]
+    simp only [bpRates_link]
+    have hterm : ∀ u w, 0 ≤ N.cap u w *
+        max (r.Q t u (best (r.Q t) u w) - r.Q t w (best (r.Q t) u w)) 0 :=
+      fun u w => mul_nonneg (N.cap_nonneg u w) (le_max_right _ _)
+    have h0 : 0 < N.cap u₀ w₀ *
+        max (r.Q t u₀ (best (r.Q t) u₀ w₀) - r.Q t w₀ (best (r.Q t) u₀ w₀)) 0 := by
+      refine mul_pos hcap (lt_of_lt_of_le ?_ (le_max_left _ _))
+      have := best_spec (r.Q t) u₀ w₀ d₀
+      linarith
+    calc (0 : ℚ) < N.cap u₀ w₀ *
+          max (r.Q t u₀ (best (r.Q t) u₀ w₀) - r.Q t w₀ (best (r.Q t) u₀ w₀)) 0 := h0
+      _ ≤ ∑ w, N.cap u₀ w * max (r.Q t u₀ (best (r.Q t) u₀ w) - r.Q t w (best (r.Q t) u₀ w)) 0 :=
+          single_le_sum (f := fun w => N.cap u₀ w *
+            max (r.Q t u₀ (best (r.Q t) u₀ w) - r.Q t w (best (r.Q t) u₀ w)) 0)
+            (fun w _ => hterm u₀ w) (mem_univ w₀)
+      _ ≤ ∑ u, ∑ w, N.cap u w * max (r.Q t u (best (r.Q t) u w) - r.Q t w (best (r.Q t) u w)) 0 :=
+          single_le_sum (f := fun u => ∑ w, N.cap u w *
+            max (r.Q t u (best (r.Q t) u w) - r.Q t w (best (r.Q t) u w)) 0)
+            (fun u _ => sum_nonneg fun w _ => hterm u w) (mem_univ u₀)
+  -- so do the run's rates: some rate is positive on a positive backlog difference
+  have hw := lt_of_lt_of_le hbp (hr.1 t _ (bpRates_feasible N (r.Q t)))
+  obtain ⟨d, u, v, hduv⟩ : ∃ d u v, 0 < r.μ t d u v * (r.Q t u d - r.Q t v d) := by
+    by_contra hn
+    simp only [not_exists, not_lt] at hn
+    have : weight (r.Q t) (r.μ t) ≤ 0 :=
+      sum_nonpos fun d _ => sum_nonpos fun u _ => sum_nonpos fun v _ => hn d u v
+    linarith
+  have hμ0 := (r.μ_feasible t).1 d u v
+  have hμ : 0 < r.μ t d u v := by
+    rcases hμ0.lt_or_eq with h | h
+    · exact h
+    · rw [← h, zero_mul] at hduv; exact absurd hduv (lt_irrefl 0)
+  have hdiff : 0 < r.Q t u d - r.Q t v d := pos_of_mul_pos_right hduv hμ0
+  have hQ : 0 < r.Q t u d := by linarith [r.Q_nonneg t v d]
+  -- work conservation sends
+  have hsum : 0 < ∑ v, r.μ t d u v :=
+    lt_of_lt_of_le hμ (single_le_sum (f := fun v => r.μ t d u v)
+      (fun v _ => (r.μ_feasible t).1 d u v) (mem_univ v))
+  have hx := lt_of_lt_of_le (lt_min hQ hsum) (hr.2 t d u)
+  obtain ⟨v', hv'⟩ : ∃ v', 0 < r.x t d u v' := by
+    by_contra hn
+    simp only [not_exists, not_lt] at hn
+    have : ∑ v, r.x t d u v ≤ 0 := sum_nonpos fun v _ => hn v
+    linarith
+  exact ⟨d, u, v', hv'⟩
+
+end Run
+
+end Progress
+
+/-- Every vertex of the mesh with `m ≥ 1` connections per link reaches every other. -/
+theorem mesh_reach (k : ℕ) {m : ℕ} (hm : 0 < m) (d v : Fin k × Fin k) :
+    ((meshNet k).copies m).Reach d v := by
+  have hcap : ∀ u w : Fin k × Fin k, MeshAdj u w → 0 < ((meshNet k).copies m).cap u w :=
+    fun u w h => by
+      show (0 : ℚ) < m * (if MeshAdj u w then 2 else 0)
+      rw [ite_eq_left h]; positivity
+  suffices H : ∀ n (v : Fin k × Fin k),
+      (Int.natAbs ((v.1 : ℤ) - d.1) + Int.natAbs ((v.2 : ℤ) - d.2)) = n →
+        ((meshNet k).copies m).Reach d v from H _ v rfl
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro v hn
+    by_cases hvd : v = d
+    · subst hvd; exact Net.Reach.here
+    obtain ⟨⟨a, ha⟩, ⟨b, hb⟩⟩ := v
+    obtain ⟨⟨c, hc⟩, ⟨e, he⟩⟩ := d
+    simp only at hn
+    rcases lt_trichotomy a c with h | h | h
+    · refine Net.Reach.step (w := (⟨a + 1, by omega⟩, ⟨b, hb⟩)) (hcap _ _ ?_) (ih _ ?_ _ rfl)
+      · left; exact ⟨rfl, Or.inl rfl⟩
+      · simp only; omega
+    · subst h
+      rcases lt_trichotomy b e with h' | h' | h'
+      · refine Net.Reach.step (w := (⟨a, ha⟩, ⟨b + 1, by omega⟩)) (hcap _ _ ?_) (ih _ ?_ _ rfl)
+        · right; exact ⟨rfl, Or.inl rfl⟩
+        · simp only; omega
+      · subst h'; exact absurd rfl hvd
+      · refine Net.Reach.step (w := (⟨a, ha⟩, ⟨b - 1, by omega⟩)) (hcap _ _ ?_) (ih _ ?_ _ rfl)
+        · right; refine ⟨rfl, Or.inr ?_⟩; show b - 1 + 1 = b; omega
+        · simp only; omega
+    · refine Net.Reach.step (w := (⟨a - 1, by omega⟩, ⟨b, hb⟩)) (hcap _ _ ?_) (ih _ ?_ _ rfl)
+      · left; refine ⟨rfl, Or.inr ?_⟩; show a - 1 + 1 = a; omega
+      · simp only; omega
+
+/-- **A finite-buffer network near the optimum, without deadlock** (the mesh with `m`
+connections per link, `k ≥ 2`, uniform traffic, `θ = m · 8 (k² - 1) / k³`).  Started empty, under
+any load at most `(1 - δ) θ`, a backpressure run
+* never holds more than `145 m k⁷ / (16 δ) + m` packets in any per-destination queue: buffers of
+  that size never overflow, so the run is the finite-buffer one;
+* never deadlocks: whenever traffic is queued, some traffic moves;
+* is stable: its backlog stays bounded and it delivers everything that arrives, up to a
+  constant. -/
+theorem mesh_finite_buffer_network (k : ℕ) (hk : 2 ≤ k) {m : ℕ} (hm : 0 < m) {δ : ℚ}
+    (hδ : 0 < δ) (hδ1 : δ ≤ 1) (r : Run ((meshNet k).copies m)) (hr : r.Backpressure)
+    (h0 : ∀ v d, r.Q 0 v d = 0)
+    (harr : ∀ t v d, v ≠ d →
+      r.a t v d ≤ (1 - δ) * (m * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3)) * uniform k v d) :
+    r.FitsIn (145 * m * k ^ 7 / (16 * δ) + m) ∧ r.Progress ∧ r.Stable := by
+  obtain ⟨hfit, hdel⟩ := mesh_buffer k hk hm hδ hδ1 r hr h0 harr
+  refine ⟨hfit, r.backpressure_progress hr (fun v d => mesh_reach k hm d v), ?_⟩
+  have hbnn : (0 : ℚ) ≤ 145 * m * k ^ 7 / (16 * δ) + m :=
+    add_nonneg (div_nonneg (by positivity) (by linarith)) (Nat.cast_nonneg m)
+  refine ⟨(Fintype.card (Fin k × Fin k) : ℚ) ^ 2 * (145 * m * k ^ 7 / (16 * δ) + m) +
+    (k : ℚ) ^ 4 * (145 * m * k ^ 7 / (16 * δ) + m), fun t => ⟨?_, ?_⟩⟩
+  · have hb : backlog (r.Q t) ≤ ∑ _d : Fin k × Fin k, ∑ _v : Fin k × Fin k,
+        (145 * (m : ℚ) * k ^ 7 / (16 * δ) + m) :=
+      sum_le_sum fun d _ => sum_le_sum fun v _ => hfit t v d
+    have e : ∑ _d : Fin k × Fin k, ∑ _v : Fin k × Fin k, (145 * (m : ℚ) * k ^ 7 / (16 * δ) + m) =
+        (Fintype.card (Fin k × Fin k) : ℚ) ^ 2 * (145 * m * k ^ 7 / (16 * δ) + m) := by
+      simp only [sum_const, card_univ, nsmul_eq_mul]; ring
+    have : (0 : ℚ) ≤ (k : ℚ) ^ 4 * (145 * m * k ^ 7 / (16 * δ) + m) :=
+      mul_nonneg (by positivity) hbnn
+    linarith
+  · have := hdel t
+    have : (0 : ℚ) ≤ (Fintype.card (Fin k × Fin k) : ℚ) ^ 2 * (145 * m * k ^ 7 / (16 * δ) + m) :=
+      mul_nonneg (by positivity) hbnn
+    linarith
+
+/-! ### Head-of-line blocking: one head per vertex does not scale -/
+
+namespace Run
+
+variable {V : Type*} [Fintype V] [DecidableEq V] {N : Net V} (r : Run N)
+
+/-- **A single head per vertex**: every vertex sends at most one packet per slot in all, as a
+vertex with one first-in first-out queue for all destinations does (only the packet at its head
+can leave). -/
+def SingleHead : Prop := ∀ t u, ∑ d, ∑ v, r.x t d u v ≤ 1
+
+omit [DecidableEq V] in
+/-- With a single head per vertex, at most `|V|` packets are delivered per slot. -/
+theorem delivered_le_card (h : r.SingleHead) (t : ℕ) : r.delivered t ≤ Fintype.card V := by
+  unfold delivered
+  calc ∑ d, ∑ u, r.x t d u d ≤ ∑ d, ∑ u, ∑ v, r.x t d u v :=
+        sum_le_sum fun d _ => sum_le_sum fun u _ =>
+          single_le_sum (f := fun v => r.x t d u v) (fun v _ => r.x_nonneg t d u v) (mem_univ d)
+    _ = ∑ u, ∑ d, ∑ v, r.x t d u v := sum_comm
+    _ ≤ ∑ _u : V, (1 : ℚ) := sum_le_sum fun u _ => h t u
+    _ = Fintype.card V := by simp
+
+/-- **Head-of-line ceiling**: a single-head run whose arrivals total `A` per slot and whose
+backlog stays bounded has `A ≤ |V|`, whatever the capacities. -/
+theorem singleHead_ceiling (h : r.SingleHead) {A : ℚ} (harr : ∀ t, r.arrived t = A)
+    (hb : r.BoundedBacklog) : A ≤ Fintype.card V := by
+  obtain ⟨C, hC⟩ := hb
+  have hT : ∀ T : ℕ, (T : ℚ) * A ≤ T * Fintype.card V + C := by
+    intro T
+    have h1 := r.delivered_sum T
+    have h2 : ∑ t ∈ range T, r.delivered t ≤ T * Fintype.card V := by
+      calc ∑ t ∈ range T, r.delivered t ≤ ∑ _t ∈ range T, (Fintype.card V : ℚ) :=
+            sum_le_sum fun t _ => r.delivered_le_card h t
+        _ = T * Fintype.card V := by simp
+    have h3 : ∑ t ∈ range T, r.arrived t = T * A := by simp [harr]
+    have := hC T
+    have := r.backlog_nonneg 0
+    linarith
+  by_contra hcon
+  rw [not_le] at hcon
+  obtain ⟨T, hT'⟩ := exists_nat_gt_rat (C / (A - Fintype.card V))
+  have hpos : 0 < A - Fintype.card V := by linarith
+  rw [div_lt_iff₀ hpos] at hT'
+  have := hT T
+  have := mul_sub (T : ℚ) A (Fintype.card V)
+  linarith
+
+end Run
+
+/-- Uniform traffic totals one packet per vertex and slot at load one. -/
+theorem uniform_total (k : ℕ) (hk : 2 ≤ k) :
+    ∑ d : Fin k × Fin k, ∑ v : Fin k × Fin k, uniform k v d = (k : ℚ) ^ 2 := by
+  have hk' : (2 : ℚ) ≤ k := by exact_mod_cast hk
+  have hK : (0 : ℚ) < (k : ℚ) ^ 2 - 1 := by nlinarith
+  have e : ∀ d : Fin k × Fin k, ∑ v, uniform k v d = 1 := fun d => by
+    have : ∀ v, uniform k v d = 1 / ((k : ℚ) ^ 2 - 1) - if v = d then 1 / ((k : ℚ) ^ 2 - 1) else 0 :=
+      fun v => by unfold uniform; split_ifs <;> simp
+    simp only [this, sum_sub_distrib, sum_const, card_univ, Fintype.card_prod, Fintype.card_fin,
+      sum_ite_eq', mem_univ, ite_true, nsmul_eq_mul]
+    push_cast
+    rw [show (k : ℚ) * k * (1 / ((k : ℚ) ^ 2 - 1)) - 1 / ((k : ℚ) ^ 2 - 1) =
+        ((k : ℚ) ^ 2 - 1) * (1 / ((k : ℚ) ^ 2 - 1)) by ring, mul_one_div_cancel hK.ne']
+  simp only [e, sum_const, card_univ, Fintype.card_prod, Fintype.card_fin, nsmul_eq_mul]
+  push_cast; ring
+
+/-- **Per-destination queues are necessary for linear scaling** (the mesh with `m` connections
+per link, `k ≥ 2`, uniform traffic).  At every load `ρ` with `1 < ρ < m · 8 (k² - 1) / k³`
+(nonempty once `m` is large enough, `m ≥ 2` for `k = 8`), backpressure, with a queue per
+destination, keeps a bounded backlog and delivers everything; no run in which every vertex
+sends at most one packet per slot (a single first-in first-out queue per vertex) keeps a bounded
+backlog, whatever its capacities. -/
+theorem mesh_headOfLine (k : ℕ) (hk : 2 ≤ k) {m : ℕ} {ρ : ℚ} (hρ1 : 1 < ρ)
+    (hρθ : ρ < m * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3)) :
+    (∀ r : Run ((meshNet k).copies m), r.Backpressure →
+        (∀ t v d, v ≠ d → r.a t v d ≤ ρ * uniform k v d) → r.Stable) ∧
+      (∀ r : Run ((meshNet k).copies m), r.SingleHead →
+        (∀ t v d, v ≠ d → r.a t v d = ρ * uniform k v d) → ¬ r.BoundedBacklog) := by
+  refine ⟨fun r hr harr => ?_, fun r hh harr hb => ?_⟩
+  · have hk' : (2 : ℚ) ≤ k := by exact_mod_cast hk
+    have hK : (0 : ℚ) < (k : ℚ) ^ 2 - 1 := by nlinarith
+    obtain ⟨hunn, hunc⟩ := uniform_props hk
+    have hR := (mesh_routable k hk).copies m
+    exact r.backpressure_optimal hr hR hR hunn hunn (div_pos one_pos hK) hunc
+      (by linarith) (by linarith) hρθ harr
+  · have hA : ∀ t, r.arrived t = ρ * (k : ℚ) ^ 2 := fun t => by
+      unfold Run.arrived
+      have e : ∀ d v, r.a t v d = ρ * uniform k v d := fun d v => by
+        by_cases h : v = d
+        · subst h; rw [r.a_dest]; simp [uniform]
+        · exact harr t v d h
+      simp only [e, ← mul_sum, uniform_total k hk]
+    have := r.singleHead_ceiling hh hA hb
+    simp only [Fintype.card_prod, Fintype.card_fin] at this
+    push_cast at this
+    have hk2 : (0 : ℚ) < (k : ℚ) ^ 2 := by
+      have : (2 : ℚ) ≤ k := by exact_mod_cast hk
+      positivity
+    nlinarith
 
 end Fluid
 
