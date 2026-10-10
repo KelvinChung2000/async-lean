@@ -707,6 +707,24 @@ trails its own best mode by 0.06 to 0.7 % at 12000 cycles; below saturation unde
 the gate keeps it in the XY mode, which delivers less than the others at offered 0.4. Switching
 is covered by `westFirstMesh_modes_safe`.
 
+**Transpose and tornado (simulation, `scripts/xp_transpose.py`).** Under transpose the two
+halves of the traffic use disjoint links and every packet enters one diagonal node; west-first
+lets packets heading west and north use only one lane north into the diagonal, so without
+chaining no west-first scheme exceeds (10.5 + 14) / 64 ≈ 0.383, and west-first random is at 95 %
+of that. The mode `route=wf:tiers=all+esc:thr=g0:sel=Pd_balL0` (within the first tier: the hop
+into the router with the most free usable directions, then the dimension with more distance
+left, then virtual channel 0 when both lanes are free) fills the under-used lanes into the
+corner diagonal nodes and beats west-first random on transpose by 3.2 % (sequential) and 1.5 %
+(no chaining), 12 fresh seeds; `westFirstTiers_correct` covers it. With it in place of the
+throttled west-first mode, the learner (`PX:t4:th=0.7:d=2:elim=0.1`, 12000 cycles) is ahead of
+every published mesh scheme on seven of eight patterns in both move models (transpose +3.2 % /
++1.4 %) and ties tornado (−0.03 % / −0.4 %). Under tornado every minimal route stays in its row,
+so every minimal scheme routes identically and a source threshold `g ≤ 4` never binds (the
+north and south lanes stay free); detours lose (Valiant, UGAL, row spreading on the mesh: −2 to
+−24 %). A stronger throttle (`g = 6`) binds and gains +1.1 % / +5.1 % by letting source rates
+differ (with unequal rates a row carries 3 packets per cycle without chaining, against 8/3 with
+equal rates) — throughput bought with unfairness between sources.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
