@@ -841,6 +841,18 @@ the bound is reached (`SatCycle.run`). So under neighbour traffic, where dimensi
 schemes reach one packet per node per cycle in simulation, no scheme can do better: that tie is
 an optimum.
 
+**Fairness on the torus (simulation, `scripts/xp_fairtorus.py`).** Counting each scheme only at
+loads where its per-source fairness is at least the best published scheme's at that scheme's
+peak, a fair-share admission rule (a source's next packet enters its injection lane only while
+its injection count is at most the mean plus a margin; a source well below the mean gets an
+unthrottled first hop) keeps the torus scheme ahead on 14 of 16 pattern/model cells at
+16 × 16 (+3 to +26 %, with min/mean 0.94 to 0.95 against UGAL's 0.44 to 0.90) but ties transpose
+(+0.6 % / −0.7 %), and at 8 × 8 a looser margin is ahead on 14 of 16 cells but loses shuffle
+(−3.4 % / −6.9 %); the margins differ by size. So under this stricter fairness-constrained
+comparison no single torus scheme is ahead everywhere; the unconstrained comparison above stands.
+The admission rule is covered by `simUD_combo_safe` (any injection rule) and the relaxations by
+`simUD_throttle_safe`.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
