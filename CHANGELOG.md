@@ -15,7 +15,11 @@
   shortest-path-only scheduling is unstable above `2/3` while backpressure is stable below
   `16/15` (`torusTornado_adaptivity`). Score-based selections are valid, so correct networks
   stay safe under them (`scoreSel_valid`). `GraphCert.PortGraph.upper_of_check'` takes potential
-  feasibility instead of a flow.
+  feasibility instead of a flow. Backpressure never deadlocks where every destination is
+  reachable (`Run.backpressure_progress`); on the mesh it is a finite-buffer network near the
+  optimum without deadlock (`mesh_finite_buffer_network`). A single first-in first-out queue per
+  vertex is never stable above one packet per vertex and slot, so per-destination queues are
+  necessary for linear scaling (`Run.singleHead_ceiling`, `mesh_headOfLine`).
 
 * **Backpressure reaches the fluid optimum** (`Flow/Backpressure.lean`,
   `scripts/backpressure_sim.py`). A discrete-time queueing model of the fluid network

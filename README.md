@@ -965,15 +965,26 @@ The statements above about packets are theorems too:
   widened networks stay deadlock and livelock free under it (`torusLanes_scoreSel`,
   `torusWide_scoreSel`).
 
-**What remains measurement, not theorem.** The throughput the simulators reach (46 to 65 % of the
-optimum for the proved-safe networks with random move order, 99 % for backpressure, the sharp
-threshold near `24 m` packets per destination) are measurements of particular schedulers on
-Poisson traffic; the theorems bound them from above (the ceilings) and prove backpressure's
-stability for every leaky-bucket arrival sequence, not for Poisson arrivals, whose bursts are
-unbounded. Head-of-line blocking's 58.6 % and the history of the schemes are cited, not
-proved. Whether one network can have both backpressure's throughput and the escape channels'
-deadlock freedom with small buffers is open: the selection is safe (`scoreSel`), its throughput
-is not proved.
+* **Finite buffers, no deadlock, near the optimum** (`Flow/Necessity.lean`). Backpressure
+  never deadlocks where every destination is reachable: whenever traffic is queued, some moves
+  (`Run.backpressure_progress`). On the mesh with `m` connections at `(1 − δ)` times the
+  optimum it fits in buffers of `145 m k⁷ / (16 δ) + m` packets per destination, never
+  deadlocks, and is stable (`mesh_finite_buffer_network`).
+* **Head-of-line blocking** (`Flow/Necessity.lean`). A vertex with a single first-in first-out
+  queue sends at most one packet per slot, so no such run is stable above one packet per vertex
+  and slot whatever the capacities (`Run.singleHead_ceiling`); on the mesh with `m` connections
+  backpressure with a queue per destination is stable up to `m` times the optimum
+  (`mesh_headOfLine`): per-destination queues are necessary for linear scaling.
+
+**What is measurement, not theorem.** The percentages the simulators report (46 to 65 % of the
+optimum for the proved-safe networks under random move order, 99 % for backpressure, the
+threshold near `24 m` packets per destination) are outcomes of particular random runs on
+Poisson traffic. The theorems bound them from above (the ceilings), prove backpressure stable on
+every arrival sequence within a leaky bucket (Poisson bursts are unbounded, so a Poisson sample
+path is covered only when it stays within some bucket), and give buffer sizes that suffice
+(loosely). The 58.6 % of a first-in first-out switch under uniform random traffic is a
+probabilistic limit from the literature; its deterministic counterpart above is proved. The
+history of the schemes is cited.
 
 ## 8. Which tactic when?
 
