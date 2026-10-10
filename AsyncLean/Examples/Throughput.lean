@@ -163,6 +163,23 @@ theorem torusLanes_delivered (k m B : ℕ) {sel : Selection (Fin m × GChan (TV 
     (R.injectedAll T : ℤ) - Fintype.card (Fin m × GChan (TV k)) ≤ R.ejected T :=
   R.ejected_ge T
 
+/-- **Backpressure-style hop choices are safe**: choosing, among the free permitted hops of the
+torus with `m` lanes, those of largest score (any score: backlog differences, congestion
+estimates) keeps the network deadlock and livelock free. -/
+theorem torusLanes_scoreSel (k m B : ℕ)
+    (score : Config (Fin m × GChan (TV k)) (THdr k) → Fin m × GChan (TV k) → THdr k →
+      (Fin m × GChan (TV k)) × THdr k → ℚ) :
+    (torusLanes k m B).DeadlockFreeWith ((torusLanes k m B).scoreSel score) ∧
+      (torusLanes k m B).LivelockFreeWith ((torusLanes k m B).scoreSel score) :=
+  (torusLanes_correct k m B).1.scoreSel score
+
+/-- The same for the widened torus (one escape and `2m - 1` adaptive channels per link). -/
+theorem torusWide_scoreSel (k m B : ℕ) (hm : 0 < m) (score : _) :
+    (torusWide k m B hm).DeadlockFreeWith ((torusWide k m B hm).scoreSel score) ∧
+      (torusWide k m B hm).LivelockFreeWith ((torusWide k m B hm).scoreSel score) :=
+  (torusWide_correct k m B hm).1.scoreSel score
+
+#assert_standard_axioms torusLanes_scoreSel torusWide_scoreSel
 #assert_standard_axioms torus_nbrs_iff torusLanesPlacement_cap torusLanes_ceiling
 #assert_standard_axioms torusLanes_timed torusLanes_sustains torusLanes_delivered
 
