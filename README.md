@@ -677,7 +677,8 @@ drains); on the torus the modes are throttle thresholds of the combined scheme. 
 proved safe: `westFirstMesh_modes_safe` (any history-dependent choice among west-first tier
 lists containing the throttled escape tier) and `torus_throttle_safe`. The learner ties the
 published schemes it contains and beats those it does not (west-first with a weak throttle
-alone gives transpose 0.4756, 6 % above published west-first), but it loses 0.1 to 4 % to its own
+alone gives transpose 0.4756, above published west-first at offered 0.6 but about 1 % below it at
+offered 1.0, 0.4819), but it loses 0.1 to 4 % to its own
 best mode on most patterns (6000 cycles; 0.3 to 0.5 % at 12000 cycles once far-worse modes are
 no longer probed): the cost of finding the right mode — exploration, re-probing, and confusing
 modes within 1 % of each other under 1 % per-epoch noise — does not vanish at these run lengths.
@@ -694,6 +695,17 @@ sequential; +1.7 %, z = 10, no chaining) and random permutation (+3.2 % and +8.4
 seeds. It is a tier list with the escape tier (`duatoTiers_correct`, `westFirstTiers_correct`).
 Without chaining a lane accepts at most one packet every two cycles, so no minimal scheme can
 exceed 0.25 under bit complement; XY on both lanes is at 90 % of that.
+
+With this mode in place of XY in the mode-switching learner (`scripts/xp_portfolio2.py`, modes
+on the west-first mesh, 8 to 12 fresh seeds, 6000 and 12000 cycles) the learner is strictly ahead
+of every published mesh scheme on six of eight patterns in both move models — uniform +4 to +6 %,
+shuffle +14 to +21 %, bit reversal +20 to +23 %, hotspot +3 to +5 %, bit complement +0.8 to
++1.9 %, random permutation +2.7 to +8.3 % — ties tornado up to 0.1 to 0.4 % (every scheme but
+O1TURN gives the same throughput there), and loses transpose to west-first random at offered
+load 1.0 (−1.2 to −2.3 %; with unthrottled west-first as a mode and 12000 cycles it ties it). It
+trails its own best mode by 0.06 to 0.7 % at 12000 cycles; below saturation under hotspot traffic
+the gate keeps it in the XY mode, which delivers less than the others at offered 0.4. Switching
+is covered by `westFirstMesh_modes_safe`.
 
 ### Beyond the mesh
 

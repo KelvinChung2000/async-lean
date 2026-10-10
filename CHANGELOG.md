@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* `scripts/xp_portfolio2.py`: the mesh mode-switching learner with the new XY mode is ahead of
+  every published mesh scheme on six of eight patterns in both move models, ties tornado and
+  trails west-first on transpose at offered load 1.0. Correction: west-first with a weak
+  throttle is not above published west-first on transpose at offered load 1.0.
+
 * `scripts/xp_portfolio.py`: a network-wide mode-switching learner over proved modes;
   `westFirstMesh_strategy_safe`, `westFirstMesh_modes_safe` (`Examples/Strategy.lean`) prove the
   switching on the west-first mesh. It matches the schemes it contains up to a learning cost of
