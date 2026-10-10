@@ -659,12 +659,28 @@ sources and uniform a higher one, and no local signal tried separates the two. *
 best configuration (west-first mesh; a deviation tier taking a hop whose next router offers
 at least 2 more free usable hops; then straight on; then the XY escape; then any VC1 hop;
 within a tier the hop into the freest router; `g = 4`) is ahead of every published and own
-scheme on uniform, shuffle (+9 to 11 %), bit reversal (+15 to 17 %) and random permutation in
-both move models, but loses transpose to west-first (−2.4 to −4.6 %) and bit complement to XY on
+scheme on uniform, shuffle (+9 to 11 %) and bit reversal (+15 to 17 %) in both move models
+(not on random permutation, as first reported: XY on both virtual channels at offered load 1.0,
+beyond the first sweep, gives 0.4657 / 0.3605 against 0.4598 / 0.3392), but loses transpose to west-first (−2.4 to −4.6 %) and bit complement to XY on
 both virtual channels (−9 to −13 %): bit complement needs packets held on their XY path, and any
 adaptive fallback costs it, while transpose needs adaptive west-first hops; every rule tried
 moves along that trade-off. It reads only the configuration and is covered by
 `westFirstTiers_correct`.
+
+**Switching modes by learning (simulation, `scripts/xp_portfolio.py`).** A network-wide
+learner runs one of several proved modes at a time, measures delivered packets per epoch,
+re-probes the others at growing intervals and keeps the best. On the mesh the modes are tier
+lists of the west-first mesh (the best configuration, west-first with a weak throttle, XY on
+both virtual channels — identical to the published `dualXY` — and price-chosen hops), learning
+only once the sources saturate (below saturation exploration leaves a backlog that never
+drains); on the torus the modes are throttle thresholds of the combined scheme. Switching is
+proved safe: `westFirstMesh_modes_safe` (any history-dependent choice among west-first tier
+lists containing the throttled escape tier) and `torus_throttle_safe`. The learner ties the
+published schemes it contains and beats those it does not (west-first with a weak throttle
+alone gives transpose 0.4756, 6 % above published west-first), but it loses 0.1 to 4 % to its own
+best mode on most patterns (6000 cycles; 0.3 to 0.5 % at 12000 cycles once far-worse modes are
+no longer probed): the cost of finding the right mode — exploration, re-probing, and confusing
+modes within 1 % of each other under 1 % per-epoch noise — does not vanish at these run lengths.
 
 ### Beyond the mesh
 

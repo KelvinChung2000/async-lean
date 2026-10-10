@@ -419,4 +419,37 @@ theorem duatoMesh_lx_safe (k : ℕ) {H : Type*} (init : H)
 #assert_standard_axioms duatoTiers_append_correct duatoMesh_strategy_safe duatoMesh_gated_safe
 #assert_standard_axioms duatoMesh_lx_safe Mesh.gatedTiers_sourceSel
 
+/-- **Every strategy on the west-first mesh whose selections satisfy Duato's condition with
+throttled sources (on the legal pairs) is safe**: deadlock and livelock free, every packet
+outside the injection channels delivered along every run channel fair relative to the selection
+in force, and every packet along every run strongly fair relative to it.  This covers switching
+between tier lists of the west-first mesh (for example a learner choosing among modes). -/
+theorem westFirstMesh_strategy_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
+    (hσ : ∀ h, (westFirstMesh k).SourceSelOn (wfLegal k) (xyEscape k) (fun c => dir c = 4)
+      (σ.sel h)) :
+    (westFirstMesh k).StrategySafe σ (fun c => dir c = 4) :=
+  Strategy.safe (wf_closed k) (wf_pairs_finite k) (xyEscape k)
+    (fun _ _ _ _ => by simp [xyEscape]) (wf_wf k) (fun _ _ _ _ _ hq => Mesh.esc_not_source hq)
+    (fun _ _ _ _ _ hq => Mesh.turnDuato_not_source (fun _ _ _ _ h => westFirst_sub h) hq)
+    (wfDist k) (fun _ _ _ hl ha hq => by have := wf_dist hl ha hq; omega) hσ
+
+/-- **Every tier list of the west-first mesh containing the throttled escape tier, switched by
+any history-dependent rule, is safe**: in state `h` the strategy uses `tiers h` (each containing
+`escTier k (g h)` with `g h ≤ 8`) and picks among the free hops of a tier with any admissible
+choice. -/
+theorem westFirstMesh_modes_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
+    (tiers : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
+    (ht : ∀ h, escTier k (g h) ∈ tiers h)
+    (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
+      σ.sel h = refineSel ((westFirstMesh k).tieredSel (tiers h)) choose) :
+    (westFirstMesh k).StrategySafe σ (fun c => dir c = 4) :=
+  westFirstMesh_strategy_safe k fun h => by
+    obtain ⟨choose, hch, he⟩ := hσ h
+    rw [he]
+    exact refineSel_sourceSelOn ((tieredSel_sourceSel (westFirstMesh k) (k := k)
+      (fun _ _ => by simp [westFirstMesh, turnDuatoMesh]) (hg h) (ht h)).sourceSelOn _)
+      ((westFirstMesh k).tieredSel_freeOnly _) hch
+
+#assert_standard_axioms westFirstMesh_strategy_safe westFirstMesh_modes_safe
+
 end AsyncLean.Examples

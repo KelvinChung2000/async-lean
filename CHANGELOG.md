@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* `scripts/xp_portfolio.py`: a network-wide mode-switching learner over proved modes;
+  `westFirstMesh_strategy_safe`, `westFirstMesh_modes_safe` (`Examples/Strategy.lean`) prove the
+  switching on the west-first mesh. It matches the schemes it contains up to a learning cost of
+  0.1 to 4 % that shrinks only slowly with run length. Correction: XY on both virtual channels,
+  not the best mesh configuration, is best under random permutation traffic.
+
 * `scripts/xp_combo2.py`: a mesh configuration ahead of every scheme on four patterns (up to
   +17 %) that loses transpose and bit complement (a trade-off every rule tried moves along), and
   a torus variant with a three-way per-source throttle that trades hotspot for uniform.
