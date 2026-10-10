@@ -794,6 +794,24 @@ schemes keep 3 seeds. Safety: every mode is a west-first tier list with the thro
 tier and the rules read only deliveries, occupancy and injected destinations, so
 `westFirstMesh_modes_safe` covers it.
 
+**16 × 16 torus (simulation, `scripts/xp_torus16.py`).** The combined scheme with its throttle
+scaled to the network (ball radius `k/4`, high thresholds `min(8, 2 + k/4)` and `min(8, k/2)`) and a
+network-wide learner choosing the concentrated sources' escape-share threshold (32 % or
+`28 + k/2` %; at k = 8 both are equal and the scheme is the published 8 × 8 one, bit for bit) is
+ahead of dimension order, Valiant and UGAL — each at its own knee — on the eight non-trivial
+patterns in both move models: uniform +23 % / +28 %, transpose +8.6 % / +6.2 %, shuffle +56 % /
++48 %, bit reversal +26 % / +28 %, bit complement +24 % / +33 %, hotspot +4.5 % / +6.2 %, tornado
++19 % / +11 %, random permutation +27 % / +31 % (fresh seeds 11 to 14, 3000 cycles, z ≥ 7), and
+ties dimension order at the injection limit under neighbour traffic (UGAL and Valiant stay
+below it). At 8 × 8 it is ahead on the same eight patterns in both models. Caveats: its peaks are
+past saturation where the published schemes peak at their knees, so its injection is less even
+on most patterns (bit complement Jain 0.75 against UGAL's 0.997); parameters were chosen on one
+seed at the evaluated loads; runs are short. Safety: price and toll choices and throttles with
+thresholds up to 8 are covered by `torus_choice_safe`, `torus_combo_safe` and
+`torus_throttle_safe`; but the simulator's escape is up*/down* routing over all links from a
+central root, while the Lean torus instances use a tree escape rooted at a corner — a gap that
+applies to every torus result here.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:

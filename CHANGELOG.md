@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `scripts/xp_torus16.py`: the torus combined scheme scaled to 16 × 16 is ahead of dimension
+  order, Valiant and UGAL on eight patterns in both move models and tied on neighbour traffic
+  (simulation; less even injection at its peak; simulated escape differs from the proved one).
+
 * `scripts/xp_scale2.py`: the mesh learner with a hotspot lock and a random-destination default is
   ahead of every published mesh scheme on all eight patterns in both move models at 16 × 16 as
   well as 8 × 8 (simulation; switching proved safe by `westFirstMesh_modes_safe`).
