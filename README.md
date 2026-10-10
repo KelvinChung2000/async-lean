@@ -650,6 +650,22 @@ the no-chaining move model is a different scheduling of the same moves (each cyc
 interleaving, so deadlock and livelock freedom carry over), but the theorems are stated for the
 step-by-step semantics; thresholds must stay at most twice the router degree.
 
+**Pushing further (simulation, `scripts/xp_combo2.py`).** *Torus:* choosing each source's
+throttle threshold three ways (32 % for sources whose smoothed detour share is at least 1 %,
+34 % for concentrated, 36 % for spread-out sources) beats the threshold variants that edged
+the combined scheme on uniform, transpose, bit reversal and random permutation, but gives up
+1 to 2 % on hotspot and 0.7 % on bit complement: hotspot wants a lower threshold for spread-out
+sources and uniform a higher one, and no local signal tried separates the two. *Mesh:* the
+best configuration (west-first mesh; a deviation tier taking a hop whose next router offers
+at least 2 more free usable hops; then straight on; then the XY escape; then any VC1 hop;
+within a tier the hop into the freest router; `g = 4`) is ahead of every published and own
+scheme on uniform, shuffle (+9 to 11 %), bit reversal (+15 to 17 %) and random permutation in
+both move models, but loses transpose to west-first (−2.4 to −4.6 %) and bit complement to XY on
+both virtual channels (−9 to −13 %): bit complement needs packets held on their XY path, and any
+adaptive fallback costs it, while transpose needs adaptive west-first hops; every rule tried
+moves along that trade-off. It reads only the configuration and is covered by
+`westFirstTiers_correct`.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:

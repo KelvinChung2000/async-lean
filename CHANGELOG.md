@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `scripts/xp_combo2.py`: a mesh configuration ahead of every scheme on four patterns (up to
+  +17 %) that loses transpose and bit complement (a trade-off every rule tried moves along), and
+  a torus variant with a three-way per-source throttle that trades hotspot for uniform.
+
 * **History-dependent routing proved safe** (`Routing/Strategy.lean`,
   `Routing/StrategyDetour.lean`, `Examples/Strategy.lean`): strategies with arbitrary state are
   deadlock, livelock and starvation free and deliver under load whenever every selection they use
