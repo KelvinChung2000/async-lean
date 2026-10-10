@@ -928,6 +928,53 @@ is within 0.01 at `24 m` and above). So about `24 m` packets per destination, so
 for `m = 1`, reach the optimum within 2 %, and too little buffer loses far more than the shortfall
 in storage would suggest.
 
+### Packets in time, whole packets, and why routing must adapt
+
+The statements above about packets are theorems too:
+
+* **Packet networks in time** (`Routing/Throughput.lean`). A *placement* puts a packet network on
+  a graph (where each channel's packet is, which link a channel belongs to); a *timed run*
+  (`Network.TimedRun`) runs in rounds from the empty network, every channel receiving at most
+  one packet per round. The potential of the packets in the network
+  (`TimedRun.injected_le`) gives the **packet ceiling** (`TimedRun.ceiling`, `cut_ceiling`,
+  `hop_ceiling`): whatever the routing and the selection, a timed run sustaining `ρ · dem`
+  respects every bound of the fluid network of its placement. Everything injected is delivered
+  but for what the network holds (`ejected_ge`). Timed runs of lanes combine round by round
+  (`lanesTimed`), injecting the sum of what the lanes inject. The networks of `GraphData` are
+  placed with two channels per link (`GraphData.placement_cap`).
+* **The torus with `m` lanes** (`Examples/Throughput.lean`): its fluid network is `m` copies of
+  the fluid torus (`torusLanesPlacement_cap`); no timed run sustains uniform traffic above `m`
+  times `torus_uniform_opt` (`torusLanes_ceiling`); any load one lane sustains, `m` lanes sustain
+  `m` times over (`torusLanes_timed`, `torusLanes_sustains`). So lane throughput with packets is
+  exactly linear, up to the fluid optimum it can never pass.
+* **Whole packets and bursts** (`Flow/Backpressure.lean`). Backpressure stays stable for arrivals
+  in a leaky bucket below a routable traffic, bounded per slot, with bursts `σ`
+  (`Run.backpressure_stable_bursty`, by the drift over frames `Run.frame_drift`): whole packets
+  at fractional rates. Sequential sends (`sendSeq`) serve `min (backlog, offered)` exactly and
+  move whole packets only (`Run.ofArrivalsSeq_int`); on the mesh with `m` connections this
+  whole-packet backpressure is stable at every leaky-bucket rate below `m` times the optimum
+  (`mesh_backpressure_packets`).
+* **Adaptivity is necessary** (`Flow/Necessity.lean`). A stable run respects every potential
+  bound on the links it uses (`Run.potentialFeasibleOn`), so the kernel-checked dual
+  certificates bound it as they bound flows (`GraphCert.Model.run_minimal_ceiling`). On the 8 × 8
+  torus under tornado traffic backpressure is stable below `16/15`, but no scheduler moving
+  traffic only along shortest paths keeps a bounded backlog above `2/3`
+  (`torusTornado_adaptivity`).
+* **Backpressure-style choices are safe**: choosing among the free permitted hops those of
+  largest score is a valid selection (`Network.scoreSel_valid`), so the lanes, shared lanes and
+  widened networks stay deadlock and livelock free under it (`torusLanes_scoreSel`,
+  `torusWide_scoreSel`).
+
+**What remains measurement, not theorem.** The throughput the simulators reach (46 to 65 % of the
+optimum for the proved-safe networks with random move order, 99 % for backpressure, the sharp
+threshold near `24 m` packets per destination) are measurements of particular schedulers on
+Poisson traffic; the theorems bound them from above (the ceilings) and prove backpressure's
+stability for every leaky-bucket arrival sequence, not for Poisson arrivals, whose bursts are
+unbounded. Head-of-line blocking's 58.6 % and the history of the schemes are cited, not
+proved. Whether one network can have both backpressure's throughput and the escape channels'
+deadlock freedom with small buffers is open: the selection is safe (`scoreSel`), its throughput
+is not proved.
+
 ## 8. Which tactic when?
 
 | Tactic | What it does | Use it when |
@@ -1154,6 +1201,8 @@ The network properties are listed in section 7.
 | `Routing/Lanes.lean` | the lane network: `m` copies of a network side by side; safety certificates and their transfer to every number of lanes; lanes run in parallel and deliver the sum of their packets |
 | `Routing/SharedLanes.lean`, `Routing/Widen.lean` | sharing the connections: escapes per lane with adaptive hops on every lane; widening any network to any number of copies of every channel, every copy usable, with every guarantee kept |
 | `Flow/Backpressure.lean` | backpressure (max-weight) scheduling in a queueing model of the fluid network: stable at every load below the fluid optimum, no scheduler stable above it; the mesh, torus and hypercube with `m` connections per link |
+| `Routing/Throughput.lean` | packet networks in time: placements, timed runs, the fluid ceiling for every selection, delivery, lanes adding their throughput, score-based selections |
+| `Flow/Necessity.lean` | stable runs respect every certified bound on the links they use; shortest-path-only scheduling loses (tornado on the torus) |
 | `Checker/Explicit.lean` | the **trusted checker** and its soundness proofs; certificates; counterexample traces |
 | `Checker/BTree.lean`, `Invariant.lean`, `Packed.lean`, `Quotient.lean` | search trees, invariant certificates, bit-packed safe nets, quotient certificates |
 | `Checker/Petri.lean` | concrete nets `PNet`, executable semantics, bisimilarity with the abstract net |

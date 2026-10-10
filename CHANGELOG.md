@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+* **Packets in time, whole packets, adaptivity** (`Routing/Throughput.lean`,
+  `Examples/Throughput.lean`, `Flow/Necessity.lean`). Timed runs of packet networks
+  (`Network.TimedRun`) on a placement respect every fluid bound under any selection
+  (`TimedRun.ceiling`, `cut_ceiling`, `hop_ceiling`) and deliver all but what the network holds
+  (`ejected_ge`); lanes add their timed throughput (`lanesTimed_injected`); the torus with `m`
+  lanes is exactly linear with packets up to `m` times the optimum (`torusLanes_ceiling`,
+  `torusLanes_sustains`). Backpressure is stable for leaky-bucket arrivals
+  (`Run.backpressure_stable_bursty`) and with whole packets (`Run.ofArrivalsSeq_int`,
+  `mesh_backpressure_packets`). Stable runs respect every potential bound on the links they use
+  (`Fluid.PotentialFeasibleOn`, `Run.potentialFeasibleOn`); on the torus under tornado,
+  shortest-path-only scheduling is unstable above `2/3` while backpressure is stable below
+  `16/15` (`torusTornado_adaptivity`). Score-based selections are valid, so correct networks
+  stay safe under them (`scoreSel_valid`). `GraphCert.PortGraph.upper_of_check'` takes potential
+  feasibility instead of a flow.
+
 * **Backpressure reaches the fluid optimum** (`Flow/Backpressure.lean`,
   `scripts/backpressure_sim.py`). A discrete-time queueing model of the fluid network
   (`Fluid.Run`); max-weight, work-conserving scheduling (`Run.Backpressure`) keeps the backlog

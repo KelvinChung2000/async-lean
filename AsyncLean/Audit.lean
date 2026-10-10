@@ -51,6 +51,7 @@ import AsyncLean.Flow.GraphCert
 import AsyncLean.Flow.GraphPatterns
 import AsyncLean.Flow.Scaling
 import AsyncLean.Flow.Backpressure
+import AsyncLean.Flow.Necessity
 import AsyncLean.AxiomAudit
 
 /-!
@@ -311,7 +312,8 @@ open LTS
   Network.TimedRun.path_occ Network.TimedRun.ejected_ge Network.lanesPlacement_fits
   Network.lanesPlacement_cap Network.lanesTimed Network.lanesTimed_injected
   GraphData.placement_fits GraphData.placement_cap GraphData.netPlacement_fits
-  GraphData.budgetPlacement_fits GraphData.detourPlacement_fits
+  GraphData.budgetPlacement_fits GraphData.detourPlacement_fits Network.scoreSel_valid
+  Network.Correct.scoreSel
 
 -- Fluid model: backpressure is stable below the fluid optimum, no scheduler above it
 #assert_standard_axioms
@@ -330,7 +332,10 @@ open LTS
   Fluid.Run.drift_gen Fluid.Run.step_change Fluid.Run.frame_change Fluid.Run.frame_drift
   Fluid.Run.backpressure_stable_bursty Fluid.clamp_eq Fluid.seqPre_total Fluid.sendSeq_sum
   Fluid.Run.ofArrivalsSeq Fluid.Run.ofArrivalsSeq_backpressure Fluid.Run.ofArrivalsSeq_int
-  Fluid.mesh_backpressure_packets
+  Fluid.mesh_backpressure_packets Fluid.Flow.potentialFeasibleOn Fluid.Run.potential_ceiling_on
+  Fluid.Run.potentialFeasibleOn Fluid.GraphCert.PortGraph.upper_of_check'
+  Fluid.GraphCert.Model.potentialFeasibleOn_transfer Fluid.GraphCert.Model.run_minimal_ceiling
+  Fluid.torusTornado_adaptivity
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms

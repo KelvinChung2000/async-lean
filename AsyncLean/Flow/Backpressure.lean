@@ -842,14 +842,24 @@ def totalFlow (T : ℕ) :
             (sum_le_sum fun d _ => r.x_le t d u v).trans ((r.μ_feasible t).2 u v)
       _ = T * N.cap u v := by rw [sum_const, card_range, nsmul_eq_mul]
 
+omit [DecidableEq V] in
+/-- A positive sum over the slots has a positive term. -/
+theorem exists_pos_of_sum_pos {T : ℕ} (d u v : V)
+    (h : 0 < (r.totalFlow T).f d u v) : ∃ t ∈ range T, 0 < r.x t d u v := by
+  by_contra hn
+  simp only [not_exists, not_and, not_lt] at hn
+  have : (r.totalFlow T).f d u v ≤ 0 := sum_nonpos fun t ht => hn t ht
+  linarith
+
 /-- **The potential ceiling**, for every scheduler: if the arrivals are `ρ * dem` in every slot
 and the backlog stays at most `C`, the load respects every potential bound of the fluid model
 with a bounded potential `0 ≤ φ ≤ M`: `ρ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`. -/
-theorem potential_ceiling {dem : V → V → ℚ} {ρ : ℚ}
+theorem potential_ceiling_on {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
+    {S : V → V → V → Prop} (hS : ∀ t d u v, 0 < r.x t d u v → S d u v)
     (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (φ : V → V → ℚ) (hφd : ∀ d, φ d d = 0)
-    (hφ : ∀ d u v, 0 < N.cap u v → φ d u - φ d v ≤ len u v)
+    (hφ : ∀ d u v, S d u v → 0 < N.cap u v → φ d u - φ d v ≤ len u v)
     (hφ0 : ∀ d v, 0 ≤ φ d v) {M : ℚ} (hM : ∀ d v, φ d v ≤ M) :
     ρ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v := by
   obtain ⟨C, hC⟩ := hb
@@ -860,8 +870,11 @@ theorem potential_ceiling {dem : V → V → ℚ} {ρ : ℚ}
   have hM0 : 0 ≤ M' := le_max_right _ _
   have hT : ∀ T : ℕ, (T : ℚ) * (ρ * Φ) ≤ T * K + M' * C := by
     intro T
-    have key := potential_bound (θ := 1) ⟨r.totalFlow T⟩ len hlen φ hφd (fun d u v hc => by
-      apply hφ d u v
+    have hsupp : (r.totalFlow T).SupportedOn S := fun d u v h => by
+      obtain ⟨t, -, ht⟩ := r.exists_pos_of_sum_pos d u v h
+      exact hS t d u v ht
+    have key := (r.totalFlow T).potential_bound_on hsupp len hlen φ hφd (fun d u v hS' hc => by
+      apply hφ d u v hS'
       simp only [Net.copies_cap] at hc
       exact pos_of_mul_pos_right hc (Nat.cast_nonneg T))
     simp only [Net.copies_cap, one_mul] at key
@@ -905,6 +918,30 @@ theorem potential_ceiling {dem : V → V → ℚ} {ρ : ℚ}
   rw [div_lt_iff₀ hpos] at hT'
   have := mul_sub (T : ℚ) (ρ * Φ) K
   linarith
+
+/-- **The potential ceiling**, for every scheduler: if the arrivals are `ρ * dem` in every slot
+and the backlog stays bounded, the load respects every potential bound of the fluid model with
+a bounded potential `0 ≤ φ ≤ M`: `ρ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`. -/
+theorem potential_ceiling {dem : V → V → ℚ} {ρ : ℚ}
+    (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
+    (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
+    (φ : V → V → ℚ) (hφd : ∀ d, φ d d = 0)
+    (hφ : ∀ d u v, 0 < N.cap u v → φ d u - φ d v ≤ len u v)
+    (hφ0 : ∀ d v, 0 ≤ φ d v) {M : ℚ} (hM : ∀ d v, φ d v ≤ M) :
+    ρ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v :=
+  r.potential_ceiling_on harr hb (S := fun _ _ _ => True) (fun _ _ _ _ _ => trivial) len hlen φ
+    hφd (fun d u v _ hc => hφ d u v hc) hφ0 hM
+
+/-- **A stable run moving traffic only on `S` respects every potential bound on `S`**, as a flow
+supported on `S` does: every dual certificate of the fluid model bounds it. -/
+theorem potentialFeasibleOn {dem : V → V → ℚ} {ρ : ℚ}
+    (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
+    {S : V → V → V → Prop} (hS : ∀ t d u v, 0 < r.x t d u v → S d u v) :
+    PotentialFeasibleOn N S dem ρ := fun len φ hlen hφd hφ hφ0 =>
+  r.potential_ceiling_on harr hb hS len hlen φ hφd hφ hφ0 (M := ∑ a, ∑ b, φ a b) fun d v =>
+    (single_le_sum (f := fun b => φ d b) (fun b _ => hφ0 d b) (mem_univ v)).trans
+      (single_le_sum (f := fun a => ∑ b, φ a b) (fun a _ => sum_nonneg fun b _ => hφ0 a b)
+        (mem_univ d))
 
 /-- **The cut ceiling**, for every scheduler: a run that keeps its backlog bounded under the load
 `ρ * dem` carries across every cut at most the cut's capacity. -/
