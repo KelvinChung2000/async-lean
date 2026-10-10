@@ -36,6 +36,7 @@ import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
 import AsyncLean.Routing.Lanes
 import AsyncLean.Routing.SharedLanes
+import AsyncLean.Routing.Throughput
 import AsyncLean.Routing.Widen
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
@@ -299,6 +300,18 @@ open LTS
   Fluid.opt_copies Fluid.worstOpt_copies Fluid.opt_superadditive Fluid.mesh_copies_worst
   Fluid.torus_copies_worst Fluid.cube_copies_worst Fluid.mesh_copies_uniform
   Fluid.torus_copies_uniform Fluid.cube_copies_uniform Fluid.torus_eight_copies_worst
+
+-- Packet networks in time: the throughput ceiling of the fluid model, lanes add their throughput
+#assert_standard_axioms
+  Network.Placement.Fits.respects Network.Placement.restrict_respects Network.sum_update_cval
+  Network.step_injW Network.path_injW Network.sum_hopLen Network.round_hopLen
+  Network.TimedRun.injW_eq Network.TimedRun.sum_injW Network.TimedRun.injected_le
+  Network.TimedRun.sum_lenOf Network.TimedRun.ceiling Network.TimedRun.cut_ceiling
+  Network.TimedRun.hop_ceiling Network.TimedRun.occ_update Network.TimedRun.step_occ
+  Network.TimedRun.path_occ Network.TimedRun.ejected_ge Network.lanesPlacement_fits
+  Network.lanesPlacement_cap Network.lanesTimed Network.lanesTimed_injected
+  GraphData.placement_fits GraphData.placement_cap GraphData.netPlacement_fits
+  GraphData.budgetPlacement_fits GraphData.detourPlacement_fits
 
 -- Fluid model: backpressure is stable below the fluid optimum, no scheduler above it
 #assert_standard_axioms
