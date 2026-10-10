@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+* **History-dependent routing proved safe** (`Routing/Strategy.lean`,
+  `Routing/StrategyDetour.lean`, `Examples/Strategy.lean`): strategies with arbitrary state are
+  deadlock, livelock and starvation free and deliver under load whenever every selection they use
+  meets the existing conditions; the torus combined scheme of `xp_combo.py` (`torus_combo_safe`),
+  price and toll choices, and the escape-share throttles are instances.
+
 * `scripts/xp_combo.py`: price-chosen adaptive hops + toll-priced source detours with a
   price-table filter + escape-share throttle. On the 8 × 8 torus it is at least as good as the
   published schemes and every listed variant of ours on all nine patterns, with sequential moves

@@ -629,6 +629,27 @@ and opens when the network is empty (an instance proof is still to be written); 
 learned latencies and the per-source threshold choice are history, outside the
 configuration-only selection theorems, as for the bandit.
 
+**History-dependent routing, proved safe.** `Routing/Strategy.lean` closes that gap. A
+`Strategy` may keep any state (prices, learned latencies, controller state, recent
+destinations) and use a different selection at every step; if every selection it can use
+satisfies the existing condition (`EscapeSel`, `SourceSel`, or the weaker `SourceSelOn`), the
+network under the strategy is deadlock free (`Strategy.movable`), livelock free
+(`Strategy.livelockFree`), delivers under sustained load for runs that are channel fair with
+respect to the selection in force (`SelRun.delivered_of_channelFair`) and is starvation free for
+strongly fair runs (`SelRun.delivered_of_stronglyFair`; bundled as `Strategy.safe`).
+`Routing/StrategyDetour.lean` proves the injection throttles of the simulations on any graph
+(`throttleSel_sourceSel`, `throttleSel_sourceSelOn`), and `Examples/Strategy.lean` instantiates
+everything on the torus of every size: any history-dependent choice of hop and intermediate
+(`torus_choice_safe`, `torus_price_safe`), the escape-share throttle as a configuration-only
+selection (`torus_lx_correct`) and with history (`torus_throttle_safe`), and the combined
+scheme exactly as `xp_combo.py` runs it, with link prices, tolls, learned latencies, the
+snapshot-based throttle mode and the per-source threshold chosen from recent destinations
+(`torus_combo_safe`); on the mesh, history-dependent choices within `tieredMesh` and gated
+tiers (`duatoMesh_strategy_safe`, `duatoMesh_gated_safe`, `duatoMesh_lx_safe`). Still outside:
+the no-chaining move model is a different scheduling of the same moves (each cycle is a valid
+interleaving, so deadlock and livelock freedom carry over), but the theorems are stated for the
+step-by-step semantics; thresholds must stay at most twice the router degree.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
@@ -1087,6 +1108,7 @@ The network properties are listed in section 7.
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Routing/Strategy.lean`, `Routing/StrategyDetour.lean` | history-dependent strategies (any state, a selection per step): deadlock, livelock, starvation freedom and delivery under load; throttles on any graph |
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Packet/Exclusion.lean`, `Packet/Ceiling.lean` | one cycle of a ring of depth-N lanes under every move order; one-packet lanes carry at most 1/2 on average; fluid optima at scaled capacity |
 | `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |

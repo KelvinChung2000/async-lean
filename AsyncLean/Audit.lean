@@ -34,6 +34,8 @@ import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
+import AsyncLean.Routing.Strategy
+import AsyncLean.Routing.StrategyDetour
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -124,6 +126,11 @@ open LTS
   GraphData.detour_underLoad_of_escapeSel GraphData.detour_underLoad GraphData.detour_underLoad_of_sourceSel
   GraphData.detour_hops_le GraphData.detour_hops_le_some GraphData.detour_phase_hops_le
   GraphData.detour_route_adj GraphData.detourNet_route_none GraphData.exists_detour_correct
+  Network.movable_of_sourceSelOn Network.SelRun.delivered_of_channelFair
+  Network.SelRun.delivered_of_stronglyFair Network.Strategy.movable Network.Strategy.livelockFree
+  Network.Strategy.safe Network.refineSel_sourceSelOn Network.minChoice_ok
+  GraphData.throttleSel_sourceSel GraphData.throttleSel_sourceSelOn
+  GraphData.detour_strategy_safe_of_sourceSel GraphData.detour_strategy_safe_of_sourceSelOn
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
