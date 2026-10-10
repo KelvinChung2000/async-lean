@@ -390,6 +390,83 @@ theorem mesh_headOfLine (k : ℕ) (hk : 2 ≤ k) {m : ℕ} {ρ : ℚ} (hρ1 : 1 
       positivity
     nlinarith
 
+
+/-! ### Backpressure restricted to permitted links reaches the optimum over them -/
+
+namespace Run
+
+variable {V : Type*} [Fintype V] [DecidableEq V] {N : Net V} (r : Run N)
+
+/-- **Backpressure restricted to the links `S`** (`S d u v`: commodity `d` may use `u → v`, for
+instance the hops a certified packet network permits): rates offered only on `S`, max-weight
+among such rates, work conserving. -/
+def BackpressureOn (S : V → V → V → Prop) : Prop :=
+  (∀ t μ', Feasible N μ' → (∀ d u v, ¬ S d u v → μ' d u v = 0) →
+      weight (r.Q t) μ' ≤ weight (r.Q t) (r.μ t)) ∧
+    r.WorkConserving ∧ ∀ t d u v, ¬ S d u v → r.μ t d u v = 0
+
+omit [DecidableEq V] in
+/-- A restricted backpressure run moves traffic only on `S`. -/
+theorem BackpressureOn.supported {S : V → V → V → Prop} (hr : r.BackpressureOn S) :
+    ∀ t d u v, 0 < r.x t d u v → S d u v := by
+  intro t d u v hx
+  by_contra hS
+  have := r.x_le t d u v
+  rw [hr.2.2 t d u v hS] at this
+  linarith
+
+/-- **Restricted backpressure reaches the optimum over its links.**  If `dem ≥ 0` is routable at
+`θ` by a flow supported on `S`, and some traffic `J` reaching every pair is routable at `η > 0` on
+`S`, then under every load `ρ * dem` with `0 ≤ ρ < θ` a backpressure run restricted to `S` keeps
+a bounded backlog and delivers everything.  (Conversely, `Run.potentialFeasibleOn` bounds every
+run on `S` by every certificate on `S`.) -/
+theorem backpressureOn_optimal {S : V → V → V → Prop} (hr : r.BackpressureOn S)
+    {dem J : V → V → ℚ} {θ η c ρ : ℚ} (F₁ : Flow N dem θ) (hF₁ : F₁.SupportedOn S)
+    (F₂ : Flow N J η) (hF₂ : F₂.SupportedOn S) (hdem : ∀ v d, 0 ≤ dem v d)
+    (hJnn : ∀ v d, 0 ≤ J v d) (hc : 0 < c) (hJc : ∀ v d, v ≠ d → c ≤ J v d) (hη : 0 < η)
+    (hρ : 0 ≤ ρ) (hρθ : ρ < θ) (harr : ∀ t v d, v ≠ d → r.a t v d ≤ ρ * dem v d) :
+    r.Stable := by
+  have hθ : 0 < θ := hρ.trans_lt hρθ
+  have hα : 0 ≤ ρ / θ := div_nonneg hρ hθ.le
+  have hα1 : ρ / θ < 1 := (div_lt_iff₀ hθ).2 (by linarith)
+  have hβ : 0 < 1 - ρ / θ := by linarith
+  let F := F₁.mix F₂ hα hβ.le (by linarith)
+  -- the mixture is supported on `S`
+  have hzero : ∀ d u v, ¬ S d u v → F.f d u v = 0 := fun d u v hS => by
+    have h1 : F₁.f d u v = 0 := le_antisymm (not_lt.1 fun h => hS (hF₁ d u v h)) (F₁.nonneg d u v)
+    have h2 : F₂.f d u v = 0 := le_antisymm (not_lt.1 fun h => hS (hF₂ d u v h)) (F₂.nonneg d u v)
+    show ρ / θ * F₁.f d u v + (1 - ρ / θ) * F₂.f d u v = 0
+    rw [h1, h2]; ring
+  have he : ∀ v d, ρ / θ * θ * dem v d = ρ * dem v d := fun v d => by
+    rw [div_mul_cancel₀ ρ hθ.ne']
+  refine r.stable_of F (fun t => hr.1 t F.f F.feasible hzero) hr.2.1
+    (fun v d => by have := hdem v d; have := hJnn v d; positivity)
+    (ε := (1 - ρ / θ) * η * c) (by positivity) fun t v d hvd => ?_
+  show r.a t v d + (1 - ρ / θ) * η * c ≤ ρ / θ * θ * dem v d + (1 - ρ / θ) * η * J v d
+  rw [he]
+  have h1 := harr t v d hvd
+  have h2 : (1 - ρ / θ) * η * c ≤ (1 - ρ / θ) * η * J v d :=
+    mul_le_mul_of_nonneg_left (hJc v d hvd) (by positivity)
+  linarith
+
+end Run
+
+/-- **Backpressure restricted to shortest paths reaches the optimum over shortest paths,
+exactly** (tornado on the `8 × 8` torus): it is stable at every load below `2/3`
+(`torusTornado_minimal_opt`), and no run moving traffic only along shortest paths — this one
+included — keeps a bounded backlog above `2/3`. -/
+theorem torusTornado_minimal_backpressure (r : Run (torusNet 8)) {ρ : ℚ}
+    (hr : r.BackpressureOn fun d u v => torusDist v d < torusDist u d) :
+    (0 ≤ ρ → ρ < 2 / 3 → (∀ t v d, v ≠ d → r.a t v d ≤ ρ * tornado8 v d) → r.Stable) ∧
+      ((∀ t v d, v ≠ d → r.a t v d = ρ * tornado8 v d) → r.BoundedBacklog → ρ ≤ 2 / 3) := by
+  refine ⟨fun hρ hρθ harr => ?_, fun harr hbd => ?_⟩
+  · obtain ⟨F₁, hF₁⟩ := torusTornado_minimal_opt.1
+    obtain ⟨F₂, hF₂⟩ := torus_uniform_opt_eight.2
+    obtain ⟨hunn, hunc⟩ := uniform_props (k := 8) (by norm_num)
+    exact r.backpressureOn_optimal hr F₁ hF₁ F₂ hF₂ tornado8_nonneg hunn
+      (c := 1 / (((8 : ℕ) : ℚ) ^ 2 - 1)) (by norm_num) hunc (by norm_num) hρ hρθ harr
+  · exact (torusTornado_adaptivity r).2 harr hbd (Run.BackpressureOn.supported r hr)
+
 end Fluid
 
 end AsyncLean

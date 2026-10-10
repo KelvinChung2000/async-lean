@@ -337,7 +337,9 @@ open LTS
   Fluid.GraphCert.Model.potentialFeasibleOn_transfer Fluid.GraphCert.Model.run_minimal_ceiling
   Fluid.torusTornado_adaptivity Fluid.Run.descent Fluid.Run.backpressure_progress Fluid.mesh_reach
   Fluid.mesh_finite_buffer_network Fluid.Run.delivered_le_card Fluid.Run.singleHead_ceiling
-  Fluid.uniform_total Fluid.mesh_headOfLine
+  Fluid.uniform_total Fluid.mesh_headOfLine Fluid.Run.drift_of Fluid.Run.stable_of
+  Fluid.Run.BackpressureOn.supported Fluid.Run.backpressureOn_optimal
+  Fluid.torusTornado_minimal_backpressure
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms

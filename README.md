@@ -976,6 +976,18 @@ The statements above about packets are theorems too:
   backpressure with a queue per destination is stable up to `m` times the optimum
   (`mesh_headOfLine`): per-destination queues are necessary for linear scaling.
 
+* **Restricted backpressure** (`Flow/Necessity.lean`). Backpressure restricted to a set of
+  permitted links (`Run.BackpressureOn`, for instance the hops a certified packet network allows)
+  is stable at every load below the optimum over those links (`Run.backpressureOn_optimal`), and
+  no run on those links does better; on the torus under tornado, restricted to shortest paths, it
+  is stable exactly up to `2/3` (`torusTornado_minimal_backpressure`).
+
+**Open.** Whether the packet networks with escape channels and one-packet buffers, under
+backpressure-style selection, reach the optimum over their permitted links is not known: their
+safety is proved (`scoreSel_valid`), and so are the ceiling and the queueing version above, but a
+throughput guarantee for one-packet buffers would be new mathematics (and the head-of-line result
+suggests shared one-packet buffers fall short).
+
 **What is measurement, not theorem.** The percentages the simulators report (46 to 65 % of the
 optimum for the proved-safe networks under random move order, 99 % for backpressure, the
 threshold near `24 m` packets per destination) are outcomes of particular random runs on
