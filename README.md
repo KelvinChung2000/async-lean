@@ -682,6 +682,19 @@ best mode on most patterns (6000 cycles; 0.3 to 0.5 % at 12000 cycles once far-w
 no longer probed): the cost of finding the right mode — exploration, re-probing, and confusing
 modes within 1 % of each other under 1 % per-epoch noise — does not vanish at these run lengths.
 
+**Beating XY on both virtual channels (simulation, `scripts/xp_bitcomp.py`).** Under bit
+complement the binding links are the X bisection; the links upstream of it are 85 % occupied
+and mostly blocked by packets waiting to turn into their column. For XY routing the two lanes
+of a link lead to the same next hops, so any lane preference with fallback leaves throughput
+exactly unchanged (reproduced bit for bit); only confining some packets to one lane changes
+anything. The mode `B:c0=fary+srcwf:fd=5:fs=3` — a packet more than 5 hops from its destination,
+or a source more than 3 hops from it, uses only virtual channel 0 while a nearer packet waits
+for the same output — beats XY on both virtual channels on bit complement (+0.4 %, z = 2.0,
+sequential; +1.7 %, z = 10, no chaining) and random permutation (+3.2 % and +8.4 %), 12 fresh
+seeds. It is a tier list with the escape tier (`duatoTiers_correct`, `westFirstTiers_correct`).
+Without chaining a lane accepts at most one packet every two cycles, so no minimal scheme can
+exceed 0.25 under bit complement; XY on both lanes is at 90 % of that.
+
 ### Beyond the mesh
 
 `Routing/Graph.lean` makes minimal adaptive routing safe on **every finite connected graph**:
