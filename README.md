@@ -982,6 +982,13 @@ The statements above about packets are theorems too:
   no run on those links does better; on the torus under tornado, restricted to shortest paths, it
   is stable exactly up to `2/3` (`torusTornado_minimal_backpressure`).
 
+* **Random arrivals** (`Flow/Stochastic.lean`). For arrivals whose mean given the past stays
+  `ε` below a routable traffic and whose total per slot has a finite second moment (Poisson
+  arrivals, for instance), backpressure is strongly stable: `2 ε ∑_{t<T} E[backlog t] ≤
+  E[energy 0] + T B` (`backpressure_strongly_stable`), for every expectation that is linear,
+  monotone and normalised on the integrable quantities (`Expect`; the Lebesgue expectation of a
+  probability space is one, finite probability spaces are built in, `Expect.ofWeights`).
+
 **Open.** Whether the packet networks with escape channels and one-packet buffers, under
 backpressure-style selection, reach the optimum over their permitted links is not known: their
 safety is proved (`scoreSel_valid`), and so are the ceiling and the queueing version above, but a
@@ -992,9 +999,8 @@ suggests shared one-packet buffers fall short).
 optimum for the proved-safe networks under random move order, 99 % for backpressure, the
 threshold near `24 m` packets per destination) are outcomes of particular random runs on
 Poisson traffic. The theorems bound them from above (the ceilings), prove backpressure stable on
-every arrival sequence within a leaky bucket (Poisson bursts are unbounded, so a Poisson sample
-path is covered only when it stays within some bucket), and give buffer sizes that suffice
-(loosely). The 58.6 % of a first-in first-out switch under uniform random traffic is a
+every arrival sequence within a leaky bucket and strongly stable in expectation under random
+arrivals such as Poisson ones, and give buffer sizes that suffice (loosely). The 58.6 % of a first-in first-out switch under uniform random traffic is a
 probabilistic limit from the literature; its deterministic counterpart above is proved. The
 history of the schemes is cited.
 

@@ -19,7 +19,11 @@
   reachable (`Run.backpressure_progress`); on the mesh it is a finite-buffer network near the
   optimum without deadlock (`mesh_finite_buffer_network`). A single first-in first-out queue per
   vertex is never stable above one packet per vertex and slot, so per-destination queues are
-  necessary for linear scaling (`Run.singleHead_ceiling`, `mesh_headOfLine`).
+  necessary for linear scaling (`Run.singleHead_ceiling`, `mesh_headOfLine`). Restricted
+  backpressure reaches the optimum over its permitted links (`Run.backpressureOn_optimal`,
+  `torusTornado_minimal_backpressure`). Under random arrivals (mean given the past `ε` below a
+  routable traffic, finite second moment: Poisson, for instance) backpressure is strongly stable
+  for every expectation operator (`Flow/Stochastic.lean`, `backpressure_strongly_stable`).
 
 * **Backpressure reaches the fluid optimum** (`Flow/Backpressure.lean`,
   `scripts/backpressure_sim.py`). A discrete-time queueing model of the fluid network

@@ -52,6 +52,7 @@ import AsyncLean.Flow.GraphPatterns
 import AsyncLean.Flow.Scaling
 import AsyncLean.Flow.Backpressure
 import AsyncLean.Flow.Necessity
+import AsyncLean.Flow.Stochastic
 import AsyncLean.AxiomAudit
 
 /-!
@@ -339,7 +340,9 @@ open LTS
   Fluid.mesh_finite_buffer_network Fluid.Run.delivered_le_card Fluid.Run.singleHead_ceiling
   Fluid.uniform_total Fluid.mesh_headOfLine Fluid.Run.drift_of Fluid.Run.stable_of
   Fluid.Run.BackpressureOn.supported Fluid.Run.backpressureOn_optimal
-  Fluid.torusTornado_minimal_backpressure
+  Fluid.torusTornado_minimal_backpressure Fluid.Expect.int_sum Fluid.Expect.int_sub
+  Fluid.Expect.ofWeights Fluid.Run.drift_random Fluid.expected_drift
+  Fluid.backpressure_strongly_stable
 
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms
