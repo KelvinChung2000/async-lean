@@ -374,7 +374,7 @@ theorem datelineRing4_wormhole : datelineRing4.WormholeCorrect := by async_decid
 misrouting (livelock freedom from a misrouting budget), deflection routing (a livelock) and
 proofs for dateline rings of every size are in `Examples/Routing.lean`.
 `Examples/OptimalRouting.lean` asks how adaptive a deadlock-free routing function can be: it
-improves Duato's mesh with a turn-model escape layer and proves, with `async_decide`, that the
+improves Duato's mesh with a turn-model escape subnetwork and proves, with `async_decide`, that the
 result is *maximally adaptive* (`Network.MaximallyAdaptive`): no further hop can be added
 without a deadlock. `Examples/MeshMaximal.lean` proves this for meshes of every size by carrying
 kernel-checked deadlocks of a 3 × 3 window into the large mesh, and `Examples/MeshMetrics.lean`

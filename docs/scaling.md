@@ -15,6 +15,7 @@ one? This guide answers in four steps, each a set of theorems with simulations a
    required; each is proved with a concrete instance.
 
 A table at the end lists which claims are theorems, which are measurements and what is open.
+The [glossary](glossary.md) maps the names used here to the literature.
 
 ## Contents
 
@@ -26,7 +27,6 @@ A table at the end lists which claims are theorems, which are measurements and w
 * [5. What is necessary](#5-what-is-necessary)
 * [6. What is proved, measured and open](#6-what-is-proved-measured-and-open)
 * [7. Where everything is](#7-where-everything-is)
-* [8. Terminology and the literature](#8-terminology-and-the-literature)
 
 ## In one page
 
@@ -222,28 +222,3 @@ python3 scripts/plane_scaling.py                       # section 3
 python3 scripts/backpressure_sim.py                   # section 4, throughput
 python3 scripts/backpressure_sim.py --buffers --cap 24   # section 4, buffers
 ```
-
-## 8. Terminology and the literature
-
-The names in the library follow the standard terms where one exists:
-
-| Here | In the literature |
-|---|---|
-| fluid optimum, `Routable dem θ` | maximum concurrent multicommodity flow (Shahrokhi and Matula, 1990); the *ideal throughput* of Dally and Towles, *Principles and Practices of Interconnection Networks* (2004) |
-| `potential_bound`, `cut_bound`, `hop_bound` | LP duality for multicommodity flow (dual edge lengths and node potentials); the cut (bisection) bound and the hop-count bound on channel load (Dally and Towles) |
-| planes, `Network.planes` | multiple physical networks (Yoon, Jiang, Becker and Dally, 2010), network planes. Not *lanes*: Dally (1992) uses *lane* for a virtual channel, as the older guides here do |
-| replication, `Network.replicate` | more channels per link, physical or virtual: in Duato's model every copy is a channel of its own |
-| escape channels, `SafeCert` | Duato's theorem: a connected routing subfunction with an acyclic extended channel dependency graph (Duato, 1993) |
-| backpressure, `Run.Backpressure`, `MaxWeight` | back-pressure / max-weight scheduling (Tassiulas and Ephremides, 1992) |
-| `Run.backpressure_optimal`, `Run.potential_bound` | throughput optimality: stable inside the capacity region (achievability), and no policy stable outside it (the converse) |
-| `lyapunov`, `Run.drift` | the quadratic Lyapunov function `∑ Q²` and its one-slot drift (Neely, *Stochastic Network Optimization*, 2010) |
-| `Run.frame_drift` | the `T`-slot (frame) drift |
-| leaky-bucket arrivals | `(σ, ρ)`-constrained arrivals (Cruz, 1991) |
-| `backpressure_strongly_stable` | strong stability: bounded time-averaged expected backlog (Neely) |
-| per-destination queues | per-commodity queues of back-pressure routing |
-| `SingleFifo`, `mesh_headOfLine` | head-of-line blocking of a single FIFO (Karol, Hluchyj and Morgan, 1987, the 58.6 % limit) |
-| selection function, `scoreSel` | Duato's selection function; choosing by a congestion score is congestion-aware adaptive selection |
-
-Two terms are the library's own: a *timed run* (`Network.TimedRun`) is a synchronous,
-cycle-by-cycle execution of a packet network, and a *placement* (`Network.Placement`) maps its
-channels onto the links of a graph.

@@ -28,6 +28,7 @@ Deeper results live in [`docs/`](docs/README.md):
 * [Scaling with the connections](docs/scaling.md): linear scaling, planes, and backpressure
   reaching the fluid optimum.
 * [Library map](docs/library-map.md): every file and what it contains.
+* [Glossary](docs/glossary.md): the library's names and the standard terms of the literature.
 
 For a checked, read-top-to-bottom version of the user guide, see
 [`AsyncLean/Tutorial.lean`](AsyncLean/Tutorial.lean); the Python scripts next to the

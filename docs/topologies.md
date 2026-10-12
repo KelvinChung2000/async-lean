@@ -61,15 +61,15 @@ any graph at 1.33 (64 routers) and 1.41 (256) times the mesh per unit of wire un
 traffic. The folded torus is the cleanest trade: twice the throughput for twice the wire, no
 link longer than 2.
 
-### The wire ceiling
+### The grid wire bound
 
-The wire ceiling is a theorem (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model, uniform
+The grid wire bound is a theorem (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model, uniform
 traffic, every k): for every network on the k × k grid with links of capacity at most 2 and wire
 lengths at least the Manhattan length — any topology, any radix, any routing —
 `θ ≤ 6 · wire / k³` (`throughput_le_wire`); the mesh's optimum is exactly `8(k² − 1)/k³` for
 even k (`mesh_opt`: an XY flow reaches it for every k, the cut through the middle bounds every
 routing); so no network with the mesh's wire beats it by more than `3k / (2(k + 1)) < 3/2`
-(`wire_ceiling`; 4/3 on the 8 × 8 grid, `wire_ceiling_eight`). Both bounds come from one weak
+(`grid_wire_bound`; 4/3 on the 8 × 8 grid, `grid_wire_bound_eight`). Both bounds come from one weak
 duality argument, `Fluid.potential_bound`.
 
 ## Routing optima in the fluid model

@@ -7,7 +7,7 @@ import AsyncLean.Routing.GraphBudget
 # Adaptive routing on every graph with a detour through an intermediate vertex
 
 `AsyncLean.Routing.GraphBudget` makes minimal adaptive routing with a bounded number of returns
-from the escape layer safe on every finite connected graph.  This file adds a **detour**: a
+from the escape subnetwork safe on every finite connected graph.  This file adds a **detour**: a
 packet may be sent first to an **intermediate vertex** `w`, chosen at the source (Valiant's
 randomised routing, or a deterministic "long way round" on a torus), and only then to its
 destination.  A packet header `(d, w, b)` carries
@@ -36,7 +36,7 @@ allows none, and then the network is exactly the one of `AsyncLean.Routing.Graph
 every `W`.
 
 A packet is delivered when it reaches its destination `d`, whether or not it has visited its
-intermediate yet (it never has to leave its destination again); the escape layer routes towards
+intermediate yet (it never has to leave its destination again); the escape subnetwork routes towards
 `d` throughout.
 
 ## The proofs
@@ -48,7 +48,7 @@ intermediate yet (it never has to leave its destination again); the escape layer
 * **Livelock freedom.**  The ranking `detRank` is `budgetRank` (`b * rankBound + rank`) once the
   intermediate is dropped, and `(b + 1) * rankBound + dist c.head w` while it is set.  A hop
   towards `w` decreases `dist · w` and keeps `b` (a packet heading for its intermediate is never
-  in the escape layer, but the proof does not need this); the hop into `w`, or an escape hop,
+  in the escape subnetwork, but the proof does not need this); the hop into `w`, or an escape hop,
   drops to `b * rankBound + rank < (b + 1) * rankBound` (`GraphData.rank_lt_rankBound`); after
   that the ranking of `AsyncLean.Routing.GraphBudget` decreases.
 
@@ -113,7 +113,7 @@ def detEscape (c : GChan V) (p : V × Option V × ℕ) : List (GChan V × (V × 
   [((G.escHop c p.1).1, (p.1, none, p.2.2))]
 
 /-- The adaptive hops of `GraphData.net` towards the target, on virtual channel 1: the
-intermediate is dropped on the hop into it, and a hop from the escape layer spends one unit of
+intermediate is dropped on the hop into it, and a hop from the escape subnetwork spends one unit of
 return budget. -/
 def detAdaptive (c : GChan V) (p : V × Option V × ℕ) : List (GChan V × (V × Option V × ℕ)) :=
   (G.adaptiveHops c (target p)).map fun q =>
@@ -123,8 +123,8 @@ def detAdaptive (c : GChan V) (p : V × Option V × ℕ) : List (GChan V × (V �
 the intermediate (if any) and the remaining return budget; a packet from `s` to `d` is injected
 with an intermediate among `W s d` and budget `B`.  From every channel the escape hop towards `d`
 is permitted (dropping the intermediate); the adaptive hops towards the target are permitted
-outside the escape layer, and from the escape layer while the budget is positive, at the cost of
-one unit of budget. -/
+outside the escape subnetwork, and from the escape subnetwork while the budget is positive, at the
+cost of one unit of budget. -/
 def detourNet (B : ℕ) (W : V → V → List (Option V)) : Network (GChan V) (V × Option V × ℕ) where
   arrived c p := decide (c.head = p.1)
   route c p := G.detEscape c p ++ if mayReturn c (p.1, p.2.2) then G.detAdaptive c p else []
@@ -139,8 +139,8 @@ theorem detourNet_arrived (B : ℕ) (W : V → V → List (Option V)) (c : GChan
     (p : V × Option V × ℕ) : (G.detourNet B W).arrived c p = G.net.arrived c p.1 := rfl
 
 /-- The permitted hops of `detourNet`: the escape hop towards the destination, dropping the
-intermediate; an adaptive hop towards the target, from outside the escape layer with the same
-budget, from the escape layer (when the budget is positive) with one unit less, dropping the
+intermediate; an adaptive hop towards the target, from outside the escape subnetwork with the same
+budget, from the escape subnetwork (when the budget is positive) with one unit less, dropping the
 intermediate on the hop into it. -/
 theorem mem_detourRoute {B : ℕ} {W : V → V → List (Option V)} {c : GChan V}
     {p : V × Option V × ℕ} {q : GChan V × (V × Option V × ℕ)}
@@ -520,7 +520,7 @@ theorem detour_underLoad_of_sourceSel {B : ℕ} {W : V → V → List (Option V)
 and bounded returns**: with any distance estimate `dist`, any return budget `B` and any choice of
 intermediates `W`, minimal adaptive routing towards the intermediate and then the destination on
 virtual channel 1, with tree routing towards the destination along a breadth-first spanning tree
-as the escape layer on virtual channel 0 and at most `B` returns from it, is deadlock and
+as the escape subnetwork on virtual channel 0 and at most `B` returns from it, is deadlock and
 livelock free under every valid selection, starvation free under strongly fair scheduling, and
 delivers every packet along every channel-fair run under every valid selection. -/
 theorem exists_detour_correct (verts : List V) (mem_verts : ∀ v, v ∈ verts)

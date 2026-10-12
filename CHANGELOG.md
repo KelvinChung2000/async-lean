@@ -110,7 +110,7 @@
   `Examples/MeshMetrics`, and the generated `Flow/GraphPatterns/Data` (one part per checking
   module; `scripts/graph_certificates.py` writes the same layout). The module of the old name
   imports all its parts, so every import and every name is unchanged.
-* **Names follow the literature** (glossary: `docs/scaling.md`, section 8). The `m` copies of a
+* **Names follow the literature** (glossary: `docs/glossary.md`). The `m` copies of a
   network are *planes* (multiple physical networks), not *lanes*, which is Dally's word for
   virtual channels: `Routing/Lanes` → `Routing/Planes`, `SharedLanes` → `SharedPlanes`,
   `Network.lanes` → `Network.planes`, `torusLanes_*` → `torusPlanes_*`,
@@ -119,6 +119,10 @@
   named like the fluid model's (`*_ceiling` → `*_bound`, `TimedRun.ceiling` →
   `TimedRun.potential_bound`; `Backpressure/Ceiling` → `Backpressure/Converse`); `energy` is the
   quadratic `lyapunov` function; `SingleHead` → `SingleFifo`.
+  In the older modules `wire_ceiling` → `grid_wire_bound` (likewise `_opt`, `_eight`;
+  `ceiling_factor_lt` → `grid_wire_factor_lt`), and the "escape layer" is the escape
+  subnetwork, Duato's routing subfunction. `docs/glossary.md` maps every area's names to the
+  literature.
 
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
@@ -171,12 +175,12 @@
   optima by kernel-checked LP certificates: transpose 10/11, shuffle 1, bit reversal 20/21 —
   all reached by minimal flows — and hotspot 40/67 against 840/1471 for minimal flows.
 
-* **The wire ceiling, proved** (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model over ℚ).
+* **The grid wire bound, proved** (`Flow/Fluid.lean`, `Flow/MeshWire.lean`, fluid model over ℚ).
   `Fluid.potential_bound` (weak duality for multicommodity flow) gives the wire bound
   (`wire_bound`: traffic × distance ≤ capacity × wire, every topology and routing) and the cut
   bound (`cut_bound`). On the k × k grid under uniform traffic: `throughput_le_wire`
   (θ ≤ 6 · wire / k³), `mesh_opt` (the mesh's optimum is exactly 8(k² − 1)/k³ for even k; an
-  explicit XY flow reaches it for every k), and `wire_ceiling` (no network with the mesh's wire
+  explicit XY flow reaches it for every k), and `grid_wire_bound` (no network with the mesh's wire
   beats it by more than 3k / (2(k + 1)) < 3/2).
 
 * `scripts/routing_graph_sim.py`: the cycle-level simulator for arbitrary graphs (same mechanics
@@ -184,7 +188,7 @@
   `CA_112`, `D_128`, `DF_156`; README "Beyond the mesh": at equal radix and wire, no topology
   tried beats the mesh significantly with packets, though the fluid model allows up to +33 %.
 
-* **Bounded returns from the escape layer** (`Routing/GraphBudget.lean`,
+* **Bounded returns from the escape subnetwork** (`Routing/GraphBudget.lean`,
   `Examples/GraphBudget.lean`). The absorbing escape of `Routing/Graph.lean` costs throughput,
   and unbounded returns can livelock. A packet header now carries a return budget `B`: from an
   escape channel a packet may take an adaptive hop while its budget lasts, spending one unit.
@@ -312,7 +316,7 @@
   `westFirstGated` uses the extra hops of the west-first mesh only towards lightly loaded
   routers; it is correct for every size (`westFirstGated_correct`).
 * `scripts/routing_sim.py`: a cycle-level simulation of the mesh routing functions (outside the
-  Lean development). More adaptivity on the escape layer can lower saturation throughput under
+  Lean development). More adaptivity on the escape subnetwork can lower saturation throughput under
   adversarial traffic; the gated selection avoids that.
 * `Network.deadlockFree_of_wormholeDeadlockFree`: one-flit packets behave like store-and-forward
   packets, so wormhole deadlock freedom implies store-and-forward deadlock freedom.

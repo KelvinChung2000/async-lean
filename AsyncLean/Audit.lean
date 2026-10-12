@@ -288,8 +288,8 @@ open LTS
   Fluid.potential_bound Fluid.Flow.potential_bound_on Fluid.wire_bound Fluid.cut_bound
   Fluid.sum_manhattan Fluid.uniform_dist Fluid.uniform_wire_bound Fluid.throughput_le_wire
   Fluid.mesh_routable Fluid.mesh_upper Fluid.mesh_opt Fluid.mesh_wire Fluid.mesh_len
-  Fluid.mesh_cap_le Fluid.wire_bound Fluid.wire_ceiling_opt Fluid.mesh_per_wire
-  Fluid.ceiling_factor_lt Fluid.mesh_opt_eight Fluid.wire_ceiling_eight
+  Fluid.mesh_cap_le Fluid.wire_bound Fluid.grid_wire_bound_opt Fluid.mesh_per_wire
+  Fluid.grid_wire_factor_lt Fluid.mesh_opt_eight Fluid.grid_wire_bound_eight
 
 -- Fluid model: the mesh's optimum for every size; no detours needed under uniform traffic
 #assert_standard_axioms

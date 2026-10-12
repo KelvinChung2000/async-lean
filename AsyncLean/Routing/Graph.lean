@@ -7,7 +7,7 @@ import AsyncLean.Routing.Source
 # Safe adaptive routing on arbitrary topologies
 
 The mesh networks of `AsyncLean.Examples` encode their channels as numbers and use the
-geometry of the mesh (XY routing, turn models) to find an acyclic escape layer.  This file
+geometry of the mesh (XY routing, turn models) to find an acyclic escape subnetwork.  This file
 does the same for **every finite connected undirected graph**: a torus, a circulant, a random
 regular graph, a dragonfly, a fat tree, an irregular chip floor plan.
 
@@ -76,7 +76,7 @@ namespace AsyncLean
 open Network
 
 /-- The channels of a network on the vertices `V`: an injection channel at each vertex, and two
-virtual channels on each directed link (`vc = false`: the escape layer, virtual channel 0;
+virtual channels on each directed link (`vc = false`: the escape subnetwork, virtual channel 0;
 `vc = true`: the adaptive layer, virtual channel 1). -/
 inductive GChan (V : Type*) where
   /-- The injection channel of vertex `u`. -/
@@ -94,7 +94,7 @@ def head : GChan V → V
   | inj u => u
   | link _ v _ => v
 
-/-- The channel belongs to the escape layer (virtual channel 0 of a link). -/
+/-- The channel belongs to the escape subnetwork (virtual channel 0 of a link). -/
 def isEsc : GChan V → Bool
   | link _ _ vc => !vc
   | inj _ => false
@@ -278,7 +278,7 @@ def adaptiveHops (c : GChan V) (d : V) : List (GChan V × V) :=
     (.link c.head v true, d)
 
 /-- **The network on the graph**: minimal adaptive routing on virtual channel 1, with an
-absorbing tree-routing escape layer on virtual channel 0.  Every vertex injects packets for
+absorbing tree-routing escape subnetwork on virtual channel 0.  Every vertex injects packets for
 every destination. -/
 def net : Network (GChan V) V where
   arrived c d := decide (c.head = d)
@@ -289,7 +289,7 @@ def net : Network (GChan V) V where
 theorem arrived_false {c : GChan V} {d : V} (h : G.net.arrived c d = false) : c.head ≠ d := by
   simpa [net] using h
 
-/-- The permitted hops: the escape hop, and (outside the escape layer) the adaptive hops. -/
+/-- The permitted hops: the escape hop, and (outside the escape subnetwork) the adaptive hops. -/
 theorem mem_route {c : GChan V} {d : V} {q : GChan V × V} (h : q ∈ G.net.route c d) :
     q = G.escHop c d ∨ c.isEsc = false ∧
       ∃ v ∈ G.nbrs c.head, G.dist v d < G.dist c.head d ∧ q = (.link c.head v true, d) := by
@@ -443,7 +443,7 @@ theorem esc_not_inj : ∀ c d q, G.legal c d → G.net.arrived c d = false → q
 
 /-! ### The ranking function -/
 
-/-- The ranking of a packet: in the escape layer, its tree distance; elsewhere, a multiple of
+/-- The ranking of a packet: in the escape subnetwork, its tree distance; elsewhere, a multiple of
 its distance estimate large enough to exceed every tree distance. -/
 def rank : GChan V → V → ℕ
   | .link _ v false, d => G.treeDist v d
@@ -586,7 +586,7 @@ noncomputable def GraphData.ofConnected (verts : List V) (mem_verts : ∀ v, v �
 
 /-- **Every finite connected undirected graph carries a correct adaptive network**: with any
 distance estimate `dist` for its adaptive layer, minimal adaptive routing on virtual channel 1
-with tree routing along a breadth-first spanning tree as the absorbing escape layer on virtual
+with tree routing along a breadth-first spanning tree as the absorbing escape subnetwork on virtual
 channel 0 is deadlock free and livelock free under every valid selection function and
 starvation free under strongly fair scheduling. -/
 theorem GraphData.exists_correct [DecidableEq V] (verts : List V) (mem_verts : ∀ v, v ∈ verts)

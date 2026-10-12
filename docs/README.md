@@ -11,6 +11,7 @@ per kind of design. These guides go deeper into the routing and throughput resul
 | [Beyond the mesh](topologies.md) | safe routing on every finite connected graph; how much a topology can carry in the fluid model (exact optima); torus routing schemes with packets (simulation) |
 | [Scaling with the connections](scaling.md) | what `m` connections per link buy: the linear ceiling, planes, packets in time, backpressure reaching the fluid optimum, and what is necessary; with a table of what is proved, measured and open |
 | [Library map](library-map.md) | every Lean file and what it contains |
+| [Glossary](glossary.md) | the library's names and the standard terms and references of each field |
 
 Reading order for newcomers: the README's section 7, then the guides in the order above.
 Throughout, **theorems** are named in `code` with the file that proves them, and

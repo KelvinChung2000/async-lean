@@ -51,7 +51,7 @@ its parts.
 | `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
 | `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
-| `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape layer: a packet may leave the escape layer `B` times |
+| `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape subnetwork: a packet may leave the escape subnetwork `B` times |
 | `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 
@@ -59,7 +59,7 @@ its parts.
 
 | File | Contents |
 |---|---|
-| `Flow/Fluid.lean`, `Flow/MeshWire.lean` | fluid throughput bounds: weak duality, the wire and cut bounds; the mesh's optimum and the wire ceiling on the k × k grid |
+| `Flow/Fluid.lean`, `Flow/MeshWire.lean` | fluid throughput bounds: weak duality, the wire and cut bounds; the mesh's optimum and the grid wire bound on the k × k grid |
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
 | `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric/`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |

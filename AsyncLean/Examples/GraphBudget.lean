@@ -6,7 +6,7 @@ import AsyncLean.Routing.GraphBudget
 import AsyncLean.AxiomAudit
 
 /-!
-# Example: the torus with a bounded number of returns from the escape layer
+# Example: the torus with a bounded number of returns from the escape subnetwork
 
 Instances of `AsyncLean.Routing.GraphBudget` on the `(k + 1) × (k + 1)` torus `torus k` of
 `AsyncLean.Examples.GraphRouting` (minimal adaptive routing with the wraparound distance on

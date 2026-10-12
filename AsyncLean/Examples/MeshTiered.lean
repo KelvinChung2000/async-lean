@@ -95,7 +95,7 @@ theorem escTier_mem_meshTiers (k g : ℕ) : escTier k g ∈ meshTiers k g :=
 end Mesh
 
 /-- **The tiered, source-throttled selection** on Duato's mesh with the turn model `turn` on its
-escape layer. -/
+escape subnetwork. -/
 def tieredMesh (turn : ℕ → ℕ → ℕ → List ℕ) (k g : ℕ) : Selection ℕ ℕ :=
   (turnDuatoMesh turn k).tieredSel (meshTiers k g)
 
