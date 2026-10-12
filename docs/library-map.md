@@ -2,8 +2,11 @@
 
 [← back to the README](../README.md) · [all guides](README.md)
 
-Every file under `AsyncLean/` (paths below are relative to it), grouped by topic. Folders such as `Flow/Backpressure/` and
-`Routing/Throughput/` are split into parts; the module of the same name imports them all.
+Every file under `AsyncLean/` (paths below are relative to it), grouped by topic. A large module `X.lean` is split
+into a folder `X/` of parts, which `X.lean` imports in full; importing `X` is all a user needs. The split modules are
+`Routing/Basic`, `Routing/Throughput`, `Flow/Symmetric`, `Flow/Backpressure`, `Flow/GraphPatterns/Data`,
+`Checker/BDD`, `Checker/Tactic`, `Examples/MeshMaximal` and `Examples/MeshMetrics`; each umbrella's docstring lists
+its parts.
 
 ## Transition systems
 
@@ -37,7 +40,7 @@ Every file under `AsyncLean/` (paths below are relative to it), grouped by topic
 
 | File | Contents |
 |---|---|
-| `Routing/Basic.lean` | networks with dynamic routing, selection functions, Duato's theorem (sufficient and necessary), Dally–Seitz, livelock by ranking, drain theorem, refutations |
+| `Routing/Basic/` | networks with dynamic routing, in five parts: `Defs` (networks, selections, correctness), `Facts` (basic facts), `Deadlock` (Duato's theorem, sufficient and necessary; Dally–Seitz), `Livelock` (livelock by ranking, the drain theorem), `Refute` (refutations) |
 | `Routing/Fairness.lean` | starvation freedom: every packet is delivered along every strongly fair run |
 | `Routing/Wormhole.lean` | wormhole switching, Duato's extended dependency graph, livelock, drain, refutations |
 | `Routing/WormholeFairness.lean`, `WormholeHold.lean` | starvation freedom under wormhole switching; blocking sets, a deadlock condition beyond Duato's |
@@ -59,8 +62,8 @@ Every file under `AsyncLean/` (paths below are relative to it), grouped by topic
 | `Flow/Fluid.lean`, `Flow/MeshWire.lean` | fluid throughput bounds: weak duality, the wire and cut bounds; the mesh's optimum and the wire ceiling on the k × k grid |
 | `Flow/MeshOdd.lean`, `Flow/MeshWorst.lean` | the mesh's uniform optimum for odd k; minimality of XY; admissible traffic, O1TURN and XY flows for any demand, the worst-case optimum 4/k and the bit-complement optimum |
 | `Flow/Certificate.lean`, `Flow/MeshPatterns.lean` | kernel-checked LP certificates (primal flow, dual lengths) for the k × k mesh; exact optima of transpose, shuffle, bit reversal and hotspot on the 8 × 8 mesh |
-| `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
-| `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube |
+| `Flow/Topologies.lean`, `Flow/Tree.lean`, `Flow/Symmetric/`, `Flow/Valiant.lean` | the torus and the hypercube; minimal routing optimal for every traffic iff tree; uniform traffic on arc-transitive networks; Valiant's half-capacity bound and the worst cases of mesh, torus and hypercube |
+| `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean` | graph-generic kernel-checked LP certificates; exact minimal and any-routing optima on the 8 × 8 torus and the 6-cube (data in `Flow/GraphPatterns/Data/`, generated, one part per checking module) |
 
 ## Scaling with the connections ([guide](scaling.md))
 
@@ -88,8 +91,8 @@ Every file under `AsyncLean/` (paths below are relative to it), grouped by topic
 | `Checker/AbstractPot.lean` | counter abstractions with linear potentials (lexicographic ranks and must-distances) |
 | `Checker/Fast.lean`, `FastPetri.lean` | the fast kernel checker on numeric states, and its instance for nets packed into bit fields |
 | `Checker/FastPOR.lean`, `FastPORLive.lean` | kernel checks of reduced state spaces |
-| `Checker/BDD.lean`, `BDDGen.lean` | symbolic certificates: decision diagrams checked by joint walks; their untrusted computation |
-| `Checker/Tactic.lean` | the `async_decide`, `async_bitmap`, `async_bdd`, `async_routing` and `async_minimize` tactics |
+| `Checker/BDD/`, `BDDGen.lean` | symbolic certificates: decision diagrams checked by joint walks (parts `Checks`, `Nodes`, `Firing`, `Theorems`); their untrusted computation |
+| `Checker/Tactic/` | the `async_decide`, `async_bitmap`, `async_bdd`, `async_routing`, `async_minimize` and `async_fast` tactics (parts `Diagnosis`, `Goals`, `Bitmap`, `Decide`, `Syntax`) |
 | `Auto/Simplex.lean`, `Auto/Structural.lean`, `Auto/StateEq.lean` | exact rational simplex (untrusted), `async_structural`, state-equation certificates and packed place-invariant bounds |
 
 ## Importers, audit and examples

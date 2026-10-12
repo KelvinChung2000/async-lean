@@ -105,6 +105,11 @@
   `docs/routing-adaptivity.md` and `docs/topologies.md`, the library map to
   `docs/library-map.md`, and the scripts are indexed in `scripts/README.md`.
   `Flow/Backpressure.lean` and `Routing/Throughput.lean` are split into folders of parts.
+  So are the large older files (each now at most ~550 lines): `Routing/Basic`,
+  `Flow/Symmetric`, `Checker/BDD`, `Checker/Tactic`, `Examples/MeshMaximal`,
+  `Examples/MeshMetrics`, and the generated `Flow/GraphPatterns/Data` (one part per checking
+  module; `scripts/graph_certificates.py` writes the same layout). The module of the old name
+  imports all its parts, so every import and every name is unchanged.
 
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
