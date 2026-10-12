@@ -24,7 +24,7 @@ destination node (plus a misrouting budget in `misrouteMesh`).  The statements h
   virtual channel 0 as escape channels.  Its dependency graph has cycles, yet it is deadlock
   free by Duato's theorem (`duatoMesh_correct`).
 * `misrouteMesh` — non-minimal adaptive routing, where a packet may take up to `b`
-  unproductive hops, is livelock free because the budget bounds the detours
+  unproductive hops, is livelock free because the budget bounds the misroutes
   (`misrouteMesh_correct`).  With unbounded misrouting (`deflectionMesh`) a packet can bounce
   between two nodes forever (`deflectionMesh_livelocks`).
 * Starvation freedom under fair scheduling (`duatoMesh_starvationFree`, and

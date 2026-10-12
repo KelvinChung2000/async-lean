@@ -23,17 +23,17 @@ variable {V : Type*} [Fintype V] [DecidableEq V]
 
 /-- `dist` is a **hop distance** for `N`: `dist d d = 0`, and along every link of positive
 capacity the distance to any destination drops by at most `1`. -/
-def IsHopDistance (N : Net V) (dist : V → V → ℚ) : Prop :=
+def IsHopPotential (N : Net V) (dist : V → V → ℚ) : Prop :=
   (∀ d, dist d d = 0) ∧ ∀ u v d, 0 < N.cap u v → dist u d - dist v d ≤ 1
 
 /-- The traffic times the hop distance it must travel, `∑ s d, dem s d * dist s d`. -/
 def hopDemand (dem dist : V → V → ℚ) : ℚ := ∑ s, ∑ d, dem s d * dist s d
 
-/-- **The hop bound.**  For a hop distance `dist`, any routing (adaptive, with detours, split over
+/-- **The hop bound.**  For a hop distance `dist`, any routing (adaptive, non-minimal, split over
 many paths) of `θ * dem` has `θ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v`: every unit of
 traffic crosses at least `dist s d` links. -/
 theorem hop_bound {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : Routable N dem θ)
-    {dist : V → V → ℚ} (hd : IsHopDistance N dist) :
+    {dist : V → V → ℚ} (hd : IsHopPotential N dist) :
     θ * hopDemand dem dist ≤ ∑ u, ∑ v, N.cap u v := by
   have := potential_bound h (fun _ _ => 1) (fun _ _ => zero_le_one) (fun d v => dist v d)
     hd.1 (fun d u v hc => hd.2 u v d hc)
@@ -106,7 +106,7 @@ throughput `θ` in which every used link brings its commodity one hop closer and
 positive capacity is loaded to exactly its capacity.  If `∑ dem * dist > 0`, then `θ` is the
 largest routable throughput, by any routing, and it equals `∑ cap / ∑ dem * dist`. -/
 theorem balanced_opt {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (F : Flow N dem θ)
-    {dist : V → V → ℚ} (hd : IsHopDistance N dist)
+    {dist : V → V → ℚ} (hd : IsHopPotential N dist)
     (hF : F.SupportedOn fun d u v => dist v d + 1 = dist u d)
     (hsat : ∀ u v, 0 < N.cap u v → ∑ d, F.f d u v = N.cap u v)
     (hD : 0 < hopDemand dem dist) :
@@ -445,7 +445,7 @@ theorem symmetric_opt (N : Net V) (dem : V → V → ℚ) (hdem : ∀ s d, 0 ≤
   have hdd : ∀ d, ((Dn d d : ℕ) : ℚ) = 0 := fun d => by rw [(hzero d d).2 rfl]; rfl
   obtain ⟨F, hF, hsat⟩ := symmetric_balanced (dist := fun u d => (Dn u d : ℚ)) R
     (fun d u v h => by have := hR d u v h; exact_mod_cast this) hdd hT hD
-  have hhd : IsHopDistance N fun u d => (Dn u d : ℚ) := ⟨hdd, fun u v d hc => by
+  have hhd : IsHopPotential N fun u d => (Dn u d : ℚ) := ⟨hdd, fun u v d hc => by
     have := hhop u v d hc
     simp only
     have : ((Dn u d : ℕ) : ℚ) ≤ (Dn v d : ℕ) + 1 := by exact_mod_cast this

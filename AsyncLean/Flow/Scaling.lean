@@ -23,8 +23,8 @@ connections times their capacity.
 connections of every link as `m` **planes**, each a full copy of the network, let every packet
 pick a plane at its source and stay on it, and route inside each plane with the best scheme for
 one connection.  Plane `i` carries the flow of that scheme; the flows add (`Flow.add`,
-`Flow.sum`).  No other routing on `m` connections does better, adaptive or not, with or without
-detours, whatever it does across planes.
+`Flow.sum`).  No other routing on `m` connections does better, adaptive or not, minimal or
+not, whatever it does across planes.
 
 **Unequal connections.**  When the connections are not copies of one network (a mesh plus a
 layer of express links, a torus plus a second torus with another wiring), split them into

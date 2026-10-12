@@ -180,7 +180,7 @@ theorem cut_bound {dem : V → V → ℚ} {ρ : ℚ}
 distance. -/
 theorem hop_bound {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
-    {dist : V → V → ℚ} (hd : IsHopDistance N dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
+    {dist : V → V → ℚ} (hd : IsHopPotential N dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
     ρ * hopDemand dem dist ≤ ∑ u, ∑ v, N.cap u v := by
   have hM : ∀ d v, dist v d ≤ ∑ a, ∑ b, dist a b := fun d v =>
     (single_le_sum (f := fun b => dist v b) (fun b _ => hd0 v b) (mem_univ d)).trans
@@ -194,8 +194,8 @@ end Run
 
 omit [Fintype V] [DecidableEq V] in
 /-- A hop distance of a network is a hop distance of its copies. -/
-theorem IsHopDistance.copies {N : Net V} {dist : V → V → ℚ} (h : IsHopDistance N dist)
-    (m : ℕ) : IsHopDistance (N.copies m) dist :=
+theorem IsHopPotential.copies {N : Net V} {dist : V → V → ℚ} (h : IsHopPotential N dist)
+    (m : ℕ) : IsHopPotential (N.copies m) dist :=
   ⟨h.1, fun u v d hc => h.2 u v d (by
     rw [Net.copies_cap] at hc; exact pos_of_mul_pos_right hc (Nat.cast_nonneg m))⟩
 
@@ -208,7 +208,7 @@ variable {N : Net V} (r : Run N)
 of the network that keeps its backlog bounded under `ρ * dem` has `ρ ≤ m * θ`. -/
 theorem copies_hop_bound {m : ℕ} (r : Run (N.copies m)) {dem : V → V → ℚ} {ρ θ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
-    {dist : V → V → ℚ} (hd : IsHopDistance N dist) (hd0 : ∀ u v, 0 ≤ dist u v)
+    {dist : V → V → ℚ} (hd : IsHopPotential N dist) (hd0 : ∀ u v, 0 ≤ dist u v)
     (hD : 0 < hopDemand dem dist) (htight : θ * hopDemand dem dist = ∑ u, ∑ v, N.cap u v) :
     ρ ≤ m * θ := by
   have h := r.hop_bound harr hb (hd.copies m) hd0

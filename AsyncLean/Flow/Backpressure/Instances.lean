@@ -73,7 +73,7 @@ theorem mesh_backpressure (k : ℕ) (hk : 2 ≤ k) (he : Even k) {m : ℕ} (hm :
   linarith
 
 /-- The hop distance of the torus. -/
-theorem torus_isHopDistance (k : ℕ) : IsHopDistance (torusNet k) torusDist :=
+theorem torus_isHopPotential (k : ℕ) : IsHopPotential (torusNet k) torusDist :=
   ⟨fun d => by rw [torusDist_eq]; simp only [Nat.cast_eq_zero]; exact (torusHops_eq_zero d d).2 rfl,
     fun u v d hc => by
       have h := torusHops_le_of_cap hc d
@@ -105,12 +105,12 @@ theorem torus_backpressure (k : ℕ) (hk : 3 ≤ k) {m : ℕ} (hm : 0 < m)
   have hD : 0 < hopDemand (uniform k) torusDist := by
     rw [torus_hop_uniform]
     exact div_pos (mul_pos (by positivity) (ringTotal_pos (by omega))) hK
-  exact r.copies_hop_bound harr hb (torus_isHopDistance k)
+  exact r.copies_hop_bound harr hb (torus_isHopPotential k)
     (fun u v => by rw [torusDist_eq]; positivity) hD
     (by rw [torus_sum_cap (by omega)]; exact torus_uniform_hop k hk)
 
 /-- The hop distance of the hypercube. -/
-theorem cube_isHopDistance (n : ℕ) : IsHopDistance (cubeNet n) cubeDist :=
+theorem cube_isHopPotential (n : ℕ) : IsHopPotential (cubeNet n) cubeDist :=
   ⟨fun d => by rw [cubeDist_eq]; simp only [Nat.cast_eq_zero]; exact (cubeHops_eq_zero d d).2 rfl,
     fun u v d hc => by
       have h := cubeHops_le_of_cap hc d
@@ -145,7 +145,7 @@ theorem cube_backpressure (n : ℕ) (hn : 1 ≤ n) {m : ℕ} (hm : 0 < m)
     rw [cube_hop_uniform]
     have hn' : (1 : ℚ) ≤ n := by exact_mod_cast hn
     exact div_pos (by positivity) (by positivity)
-  exact r.copies_hop_bound harr hb (cube_isHopDistance n)
+  exact r.copies_hop_bound harr hb (cube_isHopPotential n)
     (fun u v => by rw [cubeDist_eq]; positivity) hD
     (by rw [cube_sum_cap]; exact cube_uniform_hop n hn)
 

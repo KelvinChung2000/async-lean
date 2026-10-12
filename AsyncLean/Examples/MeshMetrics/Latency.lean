@@ -17,7 +17,7 @@ open Network Mesh
 
 /-- A routing function on the `k × k` mesh that moves packets between neighbouring nodes only,
 keeps their headers, and delivers a packet only at its destination.  Any number of virtual
-channels, any adaptivity, detours included. -/
+channels, any adaptivity, non-minimal routes included. -/
 def NeighbourRouting (k : ℕ) (N : Network ℕ ℕ) : Prop :=
   (∀ c d, N.arrived c d = true → head k c = d) ∧
   ∀ c d q, N.arrived c d = false → q ∈ N.route c d →

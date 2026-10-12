@@ -306,7 +306,7 @@ def myRing : Network ℕ ℕ where
   routing, list several. If you use escape channels (Duato's scheme), **list the escape hop
   first**: the tactic then finds it on its own.
 * The header can carry routing state, such as a virtual-channel class or a misrouting budget
-  that each detour decreases.
+  that each misroute decreases.
 * `Examples/Routing.lean` has ready-made encodings for meshes (`Mesh.ch`, `Mesh.head`,
   `Mesh.xy`, `Mesh.productive`) and rings.
 
@@ -424,12 +424,12 @@ The routing results go well beyond these checks. Each has its own guide:
 * **[How adaptive can routing be?](docs/routing-adaptivity.md)** Deadlock-free mesh routing
   functions to which no hop can be added (the west-first and north-last meshes, proved for every
   mesh size), the trade-offs between hops, buffers and routing tables, and a source-throttled
-  selection (`tieredMesh`) that is safe for every size and fast in simulation.
-* **[Beyond the mesh](docs/topologies.md).** Minimal adaptive routing, bounded detours and
-  source-chosen intermediates are safe on every finite connected graph (`GraphData.correct`,
-  `budget_correct`, `detour_correct`). In the fluid model the optimum of mesh, torus and
+  selection (`priorityMesh`) that is safe for every size and fast in simulation.
+* **[Beyond the mesh](docs/topologies.md).** Minimal adaptive routing, bounded returns from the escape
+  subnetwork and two-phase routing through source-chosen intermediates are safe on every finite connected graph (`GraphData.correct`,
+  `budget_correct`, `twoPhase_correct`). In the fluid model the optimum of mesh, torus and
   hypercube is exact for many traffic patterns; on the mesh routing has no room left, on the
-  torus detours gain up to 60 %.
+  torus non-minimal routing gains up to 60 %.
 * **[Scaling with the connections](docs/scaling.md).** With `m` connections per link no routing
   beats `m` times one connection, and `m` independent planes reach it, safely and with packets.
   Backpressure scheduling reaches the fluid optimum exactly; adaptive routing and
@@ -715,11 +715,11 @@ topic.
   imported from RTL.
 * `MaximallyAdaptive` is relative to the hops `U` you allow and compares routing functions
   only at the pairs a packet can occupy. The turn-model meshes are proved maximal for every
-  size for minimal routing on one and on two virtual channels; allowing detours or more
+  size for minimal routing on one and on two virtual channels; allowing non-minimal routes or more
   virtual channels changes the yardstick, and the maximal routing functions with it. The
   per-cost optimality results are about hop counts, virtual channels and the number of routing
   decisions; throughput and latency of the packet simulators are measurements, not theorems
-  (the guides in `docs/` mark them as such; the fluid-model and queueing results are theorems). For `tieredMesh` what is proved is safety (deadlock, livelock and
+  (the guides in `docs/` mark them as such; the fluid-model and queueing results are theorems). For `priorityMesh` what is proved is safety (deadlock, livelock and
   starvation freedom), not its speed.
 
 ### Building the documentation

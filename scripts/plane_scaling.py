@@ -7,7 +7,7 @@ is).
 Every directed link has m connections, each with 2 one-packet virtual channels, and every node
 has m injection channels; the offered load is m * rate packets per node per cycle (m sources of
 rate `rate`).  The mechanics are those of scripts/routing_graph_sim.py (routing tables `Net`,
-ejection, one hop per packet per cycle in random order, tiered selection, bounded returns,
+ejection, one hop per packet per cycle in random order, priority selection, bounded returns,
 throttled injection), with three ways to use the m connections:
 
   planes   `Network.planes`: plane L is a full copy of the network on virtual channels 2L (escape,

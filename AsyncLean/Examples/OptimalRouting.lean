@@ -373,7 +373,7 @@ theorem wf_dist {k c d : ℕ} {q : ℕ × ℕ} (hl : wfLegal k c d)
 /-! #### Wormhole switching
 
 The escape channels are those of virtual channel 0.  Duato's *extended* dependency graph also
-counts the escape channels a packet requests after detours on virtual channel 1.  Such a detour
+counts the escape channels a packet requests after adaptive hops on virtual channel 1.  Such a hop
 is productive, so it keeps the head of the packet between the escape channel it left and its
 destination (`wfBox`), and the same order `wfRank` decreases. -/
 

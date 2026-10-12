@@ -4,15 +4,15 @@
 
 This guide covers safe routing on every finite connected graph, how much throughput a
 topology can give (the fluid model, where results are theorems), and what packets actually
-reach (simulation). It ends with the torus experiments that led to the detour network
-`detourNet`, which is proved deadlock, livelock and starvation free on every graph.
+reach (simulation). It ends with the torus experiments that led to the two-phase network
+`twoPhaseNet`, which is proved deadlock, livelock and starvation free on every graph.
 
 **In short.**
 
-* Minimal adaptive routing with a spanning-tree escape, and its bounded-detour variants, are
+* Minimal adaptive routing with a spanning-tree escape, with bounded returns and with two-phase routing, are
   safe on every finite connected graph (theorems).
 * In the fluid model the optimum of a topology is computable and often exact: on the mesh,
-  routing has no room left; on the torus and the hypercube, detours can gain up to 60 %
+  routing has no room left; on the torus and the hypercube, non-minimal routing can gain up to 60 %
   (theorems, kernel-checked certificates).
 * With one-packet buffers, packets reach 35 to 75 % of those optima depending on the topology
   (simulation): the gap is flow control, which [the scaling guide](scaling.md) closes.
@@ -33,7 +33,7 @@ hops.
 
 Is the mesh the right topology? At the same router radix (4 ports) and two virtual channels,
 `scripts/routing_graph_sim.py` (peak throughput, mean of 2 seeds; spanning-tree escape rooted
-in the centre, `B = 2`, tiered selection, `g = 4`) and the exact LP of the fluid model give:
+in the centre, `B = 2`, priority selection, `g = 4`) and the exact LP of the fluid model give:
 
 | 8 × 8, 64 routers | wire | LP uniform | uniform | transpose | shuffle | bit reversal | hotspot | bit complement | random permutation |
 |---|---|---|---|---|---|---|---|---|---|
@@ -77,11 +77,11 @@ duality argument, `Fluid.potential_bound`.
 ### Routing on the mesh has no room left (fluid model, proved)
 
 In the fluid model routing is a
-choice of flow, so the optimum below bounds every routing — oblivious, adaptive, with detours,
+choice of flow, so the optimum below bounds every routing — oblivious, adaptive, non-minimal,
 with global knowledge — and a minimal flow (`Flow.Minimal`: every hop gets closer) reaching it
-shows that detours add nothing:
+shows that non-minimal routing adds nothing:
 
-| traffic | optimum (per source) | reached without detours | theorem |
+| traffic | optimum (per source) | reached minimally | theorem |
 |---|---|---|---|
 | uniform, every k ≥ 2 | 8(k² − 1)/k³ (even k), 8/k (odd k) | yes, XY | `uniform_minimal_opt`, `mesh_opt_all` |
 | bit complement, every even k | 4/k | yes, XY or O1TURN | `bitcomp_opt`, `bitcomp_minimal` |
@@ -92,16 +92,16 @@ shows that detours add nothing:
 | worst case over admissible traffic, every even k | 4/k | yes, O1TURN (XY: 2/(k − 1), `xy_worst_opt`) | `worst_opt`, `o1turn_admissible` |
 
 Admissible traffic (`Admissible`) is every matrix in which no node sends or receives more than 1,
-permutations included: O1TURN routes all of them at 4/k without detours, and the bit complement
+permutations included: O1TURN routes all of them at 4/k minimally, and the bit complement
 shows no routing does better (`Flow/MeshWorst.lean`). The 8 × 8 rows are exact LP solutions
 (`scripts/fluid_certificates.py`) checked by the kernel: a flow at the optimum, and link lengths
 whose potential bound (`Flow.potential_bound_on` for the minimal-only hotspot bound) matches it
 (`Flow/Certificate.lean`, `Flow/MeshPatterns.lean`). What remains between these optima and the
 simulated throughput (35 to 60 %) is flow control, not routing.
 
-### Other topologies: when detours help
+### Other topologies: when non-minimal routing helps
 
-When detours help is a property of the topology and the traffic together.
+When non-minimal routing helps is a property of the topology and the traffic together.
 The bounds above hold on every network; what is special about the mesh is that minimal routing
 already meets them. In general (`Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/Valiant.lean`,
 `Flow/GraphPatterns.lean`):
@@ -109,8 +109,8 @@ already meets them. In general (`Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/V
 * **For every traffic matrix: only trees.** On a connected network, minimal routing reaches the
   optimum for every traffic matrix iff the network is a tree (`minimal_optimal_iff_isTree`): on a
   tree every link is a cut that the unique route crosses; on any edge of a cycle, traffic between
-  its ends gets twice as much with the detour (`detour_helps`). So a topology class without
-  detours has to be stated for a traffic class.
+  its ends gets twice as much with non-minimal routing (`nonminimal_helps`). So a topology class on which
+  minimal routing suffices has to be stated for a traffic class.
 * **Uniform traffic: every arc-transitive network.** If automorphisms preserving the traffic map
   every link to every other, averaging any minimal routing over them loads all links equally, so
   minimal routing is optimal at `∑ cap / ∑ traffic × distance` (`symmetric_opt`). Instances: the
@@ -122,7 +122,7 @@ already meets them. In general (`Flow/Tree.lean`, `Flow/Symmetric.lean`, `Flow/V
   on the mesh (4/k, `valiant_mesh_opt`), the torus (8/k for even k ≥ 4, `torus_worst_opt'`) and
   the hypercube (2, `cube_worst_opt'`). On the mesh minimal routing (O1TURN) also reaches it; on
   the 8 × 8 torus it cannot: tornado traffic allows only 2/3 to minimal flows against 16/15 with
-  detours, below the worst-case optimum 1 (`torusTornado_minimal_opt`).
+  non-minimal flows, below the worst-case optimum 1 (`torusTornado_minimal_opt`).
 
 ### Exact optima on 64 routers
 
@@ -163,7 +163,7 @@ to the middle trades, like moving wire there: large gains under uniform, shuffle
 and hotspot traffic, losses under transpose and bit reversal. Only more storage gains
 everywhere. No equal-storage allocation tried beats the existing schemes on every pattern.
 
-### Detours on the torus with packets (simulation)
+### Non-minimal routing on the torus with packets (simulation)
 
 `scripts/torus_experiments.py`, 8 × 8
 torus, 2 virtual channels of one-packet buffers, peak accepted throughput (mean of 2 seeds):
@@ -180,10 +180,10 @@ torus, 2 virtual channels of one-packet buffers, peak accepted throughput (mean 
 Dimension order with datelines uses one virtual channel per hop, which halves its lanes;
 the tree-escape schemes use both. The minimal adaptive network already beats the existing
 schemes on every pattern but tornado (Valiant +17 %) and bit complement (UGAL +0.7 %). Letting
-the source pick a detour by congestion recovers tornado to within 1 % of Valiant (`ringvd30`)
+the source pick an intermediate by congestion recovers tornado to within 1 % of Valiant (`ringvd30`)
 at a cost of about 1 % on bit complement and neighbour traffic, or keeps every pattern but
 tornado and neighbour at or above the existing schemes (`ringvx10`). No variant tried is at least as good as every
-existing scheme on every pattern: the detours that tornado needs cost a little where none are
+existing scheme on every pattern: the non-minimal routes that tornado needs cost a little where none are
 needed, the same trade-off as on the mesh, now at the 1 % level.
 
 Sources that learn the in-network latency of each option (`bandit2`: minimal, long way in x
@@ -195,7 +195,7 @@ weights, gates, hysteresis, pricing extra hops) moves along one frontier between
 bit complement (for example 0.404 / 0.447 with hop pricing): latency-greedy sources reach an
 equilibrium in which the long way is as slow as the short one, which is right for tornado and
 slightly too much detouring for bit complement — the gap between selfish and system-optimal
-routing. Closing it needs a signal about the cost a detour imposes on others; none was found,
+routing. Closing it needs a signal about the cost a non-minimal route imposes on others; none was found,
 and no impossibility is proved (in the fluid model an adaptive routing can reach every
 pattern's optimum).
 
@@ -219,22 +219,22 @@ spreading helps). `bandit2m7f5k`, `scripts/torus_final.py` (peak over offered lo
 
 It is ahead of the best existing scheme on eight patterns (+0.4 % on bit complement, +1.4 % on
 tornado, +6 % on uniform) and at the injection limit of one packet per node per cycle, with
-dimension order, on neighbour traffic. It is a selection of `detourNet` (`Routing/GraphDetour.lean`):
+dimension order, on neighbour traffic. It is a selection of `twoPhaseNet` (`Routing/GraphTwoPhase.lean`):
 the source picks an intermediate (none, a node on the long way round, or a random node) from
-`anyDetour`, adaptive hops are minimal towards it, the escape is the spanning tree, returns are
+`anyIntermediate`, adaptive hops are minimal towards it, the escape is the spanning tree, returns are
 bounded (`B = 2`) and injection is throttled — so it is deadlock free, livelock free, starvation
-free and delivers under sustained load (`torus_valiant_correct`, `detour_underLoad_of_sourceSel`).
+free and delivers under sustained load (`torus_valiant_correct`, `twoPhase_underLoad_of_sourceSel`).
 The margins on bit complement and tornado are a few standard errors of the simulation; they
-are measurements, not theorems, and our own unthrottled-detour `GraphData.net` is still slightly
+are measurements, not theorems, and our own minimal adaptive `GraphData.net` is still slightly
 ahead of it on transpose, shuffle, bit reversal and random permutation.
-Lower exploration (0 to 1 %), margins a detour must beat the minimal route by (5 to 25 %),
+Lower exploration (0 to 1 %), margins a non-minimal route must beat the minimal route by (5 to 25 %),
 and a larger margin for the random intermediate do not close that last gap (at best 0.568 /
 0.651 / 0.656 / 0.679 against 0.570 / 0.652 / 0.658 / 0.684) without giving up tornado: under
-those permutations the learning sources still send 2 to 4 % of packets on detours, about the
+those permutations the learning sources still send 2 to 4 % of packets on non-minimal routes, about the
 1 % of throughput that minimal routing keeps. Being ahead of the existing schemes and also of
 our own minimal network on every pattern remains open. Picking, among the free minimal hops,
 the one into the router with the most free channels (`C`) helps the minimal network a little
-(transpose 0.573, bit reversal 0.660, random permutation 0.686) and the detour scheme on bit
+(transpose 0.573, bit reversal 0.660, random permutation 0.686) and the two-phase scheme on bit
 complement and tornado (0.454, 0.445), but not enough on shuffle, bit reversal, hotspot and
 random permutation; dropping the random intermediate (`Y`) keeps the permutations at the
 minimal network's level but loses tornado (0.400) and bit complement (0.444).
@@ -256,15 +256,15 @@ minimal network beats its congestion-aware version on hotspot, 0.5231 against 0.
 on transpose, 0.5684 against 0.5716), so no scheme can be expected to be ahead of every variant;
 the bar is the published schemes.
 
-## The detour network is safe on every graph
+## The two-phase network is safe on every graph
 
-These detour schemes are safe on every graph: `Routing/GraphDetour.lean` adds to the header
+These two-phase schemes are safe on every graph: `Routing/GraphTwoPhase.lean` adds to the header
 `(d, b)` of `GraphBudget` an intermediate node `w` chosen at the source from any list `W s d`
 (Valiant, the long way round a ring, or none); adaptive hops head for `w` and drop it on
 arrival, the escape heads for `d` and drops it. For every finite connected graph, every budget
 and every `W` the network is deadlock free, livelock free (at most `dist s w + (B + 1) ·
-rankBound` hops), starvation free and delivers under sustained load (`detour_correct`,
-`detour_underLoad`, `detour_hops_le_some`; torus instances in `Examples/GraphDetour.lean`), and
-with `w = none` it is exactly `GraphBudget`'s network (`detourNet_route_none`). Since the source
+rankBound` hops), starvation free and delivers under sustained load (`twoPhase_correct`,
+`twoPhase_underLoad`, `twoPhase_hops_le_some`; torus instances in `Examples/GraphTwoPhase.lean`), and
+with `w = none` it is exactly `GraphBudget`'s network (`twoPhaseNet_route_none`). Since the source
 may pick any element of `W s d`, the congestion-based choices of `ringvx` and `ringvd` are
 covered.

@@ -6,7 +6,7 @@ import AsyncLean.Routing.Throughput.Timed
 /-!
 # Packet networks in time, part 4: the networks on a graph
 
-The networks of `GraphData` (`net`, `budgetNet`, `detourNet`) are placed on their graph
+The networks of `GraphData` (`net`, `budgetNet`, `twoPhaseNet`) are placed on their graph
 (`GraphData.placement`, with the `Fits` lemmas); their fluid network has two channels, capacity
 `2`, on every link between neighbours (`GraphData.placement_cap`).
 -/
@@ -112,15 +112,15 @@ theorem budgetPlacement_fits (B : ℕ) : (G.budgetPlacement B).Fits :=
     refine ⟨G.budget_route_adj ha hq, ?_⟩
     rcases G.mem_budgetRoute hq with rfl | ⟨v, -, -, ⟨-, rfl⟩ | ⟨-, -, rfl⟩⟩ <;> rfl
 
-/-- The network `GraphData.detourNet B W` on its graph. -/
-def detourPlacement (B : ℕ) (W : V → V → List (Option V)) : (G.detourNet B W).Placement V :=
-  G.placement Prod.fst fun c p h => by simpa [detourNet] using h
+/-- The network `GraphData.twoPhaseNet B W` on its graph. -/
+def twoPhasePlacement (B : ℕ) (W : V → V → List (Option V)) : (G.twoPhaseNet B W).Placement V :=
+  G.placement Prod.fst fun c p h => by simpa [twoPhaseNet] using h
 
-theorem detourPlacement_fits (B : ℕ) (W : V → V → List (Option V)) :
-    (G.detourPlacement B W).Fits :=
+theorem twoPhasePlacement_fits (B : ℕ) (W : V → V → List (Option V)) :
+    (G.twoPhasePlacement B W).Fits :=
   G.placement_fits Prod.fst _ fun c p q ha hq => by
-    refine ⟨G.detour_route_adj ha hq, ?_⟩
-    rcases G.mem_detourRoute hq with rfl | ⟨v, -, -, ⟨-, rfl⟩ | ⟨-, -, rfl⟩⟩ <;> rfl
+    refine ⟨G.twoPhase_route_adj ha hq, ?_⟩
+    rcases G.mem_twoPhaseRoute hq with rfl | ⟨v, -, -, ⟨-, rfl⟩ | ⟨-, -, rfl⟩⟩ <;> rfl
 
 end GraphData
 

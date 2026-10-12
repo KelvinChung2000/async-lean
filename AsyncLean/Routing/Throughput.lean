@@ -53,7 +53,7 @@ model allows** (`Network.TimedRun.potential_bound`): the bridge between the pack
 * `planesTimed`, `planesTimed_injected` : **planes add their throughput in time**: timed runs of the
   planes, side by side round by round, are a timed run of the plane network injecting the sum of
   what the planes inject.
-* `GraphData.placement` : the networks of `GraphData` (`net`, `budgetNet`, `detourNet`) are
+* `GraphData.placement` : the networks of `GraphData` (`net`, `budgetNet`, `twoPhaseNet`) are
   placed on their graph, two channels per link (`GraphData.placement_cap`);
   `Network.planesPlacement` places `m` planes with `m` times the capacity.
 * `scoreSel`, `scoreSel_valid`, `Correct.scoreSel` : choosing among the free permitted hops

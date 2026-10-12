@@ -405,7 +405,7 @@ fluid network of its placement. -/
 theorem hop_bound (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V]
     {dem : V → V → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤ R.injected L T s d)
-    {dist : V → V → ℚ} (hd : Fluid.IsHopDistance L.net dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
+    {dist : V → V → ℚ} (hd : Fluid.IsHopPotential L.net dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
     ρ * Fluid.hopDemand dem dist ≤ ∑ u, ∑ v, L.net.cap u v := by
   have hM : ∀ d v, dist v d ≤ ∑ a, ∑ b, dist a b := fun d v =>
     (single_le_sum (f := fun b => dist v b) (fun b _ => hd0 v b) (mem_univ d)).trans

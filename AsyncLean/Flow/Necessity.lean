@@ -8,8 +8,8 @@ import AsyncLean.Flow.GraphPatterns
 # Adaptivity is necessary: shortest paths alone lose throughput
 
 Backpressure reaches the fluid optimum (`Fluid.Run.backpressure_optimal`) because it may move
-traffic along any link, detours included.  This file proves that this freedom is needed: a
-scheduler that moves every packet only along shortest paths — whatever else it does, however it
+traffic along any link, non-minimal routes included.  This file proves that this freedom is needed:
+a scheduler that moves every packet only along shortest paths — whatever else it does, however it
 uses the backlogs — is bounded by the fluid optimum *over minimal routings*, which can be far
 below the optimum.
 

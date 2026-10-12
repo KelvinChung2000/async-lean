@@ -59,8 +59,10 @@ to the terms and references of each field, and lists the few names that are the 
 | `MaximallyAdaptive`, `westFirst`, `northLast` | maximal adaptivity and the turn model (Glass and Ni, 1992) |
 | `datelineRing`, `misrouteMesh`, `deflectionMesh` | datelines on rings and tori (Dally and Seitz, 1987); misrouting; deflection (hot-potato) routing |
 | `SourceSel`, throttled sources | source throttling (injection limitation) |
+| `prioritySel`, `priorityMesh` | a priority-based selection function: the free hops of the highest priority level that has one |
 | `GraphData.net`: tree routing as escape | routing along a spanning tree, the tree-only case of up\*/down\* routing (Schroeder et al., Autonet, 1991) |
-| detours, `detourNet`, `anyDetour` | non-minimal routing through an intermediate node chosen at the source: Valiant's routing (Valiant and Brebner, 1981), or a deterministic choice such as the long way round a ring |
+| two-phase routing, `twoPhaseNet`, `anyIntermediate` | routing through an intermediate node chosen at the source, minimally to it and then to the destination: Valiant's two-phase routing (Valiant and Brebner, 1981), or a deterministic choice such as the long way round a ring |
+| non-minimal routing, `nonminimal_helps`, `*_nonminimal_gain` | routes that do not always bring a packet closer to its destination; misrouting (`misrouteMesh`) when hop by hop |
 | planes, `Network.planes` | multiple physical networks (Yoon, Jiang, Becker and Dally, 2010), network planes. Not *lanes*: Dally (1992) uses *lane* for a virtual channel, as the guides here do |
 | replication, `Network.replicate` | more channels per link, physical or virtual |
 
@@ -70,6 +72,7 @@ to the terms and references of each field, and lists the few names that are the 
 |---|---|
 | fluid optimum, `Routable dem θ` | maximum concurrent multicommodity flow (Shahrokhi and Matula, 1990); the *ideal throughput* of Dally and Towles, *Principles and Practices of Interconnection Networks* (2004) |
 | `potential_bound`, `cut_bound`, `hop_bound` | LP duality for multicommodity flow (dual edge lengths and node potentials); the cut (bisection) bound and the hop-count bound on channel load (Dally and Towles) |
+| `IsHopPotential`, `UGraph.IsHopDist` | a potential that drops by at most one per link (a feasible LP dual for unit lengths), and the exact hop distance (the Bellman–Ford equations) |
 | `Minimal`, `minimal_optimal_iff` | minimal routing: every packet takes a shortest path (optimal for every traffic iff the graph is a tree) |
 | `Admissible` | admissible traffic: no node sends or receives more than its injection rate (Towles and Dally, 2002) |
 | `uniform`, `transpose8`, `shuffle8`, `bitrev8`, `bitcomp`, `tornado8`, `neighbor8`, `hotspot8` | the standard synthetic traffic patterns (Dally and Towles) |
@@ -97,7 +100,6 @@ These have no standard counterpart; each is defined where it is introduced.
 | legal pairs (`Legal`) | the (channel, header) pairs a reachable configuration can hold, on which the routing function is required to behave |
 | `SafeCert` | the safety recipe packaged once: closed legal pairs, a connected escape subnetwork with a well-founded dependency graph, a ranking |
 | return budget (`Routing/GraphBudget.lean`) | at most `B` hops from the escape subnetwork back to the adaptive channels |
-| tiered selection (`tieredSel`) | a selection offering hops in order of preference, falling back tier by tier |
 | `wire_bound`, `grid_wire_bound` | total wire length times capacity bounds the traffic-weighted Manhattan distance; on the `k × k` grid no network with the mesh's wiring beats it by more than `3k / (2(k + 1))` |
 | timed run (`Network.TimedRun`) | a synchronous, cycle-by-cycle execution of a packet network |
 | placement (`Network.Placement`) | a map of a packet network's channels onto the links of a graph |

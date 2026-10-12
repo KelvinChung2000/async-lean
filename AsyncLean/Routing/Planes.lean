@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Routing.GraphDetour
+import AsyncLean.Routing.GraphTwoPhase
 import Mathlib.Data.Set.Finite.Lattice
 
 /-!
@@ -21,12 +21,12 @@ In the literature these are **multiple physical networks** (Yoon, Jiang, Becker 
 ## The network (`Network.planes`)
 
 Given a list `ls` of planes and a network `N i` for each plane (the same network on every plane,
-or different ones: a different spanning tree, a different escape, a different detour rule), the
-channels are pairs `(i, c)` of a plane and a channel of that plane; a packet in plane `i` is routed
-by `N i` and stays in plane `i`; a source may inject into any plane (the choice of plane is free:
-round robin, hashing, the least loaded plane, any rule, as the injection actions are chosen by
-the environment and throttled by the selection).  Each plane keeps its own virtual channels; no
-virtual channel is added, whatever the number of planes.
+or different ones: a different spanning tree, a different escape, a different choice of
+intermediates), the channels are pairs `(i, c)` of a plane and a channel of that plane; a packet in
+plane `i` is routed by `N i` and stays in plane `i`; a source may inject into any plane (the choice
+of plane is free: round robin, hashing, the least loaded plane, any rule, as the injection actions
+are chosen by the environment and throttled by the selection).  Each plane keeps its own virtual
+channels; no virtual channel is added, whatever the number of planes.
 
 ## Safety for every number of planes
 
@@ -42,12 +42,12 @@ disjoint union of the planes' graphs, well founded when each of them is.
   and livelock free under every valid selection (which may look at every plane: pick the least
   congested hop, compare planes) and starvation free under strong fairness, and delivers every
   packet under saturation along every channel-fair run (`Network.planes_underLoad`).
-* `GraphData.planes_correct`, `GraphData.planes_detour_correct`,
-  `GraphData.planes_detour_sourceSel` : on **every finite connected graph**, any number of planes
-  of minimal adaptive routing with a spanning-tree escape (`GraphData.net`), or of the detour
-  network with bounded returns (`GraphData.detourNet`, the scheme behind `bandit2m7f5k`), with
-  a different spanning tree and detour rule on every plane if wished, under every selection that
-  never refuses a free escape hop and may throttle the sources.
+* `GraphData.planes_correct`, `GraphData.planes_twoPhase_correct`,
+  `GraphData.planes_twoPhase_sourceSel` : on **every finite connected graph**, any number of planes
+  of minimal adaptive routing with a spanning-tree escape (`GraphData.net`), or of the two-phase
+  network with bounded returns (`GraphData.twoPhaseNet`, the scheme behind `bandit2m7f5k`), with
+  a different spanning tree and choice of intermediates on every plane if wished, under every
+  selection that never refuses a free escape hop and may throttle the sources.
 
 ## Independence: `m` planes carry `m` times the traffic
 
@@ -534,18 +534,18 @@ def budgetCert (G : GraphData V) (B : ℕ) : SafeCert (G.budgetNet B) where
   rank := G.budgetRank
   rank_lt := G.budget_rank_lt B
 
-/-- The safety certificate of adaptive routing with detours and bounded returns. -/
-def detourCert (G : GraphData V) (B : ℕ) (W : V → V → List (Option V)) :
-    SafeCert (G.detourNet B W) where
-  legal := G.detLegal B
-  closed := G.detour_closed B W
-  finite := G.detour_pairs_finite B
-  esc := G.detEscape
-  esc_sub _ _ _ hq := G.detEscape_sub hq
-  esc_conn := G.detour_esc_conn B W
-  esc_wf := G.detour_esc_wf B W
-  rank := G.detRank
-  rank_lt := G.detour_rank_lt B W
+/-- The safety certificate of adaptive two-phase routing and bounded returns. -/
+def twoPhaseCert (G : GraphData V) (B : ℕ) (W : V → V → List (Option V)) :
+    SafeCert (G.twoPhaseNet B W) where
+  legal := G.twoPhaseLegal B
+  closed := G.twoPhase_closed B W
+  finite := G.twoPhase_pairs_finite B
+  esc := G.twoPhaseEscape
+  esc_sub _ _ _ hq := G.twoPhaseEscape_sub hq
+  esc_conn := G.twoPhase_esc_conn B W
+  esc_wf := G.twoPhase_esc_wf B W
+  rank := G.twoPhaseRank
+  rank_lt := G.twoPhase_rank_lt B W
 
 variable {ι : Type*} [DecidableEq ι]
 
@@ -574,40 +574,40 @@ theorem planes_budget_correct (Gs : ι → GraphData V) (B : ℕ) (ls : List ι)
   ⟨(Network.planes_correct K ls).1, (Network.planes_correct K ls).2,
     fun _ hsel => (Network.planes_underLoad K ls hsel).2.2⟩
 
-/-- **Planes of the detour network on every graph**: for every number of planes, every return
+/-- **Planes of the two-phase network on every graph**: for every number of planes, every return
 budget and every choice of intermediates per plane, deadlock, livelock and starvation free, and
 delivering under saturation. -/
-theorem planes_detour_correct (Gs : ι → GraphData V) (B : ℕ)
+theorem planes_twoPhase_correct (Gs : ι → GraphData V) (B : ℕ)
     (W : ι → V → V → List (Option V)) (ls : List ι) :
-    (planes ls fun i => (Gs i).detourNet B (W i)).Correct ∧
-      (planes ls fun i => (Gs i).detourNet B (W i)).StarvationFree ∧
-      ∀ sel, (planes ls fun i => (Gs i).detourNet B (W i)).ValidSel sel →
-        (planes ls fun i => (Gs i).detourNet B (W i)).StarvationFreeUnderLoad sel
+    (planes ls fun i => (Gs i).twoPhaseNet B (W i)).Correct ∧
+      (planes ls fun i => (Gs i).twoPhaseNet B (W i)).StarvationFree ∧
+      ∀ sel, (planes ls fun i => (Gs i).twoPhaseNet B (W i)).ValidSel sel →
+        (planes ls fun i => (Gs i).twoPhaseNet B (W i)).StarvationFreeUnderLoad sel
           (fun _ => False) :=
-  let K := fun i => (Gs i).detourCert B (W i)
+  let K := fun i => (Gs i).twoPhaseCert B (W i)
   ⟨(Network.planes_correct K ls).1, (Network.planes_correct K ls).2,
     fun _ hsel => (Network.planes_underLoad K ls hsel).2.2⟩
 
-/-- **Planes of the detour network with throttled sources** (the selection of the simulated
+/-- **Planes of the two-phase network with throttled sources** (the selection of the simulated
 scheme `bandit2m7f5k`, run in every plane): under every selection that never refuses a free
 escape hop outside the injection channels and releases a packet from its injection channel once
 the rest of the network is empty — which may compare planes, pick a plane by congestion and
 throttle per plane — the plane network is deadlock and livelock free and delivers every packet
 outside the injection channels along every channel-fair run. -/
-theorem planes_detour_sourceSel (Gs : ι → GraphData V) (B : ℕ)
+theorem planes_twoPhase_sourceSel (Gs : ι → GraphData V) (B : ℕ)
     (W : ι → V → V → List (Option V)) (ls : List ι)
     {sel : Selection (ι × GChan V) (V × Option V × ℕ)}
-    (hsel : (planes ls fun i => (Gs i).detourNet B (W i)).SourceSel
-      (SafeCert.planes (fun i => (Gs i).detourCert B (W i)) ls).esc
+    (hsel : (planes ls fun i => (Gs i).twoPhaseNet B (W i)).SourceSel
+      (SafeCert.planes (fun i => (Gs i).twoPhaseCert B (W i)) ls).esc
       (fun x => x.2.isInj = true) sel) :
-    (planes ls fun i => (Gs i).detourNet B (W i)).DeadlockFreeWith sel ∧
-      (planes ls fun i => (Gs i).detourNet B (W i)).LivelockFreeWith sel ∧
-      (planes ls fun i => (Gs i).detourNet B (W i)).StarvationFreeUnderLoad sel
+    (planes ls fun i => (Gs i).twoPhaseNet B (W i)).DeadlockFreeWith sel ∧
+      (planes ls fun i => (Gs i).twoPhaseNet B (W i)).LivelockFreeWith sel ∧
+      (planes ls fun i => (Gs i).twoPhaseNet B (W i)).StarvationFreeUnderLoad sel
         (fun x => x.2.isInj = true) :=
-  (SafeCert.planes (fun i => (Gs i).detourCert B (W i)) ls).sourceSel
+  (SafeCert.planes (fun i => (Gs i).twoPhaseCert B (W i)) ls).sourceSel
     (fun x _ q _ _ hq => by
       obtain ⟨q', hq', rfl⟩ := mem_planes_route.1 hq
-      exact (Gs x.1).detour_route_not_inj hq') hsel
+      exact (Gs x.1).twoPhase_route_not_inj hq') hsel
 
 end GraphData
 

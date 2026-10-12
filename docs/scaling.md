@@ -47,7 +47,7 @@ The [glossary](glossary.md) maps the names used here to the literature.
 
 In the fluid model (`Flow/Fluid.lean`) a network is a set of link capacities, and a traffic
 matrix is *routable at throughput θ* if some multicommodity flow carries `θ` times it within
-the capacities. Routing, adaptive or not, with or without detours, is a choice of flow, so the
+the capacities. Routing, adaptive or not, minimal or not, is a choice of flow, so the
 fluid optimum bounds every routing scheme.
 
 `Flow/Scaling.lean` proves that this optimum is homogeneous in the capacities:
@@ -76,8 +76,8 @@ planes.
 | Theorem | Statement |
 |---|---|
 | `Network.planes_correct`, `planes_underLoad` | deadlock and livelock free under every valid selection, starvation free, every packet delivered under sustained load |
-| `GraphData.planes_correct`, `planes_budget_correct`, `planes_detour_correct` | the same for planes of the graph networks, on every finite connected graph |
-| `torusPlanes_correct` (`Examples/Planes.lean`) | the torus of every size with `m` planes of the detour network |
+| `GraphData.planes_correct`, `planes_budget_correct`, `planes_twoPhase_correct` | the same for planes of the graph networks, on every finite connected graph |
+| `torusPlanes_correct` (`Examples/Planes.lean`) | the torus of every size with `m` planes of the two-phase network |
 | `planes_reachable_iff`, `planes_path`, `copies_path` | the planes do not interfere: their runs combine, and `m` copies deliver `m` times the packets |
 
 **Packets in time** (`Routing/Throughput/`). The packet model says which moves are possible,

@@ -123,6 +123,14 @@
   `ceiling_factor_lt` → `grid_wire_factor_lt`), and the "escape layer" is the escape
   subnetwork, Duato's routing subfunction. `docs/glossary.md` maps every area's names to the
   literature.
+  Routing through a source-chosen intermediate is *two-phase routing* (Valiant):
+  `Routing/GraphDetour` → `Routing/GraphTwoPhase`, `detourNet` → `twoPhaseNet`, `anyDetour` →
+  `anyIntermediate`, `detour_*` → `twoPhase_*`; in the fluid model a detour is *non-minimal*
+  routing (`*_detour_gain` → `*_nonminimal_gain`, `detour_helps` → `nonminimal_helps`). Tiered
+  selections are *priority selections* (`tieredSel` → `prioritySel`, `tieredMesh` →
+  `priorityMesh`, `Examples/MeshTiered` → `Examples/MeshPriority`; the simulation mode `tiered`
+  is now `priority`). `Fluid.IsHopDistance` → `IsHopPotential`, apart from the exact
+  `UGraph.IsHopDist`.
 
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
@@ -131,21 +139,21 @@
 * **A torus scheme ahead of every existing one on every pattern (simulation)**:
   `bandit2m7f5k` in `scripts/torus_experiments.py` (marginal-cost prices, flow-count gate for
   the long way, Valiant only for concentrated destinations), a selection of the proved
-  `detourNet`; `scripts/torus_final.py` reproduces the comparison.
+  `twoPhaseNet`; `scripts/torus_final.py` reproduces the comparison.
 
 * `scripts/torus_experiments.py`: latency-learning sources (`bandit<e>[h<h>][q<q>][g<g>]`) beat
   every existing torus scheme on seven of nine patterns, tie on neighbour traffic, and trail
   UGAL by 1.8 % on bit complement; all variants lie on one tornado / bit-complement frontier.
 
-* **Detours, proved safe** (`Routing/GraphDetour.lean`, `Examples/GraphDetour.lean`). The header
+* **Two-phase routing, proved safe** (`Routing/GraphTwoPhase.lean`, `Examples/GraphTwoPhase.lean`). The header
   `(d, w, b)` adds a source-chosen intermediate node to `GraphBudget`; for every finite connected
   graph, budget and choice of intermediates the network is deadlock free, livelock free with an
-  explicit hop bound, starvation free and delivers under sustained load (`detour_correct`,
-  `detour_underLoad`, `exists_detour_correct`); torus instances for every size.
+  explicit hop bound, starvation free and delivers under sustained load (`twoPhase_correct`,
+  `twoPhase_underLoad`, `exists_twoPhase_correct`); torus instances for every size.
 
 * `scripts/torus_experiments.py`: torus routing with packets — dimension order with datelines,
-  Valiant, UGAL, the proved minimal adaptive tree-escape network, and source-chosen detours
-  (long way round a ring or a random intermediate, by smoothed congestion). The detour variants
+  Valiant, UGAL, the proved minimal adaptive tree-escape network, and source-chosen intermediates
+  (long way round a ring or a random intermediate, by smoothed congestion). The two-phase variants
   come within 1 % of the best existing scheme on every pattern and beat it on most; none is at
   least as good on all.
 
@@ -154,21 +162,21 @@
   uniform, shuffle, bit-complement and hotspot traffic for losses on transpose and bit
   reversal; only more storage wins on every pattern.
 
-* **Beyond the mesh: which topologies need detours** (`Flow/Topologies.lean`, `Flow/Tree.lean`,
+* **Beyond the mesh: which topologies need non-minimal routing** (`Flow/Topologies.lean`, `Flow/Tree.lean`,
   `Flow/Symmetric.lean`, `Flow/Valiant.lean`, `Flow/GraphCert.lean`, `Flow/GraphPatterns.lean`,
   `scripts/graph_certificates.py`). Minimal routing is optimal for every traffic matrix iff the
   network is a tree (`minimal_optimal_iff_isTree`); for uniform traffic on every arc-transitive
   network (`symmetric_opt`; torus and hypercube optima in closed form). Valiant's bound on every
   network with symmetric capacities (`valiant`) gives the exact worst case of the mesh (4/k),
   the torus (8/k) and the hypercube (2). Exact optima on the 8 × 8 torus and the 6-cube by
-  kernel-checked certificates: detours gain up to 60 % on the torus (tornado, shuffle,
+  kernel-checked certificates: non-minimal routing gains up to 60 % on the torus (tornado, shuffle,
   transpose, neighbour, bit reversal) and 45 % on the hypercube (shuffle).
 
 * **Routing on the mesh has no room left, proved in the fluid model** (`Flow/MeshOdd.lean`,
   `Flow/MeshWorst.lean`, `Flow/Certificate.lean`, `Flow/MeshPatterns.lean`,
   `scripts/fluid_certificates.py`). `Flow.Minimal` and `Flow.potential_bound_on` (the dual bound
   for a flow restricted to some links). Uniform traffic: the optimum for every k (8/k for odd k,
-  `mesh_opt_all`), reached by XY without detours (`uniform_minimal_opt`). Worst case over
+  `mesh_opt_all`), reached minimally by XY (`uniform_minimal_opt`). Worst case over
   admissible traffic: O1TURN routes every admissible matrix at 4/k (`o1turn_admissible`) and no
   routing does better (`worst_opt`, even k); XY's worst case is exactly 2/(k − 1)
   (`xy_worst_opt`); bit complement's optimum is 4/k (`bitcomp_opt`). On the 8 × 8 mesh, exact
@@ -206,8 +214,8 @@
   again). Under it, with injections never stopping, every packet outside the throttled
   sources is delivered (`Network.starvationFreeUnderLoad_of_source`), every packet under
   selections that never refuse a free escape hop (`starvationFreeUnderLoad_of_escape`).
-  Instances for every size: Duato's, the west-first and the north-last mesh under every tiered
-  selection containing the throttled escape tier and under every valid selection, and every
+  Instances for every size: Duato's, the west-first and the north-last mesh under every priority
+  selection containing the throttled escape level and under every valid selection, and every
   finite connected graph (`GraphData.underLoad`, `GraphData.exists_underLoad`). Packets held in
   a throttled injection channel can starve under saturation and are not covered.
 
@@ -221,13 +229,13 @@
   `GraphData.exists_correct` states it for every connected graph. Instances
   (`Examples/GraphRouting.lean`): the torus of every size (`torus_correct`) and the Petersen
   graph (`petersen_correct`).
-  * `scripts/routing_bounds.py`: the optimal throughput of mesh routing with and without
-    detours (a linear program) and the worst case of XY and O1TURN over all permutations.
+  * `scripts/routing_bounds.py`: the optimal throughput of mesh routing minimal and
+    non-minimal (a linear program) and the worst case of XY and O1TURN over all permutations.
 
-* **Any preference is safe** (`Examples/MeshTiered.lean`): Duato's, the west-first and the
-  north-last mesh are deadlock, livelock and starvation free under every tiered selection that
-  contains the throttled escape tier `Mesh.escTier`, for every size (`duatoTiers_correct`,
-  `westFirstTiers_correct`, `northLastTiers_correct`); `tieredMesh` is one instance.
+* **Any preference is safe** (`Examples/MeshPriority.lean`): Duato's, the west-first and the
+  north-last mesh are deadlock, livelock and starvation free under every priority selection that
+  contains the throttled escape level `Mesh.escPriority`, for every size (`duatoPriorities_correct`,
+  `westFirstPriorities_correct`, `northLastPriorities_correct`); `priorityMesh` is one instance.
   * `Routing/Reduce.lean`: `Network.wf_dep_of_reduction`, acyclic channel dependencies transfer
     along any map of channels that sends dependencies to chains of dependencies (a tool; nothing
     uses it yet).
@@ -238,25 +246,25 @@
     existing scheme on every pattern; under bit-complement traffic XY on both virtual channels is
     at the bisection limit of the model.
 
-* **A selection that performs, proved safe** (`Examples/MeshTiered.lean`). `tieredMesh` offers a
+* **A selection that performs, proved safe** (`Examples/MeshPriority.lean`). `priorityMesh` offers a
   packet its dimension-order hop (XY on virtual channel 0, YX on virtual channel 1), then the
   escape hop, then virtual channel 1, and throttles the sources: a packet leaves its injection
   channel only towards a router with at least `g` of its 8 outgoing channels free (channels leaving
   the mesh count as free). Duato's mesh,
   the west-first and the north-last mesh are deadlock, livelock and starvation free under it for
-  every size and every `g ≤ 8` (`duatoTiered_correct`, `westFirstTiered_correct`,
-  `northLastTiered_correct`). In simulation it has the best worst case over six traffic
+  every size and every `g ≤ 8` (`duatoPriority_correct`, `westFirstPriority_correct`,
+  `northLastPriority_correct`). In simulation it has the best worst case over six traffic
   patterns of the schemes compared on 8 × 8 and 16 × 16 meshes, and the highest peak
   throughput under four of them.
   * `Routing/Source.lean`: Duato's theorem for selections that hold packets back at their
     sources (`Network.SourceSel`, `Network.deadlockFreeWith_of_source`), starvation freedom
     under such a selection (`Network.StarvationFreeWith`,
-    `Network.starvationFreeWith_of_source`), and tiered selections (`Network.tieredSel`).
+    `Network.starvationFreeWith_of_source`), and priority selections (`Network.prioritySel`).
   * `Network.delivered_of_ranking` and `Network.reachable_finite` only need the selection to
     offer permitted hops.
-  * `scripts/routing_sim.py`: source throttling (`T<g>:`), the tiered selection, O1TURN, XY on
+  * `scripts/routing_sim.py`: source throttling (`T<g>:`), the priority selection, O1TURN, XY on
     both virtual channels, three more traffic patterns and `--bench`;
-    `scripts/validate_routing.py` runs random single-step runs of the tiered selection on small
+    `scripts/validate_routing.py` runs random single-step runs of the priority selection on small
     meshes for every threshold and finds no deadlock.
 
 * **Maximally adaptive on every mesh size** (`Examples/MeshMaximal.lean`). The west-first and

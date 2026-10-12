@@ -15,10 +15,10 @@ Run them from the repository root, for example `python3 scripts/plane_scaling.py
 | Script | What it measures | Results in |
 |---|---|---|
 | `routing_sim.py` | cycle-level mesh simulation of the routing functions of `Examples/Routing.lean` and `Examples/OptimalRouting.lean`; `--bench` prints the selection tables | [routing-adaptivity.md](../docs/routing-adaptivity.md) |
-| `routing_experiments.py` | further selections on the mesh, beyond `tieredMesh` | [routing-adaptivity.md](../docs/routing-adaptivity.md) |
+| `routing_experiments.py` | further selections on the mesh, beyond `priorityMesh` | [routing-adaptivity.md](../docs/routing-adaptivity.md) |
 | `routing_graph_sim.py` | the same mechanics on any graph of radix ≤ 4 (mesh, torus, express links, …) | [topologies.md](../docs/topologies.md) |
 | `flow_control_experiments.py` | reallocating the same buffer storage on the mesh | [topologies.md](../docs/topologies.md) |
-| `torus_experiments.py` | routing schemes and detour rules on the 8 × 8 torus | [topologies.md](../docs/topologies.md) |
+| `torus_experiments.py` | routing schemes and rules for choosing intermediates on the 8 × 8 torus | [topologies.md](../docs/topologies.md) |
 | `torus_final.py` | the final torus comparison (4 seeds) | [topologies.md](../docs/topologies.md) |
 | `torus_significance.py` | the same with standard errors (8 fresh seeds) | [topologies.md](../docs/topologies.md) |
 | `plane_scaling.py` | throughput per connection with `m` connections: planes, shared planes, replication | [scaling.md](../docs/scaling.md) |

@@ -13,12 +13,12 @@ This module gathers 3 parts:
 3. `Symmetric.Cube` — the hypercube and worst-case traffic.
 
 On a network whose automorphisms act transitively on the links (the torus, the hypercube),
-traffic invariant under the automorphisms is routed optimally by a **minimal** flow (no
-detours), and the optimum is the total capacity divided by the traffic times the hop distance.
+traffic invariant under the automorphisms is routed optimally by a **minimal** flow, and the optimum
+is the total capacity divided by the traffic times the hop distance.
 
 **General theory** (any network `N`, traffic `dem`, distance `dist`):
 
-* `IsHopDistance N dist` : `dist d d = 0` and `dist u d - dist v d ≤ 1` on every link of positive
+* `IsHopPotential N dist` : `dist d d = 0` and `dist u d - dist v d ≤ 1` on every link of positive
   capacity; `hopDemand dem dist = ∑ s d, dem s d * dist s d`.
 * `hop_bound` : any routing has `θ * ∑ dem * dist ≤ ∑ cap` (the potential bound, length `1`).
 * `minimal_load_total` : a flow in which every used link brings its commodity one hop closer

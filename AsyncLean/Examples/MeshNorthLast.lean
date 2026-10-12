@@ -25,7 +25,7 @@ has no eastward or westward hop left, so after it only northward escape hops fol
 
 Under wormhole switching Duato's condition fails for the north-last mesh with these escape
 channels: a packet that took a southward hop on virtual channel 0 while it still had to go east
-or west can turn on virtual channel 0 after detours on virtual channel 1, and these indirect
+or west can turn on virtual channel 0 after adaptive hops on virtual channel 1, and these indirect
 dependencies close cycles.  The west-first mesh does not have this problem
 (`westFirstMesh_wormholeCorrect`).
 -/

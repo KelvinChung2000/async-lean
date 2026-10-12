@@ -15,7 +15,7 @@ carries a rate of traffic up to its capacity `cap u v`, and a traffic matrix `de
 from `s` to `d` per unit of throughput) is **routable at throughput `θ`** if a multicommodity
 flow (one commodity per destination) carries `θ * dem` within the capacities (`Fluid.Flow`).
 The throughput a network reaches with packets is at most what it reaches in the fluid model,
-under any routing, adaptive or not, with or without detours.
+under any routing, adaptive or not, minimal or not.
 
 The upper bounds here are all instances of one argument (`Fluid.potential_bound`, the weak
 duality of the maximum concurrent flow problem): give every vertex a potential `φ d v` towards
@@ -106,7 +106,7 @@ def SupportedOn (F : Flow N dem θ) (S : V → V → V → Prop) : Prop :=
   ∀ d u v, 0 < F.f d u v → S d u v
 
 /-- The flow is **minimal** for the distance `dist`: every link a commodity uses brings it
-strictly closer to its destination (no detours). -/
+strictly closer to its destination (minimal). -/
 def Minimal (F : Flow N dem θ) (dist : V → V → ℚ) : Prop :=
   F.SupportedOn fun d u v => dist v d < dist u d
 
@@ -193,7 +193,7 @@ theorem manhattan_sub_le (p q r : ℤ × ℤ) :
 length of every link of positive capacity, at least the Manhattan distance of its ends.  If
 `θ * dem` is routable, the traffic times the distance it must travel is at most the capacity
 times the wire: `θ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v * len u v`.  Every topology and
-every routing (adaptive, with detours, split over many paths) is covered. -/
+every routing (adaptive, non-minimal, split over many paths) is covered. -/
 theorem wire_bound {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : Routable N dem θ)
     (pos : V → ℤ × ℤ) (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (hwire : ∀ u v, 0 < N.cap u v → manhattan (pos u) (pos v) ≤ len u v) :

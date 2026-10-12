@@ -5,37 +5,37 @@ import AsyncLean.Flow.Topologies
 import Mathlib.Logic.Relation
 
 /-!
-# Detours never help for any traffic if and only if the network is a tree
+# Non-minimal routing never helps for any traffic if and only if the network is a tree
 
 A finite simple graph (`UGraph`) gives a network in the fluid model (`UGraph.net c`): capacity
 `c > 0` in both directions of every edge.  A routing is **minimal** (`Flow.Minimal`) for the hop
 distance `D` of the graph (`UGraph.IsHopDist`: the Bellman–Ford equations; `UGraph.hopDist`, the
 length of a shortest walk, satisfies them on a connected graph, `isHopDist_hopDist`) if every
-link it uses brings the traffic one hop closer to its destination.  Detours never help for a
-traffic matrix `dem` if every throughput routable for `dem` is reached by a minimal flow.
+link it uses brings the traffic one hop closer to its destination.  Non-minimal routing never helps
+for a traffic matrix `dem` if every throughput routable for `dem` is reached by a minimal flow.
 
 A **tree** (`UGraph.IsTree`) is a connected graph whose every edge is a bridge (`AllBridges`:
 removing the edge `{u, v}` disconnects `u` from `v`; equivalently, no edge lies on a cycle).
 
 * `UGraph.AllBridges.minimal_of_routable` (and `UGraph.IsTree.minimal_of_routable`) :
-  **trees: detours never help.**  For every nonnegative traffic matrix and every `θ ≥ 0`
-  routable in a tree, the **tree flow** (`treeFlowF`: every vertex forwards each commodity to its
-  unique next hop) routes it at `θ`, minimally.  On the link `a → b` it carries `θ` times the
+  **trees: non-minimal routing never helps.**  For every nonnegative traffic matrix and every
+  `θ ≥ 0` routable in a tree, the **tree flow** (`treeFlowF`: every vertex forwards each commodity
+  to its unique next hop) routes it at `θ`, minimally.  On the link `a → b` it carries `θ` times the
   traffic from `a`'s side of the edge to `b`'s side; that side's only outgoing link is `a → b`
   (`AllBridges.cut_unique`), so the cut bound (`cut_bound`) keeps it within `c`.  The local
   facts behind it: the two ends of an edge are never at the same distance from a vertex
   (`AllBridges.ne_of_adj`), and every vertex has a unique next hop towards every other
   (`AllBridges.unique_desc`); both hold because two different descents would close a cycle.
-* `UGraph.IsHopDist.detour_helps` : **cycles: detours help.**  If the edge `u — v` lies on a
-  cycle, the single-pair traffic `u → v` (`pairDem`) is routable at `2c` (`c` on the edge, `c`
-  around the cycle along a path, `exists_pathFlow`), but every minimal flow reaches at most `c`
+* `UGraph.IsHopDist.nonminimal_helps` : **cycles: non-minimal routing helps.**  If the edge `u — v`
+  lies on a cycle, the single-pair traffic `u → v` (`pairDem`) is routable at `2c` (`c` on the edge,
+  `c` around the cycle along a path, `exists_pathFlow`), but every minimal flow reaches at most `c`
   (`minimal_pair_le`: the edge is the only shortest path).
 * `UGraph.IsHopDist.minimal_optimal_iff`, `UGraph.minimal_optimal_iff_isTree` : **the
   characterisation.**  For a connected graph with its hop distance:
   `(∀ dem ≥ 0, ∀ θ ≥ 0, Routable dem θ → ∃ minimal flow at θ) ↔ IsTree`.
 * Examples: the path on `Fin k` is a tree (`pathGraph_isTree`, `path_minimal_optimal`); the
   4-cycle is not (`cycle4_not_isTree`), and on it the traffic `0 → 1` is routable at `2c` while
-  minimal flows reach only `c` (`cycle4_detour`).
+  minimal flows reach only `c` (`cycle4_nonminimal`).
 
 All results are over `ℚ` and general in the graph, the capacity and the traffic matrix.
 -/
@@ -418,8 +418,8 @@ theorem treeFlow_capacity {c : ℚ} (hc : 0 ≤ c) {dem : V → V → ℚ} (hdem
       unfold treeFlowF; rw [ite_eq_right (fun h' => hab h'.1)]
     simp [h0, net, hab]
 
-/-- **Trees: detours never help.**  In a graph whose every edge is a bridge (with its hop
-distance `D`; the graph is then a tree), every nonnegative traffic matrix routable at `θ ≥ 0` is
+/-- **Trees: non-minimal routing never helps.**  In a graph whose every edge is a bridge (with its
+hop distance `D`; the graph is then a tree), every nonnegative traffic matrix routable at `θ ≥ 0` is
 routed at `θ` by a minimal flow: the tree flow, in which every vertex forwards each commodity to
 its unique next hop. -/
 theorem minimal_of_routable {c : ℚ} (hc : 0 ≤ c) {dem : V → V → ℚ}
@@ -440,7 +440,7 @@ theorem minimal_of_routable {c : ℚ} (hc : 0 ≤ c) {dem : V → V → ℚ}
 end AllBridges
 
 
-/-! ### Graphs with a cycle: a detour doubles the throughput of an edge -/
+/-! ### Graphs with a cycle: non-minimal routing doubles the throughput of an edge -/
 
 /-- **A path from a walk**: an `R`-walk of length at most `n` from `a` to `b` yields a unit
 flow from `a` to `b` on the links of `R`, at most `1` on every link (a path, not a walk: it
@@ -500,7 +500,7 @@ namespace IsHopDist
 variable {D : V → V → ℕ} (hD : G.IsHopDist D)
 include hD
 
-/-- **Without detours, an edge carries at most its capacity**: a minimal flow of the
+/-- **Under minimal routing, an edge carries at most its capacity**: a minimal flow of the
 single-pair traffic between the ends of an edge `u — v` reaches at most `θ ≤ c`.  Its only
 shortest path is the edge itself (`D u v = 1`), so commodity `v` leaves `u` only on `u → v`. -/
 theorem minimal_pair_le {u v : V} (huv : G.Adj u v) {c : ℚ} (hc : 0 ≤ c) {θ : ℚ}
@@ -543,9 +543,9 @@ theorem minimal_pair_le {u v : V} (huv : G.Adj u v) {c : ℚ} (hc : 0 ≤ c) {θ
 
 end IsHopDist
 
-/-- **With a detour, an edge carries twice its capacity**: if the ends of the edge `u — v` are
-still joined after removing it (the edge lies on a cycle), the single-pair traffic `u → v` is
-routable at `2c`: `c` on the edge, `c` on a path around the cycle. -/
+/-- **With non-minimal routing, an edge carries twice its capacity**: if the ends of the edge
+`u — v` are still joined after removing it (the edge lies on a cycle), the single-pair traffic
+`u → v` is routable at `2c`: `c` on the edge, `c` on a path around the cycle. -/
 theorem routable_pair_two {c : ℚ} (hc : 0 ≤ c) {u v : V} (huv : G.Adj u v)
     (hcyc : Relation.ReflTransGen (G.del u v) u v) :
     Routable (G.net c hc) (pairDem u v) (2 * c) := by
@@ -590,10 +590,10 @@ namespace IsHopDist
 variable {D : V → V → ℕ} (hD : G.IsHopDist D)
 include hD
 
-/-- **Cycles: detours help.**  If the edge `u — v` lies on a cycle (its ends are still joined
-after removing it), the single-pair traffic `u → v` is routable at `2c`, while every minimal
+/-- **Cycles: non-minimal routing helps.**  If the edge `u — v` lies on a cycle (its ends are still
+joined after removing it), the single-pair traffic `u → v` is routable at `2c`, while every minimal
 flow of it reaches at most `c`. -/
-theorem detour_helps {c : ℚ} (hc : 0 < c) {u v : V} (huv : G.Adj u v)
+theorem nonminimal_helps {c : ℚ} (hc : 0 < c) {u v : V} (huv : G.Adj u v)
     (hcyc : Relation.ReflTransGen (G.del u v) u v) :
     Routable (G.net c hc.le) (pairDem u v) (2 * c) ∧
       ∀ θ (F : Flow (G.net c hc.le) (pairDem u v) θ),
@@ -606,13 +606,13 @@ theorem not_minimal_optimal {c : ℚ} (hc : 0 < c) {u v : V} (huv : G.Adj u v)
     ¬ ∀ θ, 0 ≤ θ → Routable (G.net c hc.le) (pairDem u v) θ →
       ∃ F : Flow (G.net c hc.le) (pairDem u v) θ, F.Minimal (fun a b => (D a b : ℚ)) := by
   intro h
-  obtain ⟨hr, hmin⟩ := hD.detour_helps hc huv hcyc
+  obtain ⟨hr, hmin⟩ := hD.nonminimal_helps hc huv hcyc
   obtain ⟨F, hF⟩ := h (2 * c) (by linarith) hr
   have := hmin _ F hF
   linarith
 
-/-- **Detours never help for any traffic iff the network is a tree.**  For a graph with hop
-distance `D` (so a connected graph) and links of capacity `c > 0` both ways: every nonnegative
+/-- **Non-minimal routing never helps for any traffic iff the network is a tree.**  For a graph with
+hop distance `D` (so a connected graph) and links of capacity `c > 0` both ways: every nonnegative
 traffic matrix routable at a throughput `θ ≥ 0` is routed at `θ` by a minimal flow if and only
 if the graph is a tree. -/
 theorem minimal_optimal_iff {c : ℚ} (hc : 0 < c) :
@@ -627,15 +627,15 @@ theorem minimal_optimal_iff {c : ℚ} (hc : 0 < c) :
 
 end IsHopDist
 
-/-- **Detours never help for any traffic iff the network is a tree**, for a connected graph
-with its hop distance `hopDist`. -/
+/-- **Non-minimal routing never helps for any traffic iff the network is a tree**, for a connected
+graph with its hop distance `hopDist`. -/
 theorem minimal_optimal_iff_isTree (hG : G.Connected) {c : ℚ} (hc : 0 < c) :
     (∀ dem : V → V → ℚ, (∀ s d, 0 ≤ dem s d) → ∀ θ, 0 ≤ θ → Routable (G.net c hc.le) dem θ →
       ∃ F : Flow (G.net c hc.le) dem θ, F.Minimal (fun a b => (G.hopDist a b : ℚ))) ↔
       G.IsTree :=
   (isHopDist_hopDist hG).minimal_optimal_iff hc
 
-/-- **Trees: detours never help** (with the tree's hop distance `hopDist`). -/
+/-- **Trees: non-minimal routing never helps** (with the tree's hop distance `hopDist`). -/
 theorem IsTree.minimal_of_routable (hT : G.IsTree) {c : ℚ} (hc : 0 ≤ c) {dem : V → V → ℚ}
     (hdem : ∀ s d, 0 ≤ dem s d) {θ : ℚ} (hθ : 0 ≤ θ) (h : Routable (G.net c hc) dem θ) :
     ∃ F : Flow (G.net c hc) dem θ, F.Minimal (fun a b => (G.hopDist a b : ℚ)) :=
@@ -707,8 +707,8 @@ theorem pathGraph_isTree (k : ℕ) : (pathGraph k).IsTree := by
         omega) hcyc (le_refl _)
       omega
 
-/-- **On a path, detours never help**: every nonnegative traffic matrix routable at `θ ≥ 0` is
-routed at `θ` by a minimal flow. -/
+/-- **On a path, non-minimal routing never helps**: every nonnegative traffic matrix routable at
+`θ ≥ 0` is routed at `θ` by a minimal flow. -/
 theorem path_minimal_optimal (k : ℕ) {c : ℚ} (hc : 0 ≤ c) {dem : Fin k → Fin k → ℚ}
     (hdem : ∀ s d, 0 ≤ dem s d) {θ : ℚ} (hθ : 0 ≤ θ)
     (h : Routable ((pathGraph k).net c hc) dem θ) :
@@ -735,13 +735,13 @@ theorem cycle4_cycle : Relation.ReflTransGen (cycle4.del 0 1) 0 1 :=
 /-- **The 4-cycle is not a tree.** -/
 theorem cycle4_not_isTree : ¬ cycle4.IsTree := fun h => h.2 0 1 (by decide) cycle4_cycle
 
-/-- **On the 4-cycle, detours help**: the traffic `0 → 1` is routable at `2c` (half of it around
-the cycle), while every minimal flow of it reaches at most `c`. -/
-theorem cycle4_detour {c : ℚ} (hc : 0 < c) :
+/-- **On the 4-cycle, non-minimal routing helps**: the traffic `0 → 1` is routable at `2c` (half of
+it around the cycle), while every minimal flow of it reaches at most `c`. -/
+theorem cycle4_nonminimal {c : ℚ} (hc : 0 < c) :
     Routable (cycle4.net c hc.le) (pairDem 0 1) (2 * c) ∧
       ∀ θ (F : Flow (cycle4.net c hc.le) (pairDem 0 1) θ),
         F.Minimal (fun a b => (ringDist a b : ℚ)) → θ ≤ c :=
-  cycle4_isHopDist.detour_helps hc (by decide) cycle4_cycle
+  cycle4_isHopDist.nonminimal_helps hc (by decide) cycle4_cycle
 
 end Fluid
 

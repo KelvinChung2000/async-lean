@@ -38,7 +38,7 @@ import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
-import AsyncLean.Routing.GraphDetour
+import AsyncLean.Routing.GraphTwoPhase
 import AsyncLean.Routing.Planes
 import AsyncLean.Routing.SharedPlanes
 import AsyncLean.Routing.Throughput
@@ -114,7 +114,7 @@ open LTS
   Network.delivered_of_ranking Network.starvationFree_of_escape_ranking
   Network.reachable_finite Network.exists_leave
   Network.EscapeSel.sourceSel Network.movable_of_source Network.deadlockFreeWith_of_source
-  Network.starvationFreeWith_of_source Network.mem_tieredSel Network.tieredSel_conserving
+  Network.starvationFreeWith_of_source Network.mem_prioritySel Network.prioritySel_conserving
   Network.wf_dep_of_reduction
   GraphData.correct GraphData.correct_of_escapeSel GraphData.correct_of_sourceSel
   GraphData.route_adj GraphData.adaptive_ne_nil GraphData.exists_correct GraphData.escRank_lt
@@ -131,21 +131,23 @@ open LTS
   GraphData.budget_route_adj GraphData.return_mem_route GraphData.budgetNet_route_zero
   GraphData.exists_budget_correct GraphData.budget_esc_wf GraphData.budget_rank_lt
   GraphData.budget_closed GraphData.rank_lt_rankBound
-  GraphData.detour_correct GraphData.detour_correct_of_escapeSel GraphData.detour_correct_of_sourceSel
-  GraphData.detour_underLoad_of_escapeSel GraphData.detour_underLoad GraphData.detour_underLoad_of_sourceSel
-  GraphData.detour_hops_le GraphData.detour_hops_le_some GraphData.detour_phase_hops_le
-  GraphData.detour_route_adj GraphData.detourNet_route_none GraphData.exists_detour_correct
+  GraphData.twoPhase_correct GraphData.twoPhase_correct_of_escapeSel
+      GraphData.twoPhase_correct_of_sourceSel
+  GraphData.twoPhase_underLoad_of_escapeSel GraphData.twoPhase_underLoad
+      GraphData.twoPhase_underLoad_of_sourceSel
+  GraphData.twoPhase_hops_le GraphData.twoPhase_hops_le_some GraphData.twoPhase_phase_hops_le
+  GraphData.twoPhase_route_adj GraphData.twoPhaseNet_route_none GraphData.exists_twoPhase_correct
   Network.SafeCert.correct Network.SafeCert.underLoad Network.SafeCert.underLoad_of_valid
   Network.SafeCert.sourceSel Network.SafeCert.planes_dep Network.SafeCert.planes_esc_wf
   Network.planes_correct Network.planes_underLoad Network.planes_step Network.planes_path_one
   Network.planes_path Network.ejections_flatMap Network.copies_path Network.planes_reachable_iff
   Network.planes_reachable_plane GraphData.planes_correct GraphData.planes_budget_correct
-  GraphData.planes_detour_correct GraphData.planes_detour_sourceSel
+  GraphData.planes_twoPhase_correct GraphData.planes_twoPhase_sourceSel
   GraphData.shared_closed GraphData.shared_dep GraphData.shared_esc_wf GraphData.shared_correct
   GraphData.shared_sourceSel GraphData.planes_route_sub
   Network.SafeCert.replicate_dep Network.replicate_correct Network.replicate_sourceSel
-  GraphData.replicated_correct GraphData.replicated_detour_correct
-  GraphData.replicated_detour_sourceSel GraphData.shared_slots_correct
+  GraphData.replicated_correct GraphData.replicated_twoPhase_correct
+  GraphData.replicated_twoPhase_sourceSel GraphData.shared_slots_correct
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
@@ -291,7 +293,7 @@ open LTS
   Fluid.mesh_cap_le Fluid.wire_bound Fluid.grid_wire_bound_opt Fluid.mesh_per_wire
   Fluid.grid_wire_factor_lt Fluid.mesh_opt_eight Fluid.grid_wire_bound_eight
 
--- Fluid model: the mesh's optimum for every size; no detours needed under uniform traffic
+-- Fluid model: the mesh's optimum for every size; minimal routing suffices under uniform traffic
 #assert_standard_axioms
   Fluid.mesh_routable_odd Fluid.mesh_cut Fluid.mesh_upper_odd Fluid.mesh_opt_odd
   Fluid.mesh_opt_all Fluid.xyFlow_minimal Fluid.xyRouting_minimal Fluid.xyRoutingOdd_minimal
@@ -308,7 +310,7 @@ open LTS
 #assert_standard_axioms
   Fluid.transpose8_opt Fluid.transpose8_minimal Fluid.shuffle8_opt Fluid.shuffle8_minimal
   Fluid.bitrev8_opt Fluid.bitrev8_minimal Fluid.hotspot8_opt Fluid.hotspot8_minimal_opt
-  Fluid.hotspot8_detour_gain
+  Fluid.hotspot8_nonminimal_gain
 
 -- Fluid model: Valiant's bound on every symmetric network; worst cases of the torus and hypercube
 #assert_standard_axioms
@@ -334,7 +336,7 @@ open LTS
   Network.TimedRun.path_occ Network.TimedRun.ejected_ge Network.planesPlacement_fits
   Network.planesPlacement_cap Network.planesTimed Network.planesTimed_injected
   GraphData.placement_fits GraphData.placement_cap GraphData.netPlacement_fits
-  GraphData.budgetPlacement_fits GraphData.detourPlacement_fits Network.scoreSel_valid
+  GraphData.budgetPlacement_fits GraphData.twoPhasePlacement_fits Network.scoreSel_valid
   Network.Correct.scoreSel
 
 -- Fluid model: backpressure is stable below the fluid optimum, no scheduler above it
@@ -344,7 +346,7 @@ open LTS
   Fluid.Run.Q_nonneg Fluid.Run.backlog_succ Fluid.Run.delivered_sum Fluid.Run.drift
   Fluid.Run.lyapunov_bounded Fluid.Run.backpressure_stable Fluid.Run.backpressure_optimal
   Fluid.Run.totalFlow Fluid.Run.potential_bound Fluid.Run.cut_bound Fluid.Run.hop_bound
-  Fluid.IsHopDistance.copies Fluid.Run.copies_hop_bound Fluid.bpRates_maxWeight
+  Fluid.IsHopPotential.copies Fluid.Run.copies_hop_bound Fluid.bpRates_maxWeight
   Fluid.bpRates_feasible Fluid.sendAll_sum Fluid.Run.ofArrivals
   Fluid.Run.ofArrivals_backpressure Fluid.mesh_backpressure Fluid.torus_backpressure
   Fluid.cube_backpressure Fluid.mesh_backpressure_exists Fluid.mesh_upper_of_cut
@@ -368,9 +370,9 @@ open LTS
 -- Fluid model: minimal routing is optimal for every traffic matrix iff the network is a tree
 #assert_standard_axioms
   Fluid.UGraph.AllBridges.minimal_of_routable Fluid.UGraph.IsTree.minimal_of_routable
-  Fluid.UGraph.IsHopDist.detour_helps Fluid.UGraph.IsHopDist.not_minimal_optimal
+  Fluid.UGraph.IsHopDist.nonminimal_helps Fluid.UGraph.IsHopDist.not_minimal_optimal
   Fluid.UGraph.IsHopDist.minimal_optimal_iff Fluid.UGraph.minimal_optimal_iff_isTree
-  Fluid.pathGraph_isTree Fluid.path_minimal_optimal Fluid.cycle4_not_isTree Fluid.cycle4_detour
+  Fluid.pathGraph_isTree Fluid.path_minimal_optimal Fluid.cycle4_not_isTree Fluid.cycle4_nonminimal
 
 -- Fluid model: uniform traffic on arc-transitive networks; the torus and the hypercube
 #assert_standard_axioms
@@ -382,12 +384,12 @@ open LTS
 
 -- Fluid model: exact optima on the 8 x 8 torus and the 6-cube (kernel-checked certificates)
 #assert_standard_axioms
-  Fluid.torusTornado_opt Fluid.torusTornado_minimal_opt Fluid.torusTornado_detour_gain
-  Fluid.torusShuffle_opt Fluid.torusShuffle_minimal_opt Fluid.torusShuffle_detour_gain
-  Fluid.torusTranspose_opt Fluid.torusTranspose_minimal_opt Fluid.torusTranspose_detour_gain
-  Fluid.torusNeighbor_opt Fluid.torusNeighbor_minimal_opt Fluid.torusNeighbor_detour_gain
-  Fluid.torusBitrev_opt Fluid.torusBitrev_minimal_opt Fluid.torusBitrev_detour_gain
-  Fluid.cubeShuffle_opt Fluid.cubeShuffle_minimal_opt Fluid.cubeShuffle_detour_gain
+  Fluid.torusTornado_opt Fluid.torusTornado_minimal_opt Fluid.torusTornado_nonminimal_gain
+  Fluid.torusShuffle_opt Fluid.torusShuffle_minimal_opt Fluid.torusShuffle_nonminimal_gain
+  Fluid.torusTranspose_opt Fluid.torusTranspose_minimal_opt Fluid.torusTranspose_nonminimal_gain
+  Fluid.torusNeighbor_opt Fluid.torusNeighbor_minimal_opt Fluid.torusNeighbor_nonminimal_gain
+  Fluid.torusBitrev_opt Fluid.torusBitrev_minimal_opt Fluid.torusBitrev_nonminimal_gain
+  Fluid.cubeShuffle_opt Fluid.cubeShuffle_minimal_opt Fluid.cubeShuffle_nonminimal_gain
   Fluid.torusBitcomp_opt Fluid.torusBitcomp_minimal Fluid.torusBitcomp_minimal_opt
   Fluid.cubeTranspose_opt Fluid.cubeTranspose_minimal Fluid.cubeTranspose_minimal_opt
   Fluid.cubeBitrev_opt Fluid.cubeBitrev_minimal Fluid.cubeBitrev_minimal_opt Fluid.cubeBitcomp_opt

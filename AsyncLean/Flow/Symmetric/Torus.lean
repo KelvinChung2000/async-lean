@@ -453,7 +453,7 @@ theorem torus_uniform_hop (k : ℕ) (hk : 3 ≤ k) :
 
 /-- **Uniform traffic on the torus** (`k ≥ 3`): the optimal throughput, over all routings, is
 `16 (k² - 1) / k³` for even `k` and `16 / k` for odd `k`, and it is reached by a minimal flow
-(no detours) loading every link to exactly its capacity. -/
+(minimal) loading every link to exactly its capacity. -/
 theorem torus_uniform_opt (k : ℕ) (hk : 3 ≤ k) :
     IsGreatest {θ : ℚ | Routable (torusNet k) (uniform k) θ}
         (if Even k then 16 * ((k : ℚ) ^ 2 - 1) / k ^ 3 else 16 / k) ∧

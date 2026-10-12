@@ -106,8 +106,8 @@ added.
 ## A selection that performs
 
 Maximal adaptivity says which hops a packet *may* take; throughput under load depends on which
-one it *does* take. `tieredMesh` (`Examples/MeshTiered.lean`) offers each packet the free hops
-of the first tier that has one: its dimension-order hop (XY on virtual channel 0, YX on virtual
+one it *does* take. `priorityMesh` (`Examples/MeshPriority.lean`) offers each packet the free hops
+of the first priority level that has one: its dimension-order hop (XY on virtual channel 0, YX on virtual
 channel 1, so flows in different orders share no channel), then the escape hop, then any hop on
 virtual channel 1. It also throttles the sources: a packet leaves its injection channel only
 towards a router with at least `g` of its 8 outgoing channels free (channels leaving the mesh count as free). Throttling refuses free
@@ -115,11 +115,11 @@ escape hops, so Duato's condition for selections fails; `Network.deadlockFreeWit
 (`Routing/Source.lean`) proves Duato's theorem for selections that may hold packets back at
 their sources as long as a source lets its packet go once the rest of the network is empty.
 Duato's mesh, the west-first and the north-last mesh are deadlock, livelock and starvation free
-under `tieredMesh` for every size and every `g ≤ 8` (`duatoTiered_correct`,
-`westFirstTiered_correct`, `northLastTiered_correct`). Only the throttled escape tier
-(`Mesh.escTier`) matters for this: the same holds for **every** tier list containing it,
-whatever the other tiers prefer and whatever they read of the network (`duatoTiers_correct`,
-`westFirstTiers_correct`, `northLastTiers_correct`), so a new preference costs no new proof.
+under `priorityMesh` for every size and every `g ≤ 8` (`duatoPriority_correct`,
+`westFirstPriority_correct`, `northLastPriority_correct`). Only the throttled escape level
+(`Mesh.escPriority`) matters for this: the same holds for **every** level list containing it,
+whatever the other levels prefer and whatever they read of the network (`duatoPriorities_correct`,
+`westFirstPriorities_correct`, `northLastPriorities_correct`), so a new preference costs no new proof.
 
 Peak accepted throughput (packets per node and cycle, the largest over a sweep of offered
 loads; `python3 scripts/routing_sim.py --bench` prints the underlying tables):
@@ -131,12 +131,12 @@ loads; `python3 scripts/routing_sim.py --bench` prints the underlying tables):
 | XY on both virtual channels | 0.227 | 0.133 | 0.125 | 0.096 | 0.082 | **0.120** | 0.60 |
 | O1TURN | 0.174 | 0.125 | 0.107 | 0.087 | 0.090 | 0.100 | 0.54 |
 | west-first mesh, random selection | 0.200 | **0.221** | 0.198 | 0.113 | 0.080 | 0.080 | 0.67 |
-| **`tieredMesh`, `g = 4`** | **0.237** | 0.202 | **0.199** | **0.140** | **0.118** | 0.108 | **0.90** |
+| **`priorityMesh`, `g = 4`** | **0.237** | 0.202 | **0.199** | **0.140** | **0.118** | 0.108 | **0.90** |
 
-On 8 × 8 meshes the picture is the same (`tieredMesh` first under uniform, shuffle, bit-reversal
+On 8 × 8 meshes the picture is the same (`priorityMesh` first under uniform, shuffle, bit-reversal
 and hotspot traffic, worst case 0.87 of the best against 0.84 for the next scheme); the
 west-first mesh with a random selection is 15 % faster under transpose traffic and XY on both
-virtual channels 12 % faster under bit-complement traffic. Past saturation `tieredMesh` keeps
+virtual channels 12 % faster under bit-complement traffic. Past saturation `priorityMesh` keeps
 its throughput, where Duato's mesh with a random selection loses up to half of it (16 × 16,
 uniform: 0.14 at an offered 0.3). On 4 × 4 meshes, which saturate late, the throttling costs it
 3 to 5 % against the random selections. No selection among those tried was best on every
@@ -150,7 +150,7 @@ traffic collapse, and bit-complement traffic favours keeping every packet on its
 | 8 × 8 mesh | uniform | transpose | shuffle | bit reversal | hotspot | bit complement |
 |---|---|---|---|---|---|---|
 | best existing scheme | 0.492 | **0.447** (west-first) | 0.524 | 0.345 | 0.373 | **0.298** (XY on both) |
-| `tieredMesh` | 0.506 | 0.399 | 0.527 | 0.374 | **0.386** | 0.265 |
+| `priorityMesh` | 0.506 | 0.399 | 0.527 | 0.374 | **0.386** | 0.265 |
 | ... with the west-first hops last | 0.507 | 0.429 | 0.543 | 0.369 | 0.379 | 0.250 |
 | global view (least occupied path) | **0.508** | 0.402 | 0.540 | 0.376 | 0.382 | 0.263 |
 | sources learning their mode | 0.495 | 0.418 | **0.546** | **0.399** | 0.374 | 0.249 |
@@ -161,7 +161,7 @@ Only the global-view row and the west-first row are selections the theorems abov
 read nothing but the configuration); learning sources, the mode-switching controller, two-phase
 XY, patience and distance rules keep per-packet or global state, which a `Selection` cannot
 read. Each of them always admits the free escape hop, so the same argument should apply, but
-that is not proved. Seeing the whole network does not help (the global-view row matches `tieredMesh`), so the gaps
+that is not proved. Seeing the whole network does not help (the global-view row matches `priorityMesh`), so the gaps
 are not for lack of information. Under bit-complement traffic every packet crosses both
 bisections; XY on both virtual channels pushes about 0.6 packets per cycle through each
 bisection channel, which is what a saturated chain of one-packet channels carries in this model

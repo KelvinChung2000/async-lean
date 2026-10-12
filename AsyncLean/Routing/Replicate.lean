@@ -36,10 +36,10 @@ its escape channel.
 * `Network.replicate_correct`, `Network.replicate_underLoad` : deadlock and livelock free under
   every valid selection, starvation free under strong fairness, and delivering under saturation.
 * `Network.slots` : copies `(c, k)` for `k < n c` of every channel `c`.
-* `GraphData.replicated_correct`, `GraphData.replicated_detour_correct` : on every finite connected
-  graph, the bounded-return and the detour networks with `n c ≥ 1` copies of every channel `c`; for
-  example one escape channel, `2m - 1` adaptive channels and `m` injection channels per link
-  and node, the `shared` scheme of the simulation (`GraphData.sharedSlots`).
+* `GraphData.replicated_correct`, `GraphData.replicated_twoPhase_correct` : on every finite
+  connected graph, the bounded-return and the two-phase networks with `n c ≥ 1` copies of every
+  channel `c`; for example one escape channel, `2m - 1` adaptive channels and `m` injection channels
+  per link and node, the `shared` scheme of the simulation (`GraphData.sharedSlots`).
 -/
 
 namespace AsyncLean
@@ -216,28 +216,28 @@ theorem replicated_correct (G : GraphData V) (B : ℕ) (n : GChan V → ℕ) (hn
         ((G.budgetNet B).replicate (slots n hn)).StarvationFreeUnderLoad sel (fun _ => False) :=
   replicate_correct (G.budgetCert B) (slots n hn)
 
-/-- **The detour network with any number of copies of every channel**, on every graph. -/
-theorem replicated_detour_correct (G : GraphData V) (B : ℕ) (W : V → V → List (Option V))
+/-- **The two-phase network with any number of copies of every channel**, on every graph. -/
+theorem replicated_twoPhase_correct (G : GraphData V) (B : ℕ) (W : V → V → List (Option V))
     (n : GChan V → ℕ) (hn : ∀ c, 0 < n c) :
-    ((G.detourNet B W).replicate (slots n hn)).Correct ∧
-      ((G.detourNet B W).replicate (slots n hn)).StarvationFree ∧
-      ∀ sel, ((G.detourNet B W).replicate (slots n hn)).ValidSel sel →
-        ((G.detourNet B W).replicate (slots n hn)).StarvationFreeUnderLoad sel (fun _ => False) :=
-  replicate_correct (G.detourCert B W) (slots n hn)
+    ((G.twoPhaseNet B W).replicate (slots n hn)).Correct ∧
+      ((G.twoPhaseNet B W).replicate (slots n hn)).StarvationFree ∧
+      ∀ sel, ((G.twoPhaseNet B W).replicate (slots n hn)).ValidSel sel →
+        ((G.twoPhaseNet B W).replicate (slots n hn)).StarvationFreeUnderLoad sel (fun _ => False) :=
+  replicate_correct (G.twoPhaseCert B W) (slots n hn)
 
-/-- **The detour network, replicated, with throttled sources**: no hop leads into a copy of an
+/-- **The two-phase network, replicated, with throttled sources**: no hop leads into a copy of an
 injection channel, so the source-throttling guarantee carries over. -/
-theorem replicated_detour_sourceSel (G : GraphData V) (B : ℕ) (W : V → V → List (Option V))
+theorem replicated_twoPhase_sourceSel (G : GraphData V) (B : ℕ) (W : V → V → List (Option V))
     (n : GChan V → ℕ) (hn : ∀ c, 0 < n c)
     {sel : Selection (GChan V × ℕ) (V × Option V × ℕ)}
-    (hsel : ((G.detourNet B W).replicate (slots n hn)).SourceSel
-      ((G.detourCert B W).replicate (slots n hn)).esc (fun c' => c'.1.isInj = true) sel) :
-    ((G.detourNet B W).replicate (slots n hn)).DeadlockFreeWith sel ∧
-      ((G.detourNet B W).replicate (slots n hn)).LivelockFreeWith sel ∧
-      ((G.detourNet B W).replicate (slots n hn)).StarvationFreeUnderLoad sel
+    (hsel : ((G.twoPhaseNet B W).replicate (slots n hn)).SourceSel
+      ((G.twoPhaseCert B W).replicate (slots n hn)).esc (fun c' => c'.1.isInj = true) sel) :
+    ((G.twoPhaseNet B W).replicate (slots n hn)).DeadlockFreeWith sel ∧
+      ((G.twoPhaseNet B W).replicate (slots n hn)).LivelockFreeWith sel ∧
+      ((G.twoPhaseNet B W).replicate (slots n hn)).StarvationFreeUnderLoad sel
         (fun c' => c'.1.isInj = true) :=
-  replicate_sourceSel (G.detourCert B W) (slots n hn) (src := fun c => c.isInj = true)
-    (fun _ _ _ _ _ hq => G.detour_route_not_inj hq) hsel
+  replicate_sourceSel (G.twoPhaseCert B W) (slots n hn) (src := fun c => c.isInj = true)
+    (fun _ _ _ _ _ hq => G.twoPhase_route_not_inj hq) hsel
 
 /-- The copies of the `shared` scheme with `m ≥ 1` connections per link: one escape channel,
 `2m - 1` adaptive channels on every link, `m` injection channels at every node. -/
@@ -251,13 +251,13 @@ theorem sharedSlots_pos {m : ℕ} (hm : 0 < m) (c : GChan V) : 0 < sharedSlots m
   rcases c with _ | ⟨_, _, _ | _⟩ <;> simp [sharedSlots] <;> omega
 
 /-- **The `shared` scheme on every graph**: `m` connections per link used as one escape channel
-and `2m - 1` adaptive channels, with `m` injection channels per node, over the detour network
+and `2m - 1` adaptive channels, with `m` injection channels per node, over the two-phase network
 with bounded returns. -/
 theorem shared_slots_correct (G : GraphData V) (B : ℕ) (W : V → V → List (Option V)) {m : ℕ}
     (hm : 0 < m) :
-    ((G.detourNet B W).replicate (slots (sharedSlots m) (sharedSlots_pos hm))).Correct ∧
-      ((G.detourNet B W).replicate (slots (sharedSlots m) (sharedSlots_pos hm))).StarvationFree :=
-  ⟨(G.replicated_detour_correct B W _ _).1, (G.replicated_detour_correct B W _ _).2.1⟩
+    ((G.twoPhaseNet B W).replicate (slots (sharedSlots m) (sharedSlots_pos hm))).Correct ∧
+      ((G.twoPhaseNet B W).replicate (slots (sharedSlots m) (sharedSlots_pos hm))).StarvationFree :=
+  ⟨(G.replicated_twoPhase_correct B W _ _).1, (G.replicated_twoPhase_correct B W _ _).2.1⟩
 
 end GraphData
 

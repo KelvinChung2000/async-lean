@@ -66,7 +66,7 @@ import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
-import AsyncLean.Routing.GraphDetour
+import AsyncLean.Routing.GraphTwoPhase
 import AsyncLean.Routing.Planes
 import AsyncLean.Routing.SharedPlanes
 import AsyncLean.Routing.Throughput
@@ -113,11 +113,11 @@ import AsyncLean.Examples.OptimalRouting
 import AsyncLean.Examples.MeshMaximal
 import AsyncLean.Examples.MeshNorthLast
 import AsyncLean.Examples.MeshMetrics
-import AsyncLean.Examples.MeshTiered
+import AsyncLean.Examples.MeshPriority
 import AsyncLean.Examples.GraphRouting
 import AsyncLean.Examples.Saturation
 import AsyncLean.Examples.GraphBudget
-import AsyncLean.Examples.GraphDetour
+import AsyncLean.Examples.GraphTwoPhase
 import AsyncLean.Examples.Planes
 import AsyncLean.Examples.Throughput
 import AsyncLean.Tutorial

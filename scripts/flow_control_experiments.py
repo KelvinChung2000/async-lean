@@ -67,7 +67,7 @@ def run_alloc(k, scheme, alloc, rate, pattern, cycles=5000, warmup=1500, seed=1)
             return [esc] + ([((u, xy(u, d)), 1)] if alloc != 'deep1' else [])
         if scheme == 'duato':     # escape XY on vc0 + any productive on vc1, random among free
             return [esc] + [((u, dr), 1) for dr in prod(u, d)]
-        if scheme == 'tiered':
+        if scheme == 'priority':
             pref = esc if (cur_vc == 0 and not src) else ((u, yx(u, d)), 1)
             return [[pref] + ([esc] if src else []), [esc], [((u, dr), 1) for dr in prod(u, d)]]
     lat = []
@@ -95,10 +95,10 @@ def run_alloc(k, scheme, alloc, rate, pattern, cycles=5000, warmup=1500, seed=1)
             d = pkt[0]
             if u == d: continue
             cs = cands(u, d, cur_vc, src)
-            if scheme == 'tiered':
+            if scheme == 'priority':
                 choice = []
-                for tier in cs:
-                    f = [c for c in tier if has_room(*c)]
+                for level in cs:
+                    f = [c for c in level if has_room(*c)]
                     if f: choice = f; break
             else:
                 choice = [c for c in cs if has_room(*c)]
@@ -171,7 +171,7 @@ def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else 'alloc'
     if mode == 'alloc':
         rows = {f'{s}/{a}': (s, a) for s, a in [('xy', 'split'), ('xy', 'deep1'), ('duato', 'split'),
-                ('duato', 'shared'), ('tiered', 'split'), ('tiered', 'shared'), ('duato', 'split3')]}
+                ('duato', 'shared'), ('priority', 'split'), ('priority', 'shared'), ('duato', 'split3')]}
         fn = run_alloc
         jobs = [(8, *v, 0.8, p, 5000, 1500, sd) for v in rows.values() for p in PATTERNS for sd in (1, 2)]
     else:

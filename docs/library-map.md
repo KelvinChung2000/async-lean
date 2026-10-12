@@ -48,11 +48,11 @@ its parts.
 | `Routing/Check.lean`, `Routing/WormholeCheck.lean` | trusted routing checkers, untrusted certificate search and diagnosis |
 | `Routing/Optimal.lean` | comparing routing functions by adaptivity, maximally adaptive routing, refutations for intervals of routing functions |
 | `Routing/Embed.lean` | carrying a deadlock of a small network into every network that contains a copy of it |
-| `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; tiered selections |
+| `Routing/Source.lean` | Duato's theorem and starvation freedom for selections that throttle the sources; priority selections |
 | `Routing/Reduce.lean` | reducing one routing function to another: acyclic channel dependencies transfer along a map of channels |
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
 | `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape subnetwork: a packet may leave the escape subnetwork `B` times |
-| `Routing/GraphDetour.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
+| `Routing/GraphTwoPhase.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 
 ## The fluid model: throughput bounds
@@ -101,4 +101,4 @@ its parts.
 |---|---|
 | `Import/G.lean`, `Pnml.lean`, `Verilog.lean` | importers: `stg_from_g`, `pnet_from_pnml`, `gates_from_verilog`, `circuit_from_verilog`, `comb_from_verilog`; `#export_pnml` writes a net for other model checkers |
 | `AxiomAudit.lean`, `Audit.lean` | `#assert_standard_axioms` and the library-wide audit |
-| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost, a tiered source-throttled selection, safe routing on the torus and the Petersen graph, `Examples/Throughput.lean`), bitmaps, routing logic from RTL, the torus with `m` planes and its packet throughput (`Examples/Planes.lean` |
+| `Examples/` | Muller rings, arbiter, dining philosophers, counterexamples, circuits, STG implementation, composition, imported designs, structural proofs, fairness, free choice, QDI, concurrent firing, unbounded nets, scale, symbolic certificates, routing, maximally adaptive routing (on every mesh size), optimal routing per cost, safe routing on the torus and the Petersen graph, `Examples/Throughput.lean`), bitmaps, routing logic from RTL, the torus with `m` planes and its packet throughput (`Examples/Planes.lean`, a priority source-throttled selection |

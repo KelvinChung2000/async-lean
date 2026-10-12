@@ -13,7 +13,7 @@ import AsyncLean.Flow.MeshWorst
 The `8 × 8` torus (`torusNet 8`) and the 6-dimensional hypercube (`cubeNet 6`), capacity `2` on
 every directed link, under the standard permutation patterns, in the fluid model: the largest
 throughput `θ` (per active source) at which the pattern is routable, over **all** routings
-(adaptive, split over many paths, with detours) and over **minimal** routings only
+(adaptive, split over many paths, non-minimal) and over **minimal** routings only
 (`Flow.Minimal` for the hop distance `torusDist`, `cubeDist`).
 
 The patterns are defined on the vertex index `s < 64`: on the torus `s = x + 8 y`; on the
@@ -24,7 +24,7 @@ high three bits), shuffle `u ↦ (i ↦ u (i - 1))` (rotate the bits), bit rever
 
 **Torus** (minimal-only optimum / optimum over all routings):
 
-* tornado `(x, y) ↦ (x + 3, y)`: `2/3` / `16/15` (detours gain `60 %`);
+* tornado `(x, y) ↦ (x + 3, y)`: `2/3` / `16/15` (non-minimal routing gains `60 %`);
 * perfect shuffle: `1` / `8/5` (`+60 %`);
 * transpose: `4/3` / `20/11` (`+36 %`);
 * neighbour `(x, y) ↦ (x + 1, y)`: `2` / `16/7` (`+14 %`);
@@ -40,7 +40,7 @@ The demands are `tornado8`, `shuffle8`, `transpose8`, `neighbor8`, `bitrev8` and
 the torus (on `Fin 8 × Fin 8`, shared with the mesh), and `cubeShuffle`, `cubeTranspose`,
 `cubeBitrev`, `cubeBitcomp` and `cubeTornado` on the hypercube, all permutation patterns
 (`permDem`).  For each pattern `X` (`torusTornado`, …, `cubeTornado`): `X_opt` (`IsGreatest` over
-all routings), `X_minimal_opt` (`IsGreatest` over minimal routings), and `X_detour_gain` (the
+all routings), `X_minimal_opt` (`IsGreatest` over minimal routings), and `X_nonminimal_gain` (the
 strict gap) or `X_minimal` (a minimal flow reaches the optimum over all routings).  Uniform and
 hotspot traffic are not covered here.  Every optimum is certified by data computed in exact rational
 arithmetic by `scripts/graph_certificates.py` (`AsyncLean.Flow.GraphPatterns.Data`): a flow at `θ`
@@ -235,9 +235,9 @@ theorem torusTornado_minimal_opt :
     torusTornadoMin_cons torusTornadoMin_cap torusTornadoMin_min torusTornadoMin_dual
     torusTornadoMin_bound
 
-/-- **Tornado on the torus: detours help**: the minimal optimum is below the optimum
+/-- **Tornado on the torus: non-minimal routing helps**: the minimal optimum is below the optimum
 over all routings (by `60 %`). -/
-theorem torusTornado_detour_gain : (2 / 3 : ℚ) < 16 / 15 := by norm_num
+theorem torusTornado_nonminimal_gain : (2 / 3 : ℚ) < 16 / 15 := by norm_num
 
 /-- Perfect shuffle on the indices. -/
 theorem torusShuffle_dem (s d : Fin 8 × Fin 8) :
@@ -260,9 +260,9 @@ theorem torusShuffle_minimal_opt :
     torusShuffleMin_cons torusShuffleMin_cap torusShuffleMin_min torusShuffleMin_dual
     torusShuffleMin_bound
 
-/-- **Perfect shuffle on the torus: detours help**: the minimal optimum is below the optimum
-over all routings (by `60 %`). -/
-theorem torusShuffle_detour_gain : (1 : ℚ) < 8 / 5 := by norm_num
+/-- **Perfect shuffle on the torus: non-minimal routing helps**: the minimal optimum is below the
+optimum over all routings (by `60 %`). -/
+theorem torusShuffle_nonminimal_gain : (1 : ℚ) < 8 / 5 := by norm_num
 
 /-- Transpose on the indices. -/
 theorem torusTranspose_dem (s d : Fin 8 × Fin 8) :
@@ -285,9 +285,9 @@ theorem torusTranspose_minimal_opt :
     torusTransposeMin_cons torusTransposeMin_cap torusTransposeMin_min torusTransposeMin_dual
     torusTransposeMin_bound
 
-/-- **Transpose on the torus: detours help**: the minimal optimum is below the optimum
+/-- **Transpose on the torus: non-minimal routing helps**: the minimal optimum is below the optimum
 over all routings (by `36 %`). -/
-theorem torusTranspose_detour_gain : (4 / 3 : ℚ) < 20 / 11 := by norm_num
+theorem torusTranspose_nonminimal_gain : (4 / 3 : ℚ) < 20 / 11 := by norm_num
 
 /-- Neighbour traffic on the indices. -/
 theorem torusNeighbor_dem (s d : Fin 8 × Fin 8) :
@@ -310,9 +310,9 @@ theorem torusNeighbor_minimal_opt :
     torusNeighborMin_cons torusNeighborMin_cap torusNeighborMin_min torusNeighborMin_dual
     torusNeighborMin_bound
 
-/-- **Neighbour traffic on the torus: detours help**: the minimal optimum is below the optimum
-over all routings (by `14 %`). -/
-theorem torusNeighbor_detour_gain : (2 : ℚ) < 16 / 7 := by norm_num
+/-- **Neighbour traffic on the torus: non-minimal routing helps**: the minimal optimum is below the
+optimum over all routings (by `14 %`). -/
+theorem torusNeighbor_nonminimal_gain : (2 : ℚ) < 16 / 7 := by norm_num
 
 /-- Bit reversal on the indices. -/
 theorem torusBitrev_dem (s d : Fin 8 × Fin 8) :
@@ -335,9 +335,9 @@ theorem torusBitrev_minimal_opt :
     torusBitrevMin_cons torusBitrevMin_cap torusBitrevMin_min torusBitrevMin_dual
     torusBitrevMin_bound
 
-/-- **Bit reversal on the torus: detours help**: the minimal optimum is below the optimum
-over all routings (by `7 %`). -/
-theorem torusBitrev_detour_gain : (16 / 9 : ℚ) < 40 / 21 := by norm_num
+/-- **Bit reversal on the torus: non-minimal routing helps**: the minimal optimum is below the
+optimum over all routings (by `7 %`). -/
+theorem torusBitrev_nonminimal_gain : (16 / 9 : ℚ) < 40 / 21 := by norm_num
 
 /-- Bit complement on the indices. -/
 theorem torusBitcomp_dem (s d : Fin 8 × Fin 8) :
@@ -351,8 +351,8 @@ theorem torusBitcomp_opt :
     torusBitcompL 1 1 (by norm_num) one_pos (by decide) one_pos torusBitcomp_cons torusBitcomp_cap
     torusBitcomp_dual torusBitcomp_bound
 
-/-- **Bit complement on the torus: the optimum `1` is reached by a minimal flow** (detours add
-nothing). -/
+/-- **Bit complement on the torus: the optimum `1` is reached by a minimal flow** (non-minimal
+routing adds nothing). -/
 theorem torusBitcomp_minimal : ∃ F : Flow (torusNet 8) (bitcomp 8) 1, F.Minimal torusDist :=
   torusModel.exists_minimal _ _ 1 torusBitcomp_dem torusBitcompG torusBitcompD 1 1 (by norm_num)
     one_pos (by decide) one_pos torusBitcomp_cons torusBitcomp_cap torusBitcomp_min
@@ -383,9 +383,9 @@ theorem cubeShuffle_minimal_opt :
     cubeShuffleMinL 12 5 (by norm_num) one_pos (by decide) (by norm_num) cubeShuffleMin_cons
     cubeShuffleMin_cap cubeShuffleMin_min cubeShuffleMin_dual cubeShuffleMin_bound
 
-/-- **Perfect shuffle on the hypercube: detours help**: the minimal optimum is below the optimum
-over all routings (by `45 %`). -/
-theorem cubeShuffle_detour_gain : (12 / 5 : ℚ) < 108 / 31 := by norm_num
+/-- **Perfect shuffle on the hypercube: non-minimal routing helps**: the minimal optimum is below
+the optimum over all routings (by `45 %`). -/
+theorem cubeShuffle_nonminimal_gain : (12 / 5 : ℚ) < 108 / 31 := by norm_num
 
 /-- Transpose on the indices. -/
 theorem cubeTranspose_dem (s d : Fin 6 → Bool) :
@@ -399,8 +399,8 @@ theorem cubeTranspose_opt :
     cubeTransposeL 4 1 (by norm_num) one_pos (by decide) one_pos cubeTranspose_cons
     cubeTranspose_cap cubeTranspose_dual cubeTranspose_bound
 
-/-- **Transpose on the hypercube: the optimum `4` is reached by a minimal flow** (detours add
-nothing). -/
+/-- **Transpose on the hypercube: the optimum `4` is reached by a minimal flow** (non-minimal
+routing adds nothing). -/
 theorem cubeTranspose_minimal : ∃ F : Flow (cubeNet 6) cubeTranspose 4, F.Minimal cubeDist :=
   cubeModel.exists_minimal _ _ 1 cubeTranspose_dem cubeTransposeG cubeTransposeD 4 1 (by norm_num)
     one_pos (by decide) one_pos cubeTranspose_cons cubeTranspose_cap cubeTranspose_min
@@ -423,8 +423,8 @@ theorem cubeBitrev_opt :
     4 1 (by norm_num) one_pos (by decide) one_pos cubeBitrev_cons cubeBitrev_cap cubeBitrev_dual
     cubeBitrev_bound
 
-/-- **Bit reversal on the hypercube: the optimum `4` is reached by a minimal flow** (detours add
-nothing). -/
+/-- **Bit reversal on the hypercube: the optimum `4` is reached by a minimal flow** (non-minimal
+routing adds nothing). -/
 theorem cubeBitrev_minimal : ∃ F : Flow (cubeNet 6) cubeBitrev 4, F.Minimal cubeDist :=
   cubeModel.exists_minimal _ _ 1 cubeBitrev_dem cubeBitrevG cubeBitrevD 4 1 (by norm_num) one_pos
     (by decide) one_pos cubeBitrev_cons cubeBitrev_cap cubeBitrev_min
@@ -447,8 +447,8 @@ theorem cubeBitcomp_opt :
     cubeBitcompL 2 1 (by norm_num) one_pos (by decide) one_pos cubeBitcomp_cons cubeBitcomp_cap
     cubeBitcomp_dual cubeBitcomp_bound
 
-/-- **Bit complement on the hypercube: the optimum `2` is reached by a minimal flow** (detours add
-nothing). -/
+/-- **Bit complement on the hypercube: the optimum `2` is reached by a minimal flow** (non-minimal
+routing adds nothing). -/
 theorem cubeBitcomp_minimal : ∃ F : Flow (cubeNet 6) cubeBitcomp 2, F.Minimal cubeDist :=
   cubeModel.exists_minimal _ _ 1 cubeBitcomp_dem cubeBitcompG cubeBitcompD 2 1 (by norm_num) one_pos
     (by decide) one_pos cubeBitcomp_cons cubeBitcomp_cap cubeBitcomp_min
@@ -471,8 +471,8 @@ theorem cubeTornado_opt :
     cubeTornadoL 2 1 (by norm_num) one_pos (by decide) one_pos cubeTornado_cons cubeTornado_cap
     cubeTornado_dual cubeTornado_bound
 
-/-- **Tornado on the hypercube: the optimum `2` is reached by a minimal flow** (detours add
-nothing). -/
+/-- **Tornado on the hypercube: the optimum `2` is reached by a minimal flow** (non-minimal
+routing adds nothing). -/
 theorem cubeTornado_minimal : ∃ F : Flow (cubeNet 6) cubeTornado 2, F.Minimal cubeDist :=
   cubeModel.exists_minimal _ _ 1 cubeTornado_dem cubeTornadoG cubeTornadoD 2 1 (by norm_num) one_pos
     (by decide) one_pos cubeTornado_cons cubeTornado_cap cubeTornado_min

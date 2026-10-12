@@ -22,8 +22,8 @@ and the cut between columns `m - 1` and `m` matches it.
 * `xyFlow_minimal`, `xyRouting_minimal`, `xyRoutingOdd_minimal` : XY routing is **minimal**
   (`Flow.Minimal`): every link a commodity uses brings it one step closer, in Manhattan distance,
   to its destination.
-* `uniform_minimal_opt` : **detours add nothing on uniform traffic.**  For every `k ≥ 2` the
-  mesh's optimum is reached by a minimal flow.
+* `uniform_minimal_opt` : **non-minimal routing adds nothing on uniform traffic.**  For every
+  `k ≥ 2` the mesh's optimum is reached by a minimal flow.
 -/
 
 namespace AsyncLean
@@ -333,20 +333,20 @@ theorem xyFlow_minimal (k : ℕ) (r : ℚ) (d u v : Fin k × Fin k) (h : 0 < xyF
     · rw [ite_eq_right h1] at hB; exact absurd hB (lt_irrefl 0)
 
 /-- **XY routing is minimal** (every `k ≥ 2`): the optimal flow of `mesh_routable` takes no
-detour. -/
+non-minimal hop. -/
 theorem xyRouting_minimal (k : ℕ) (hk : 2 ≤ k) :
     (xyRouting k hk).Minimal (fun u v => manhattan (gridPos u) (gridPos v)) :=
   fun d u v h => xyFlow_minimal k _ d u v h
 
 /-- **XY routing is minimal** (odd `k ≥ 3`): the optimal flow of `mesh_routable_odd` takes no
-detour. -/
+non-minimal hop. -/
 theorem xyRoutingOdd_minimal (k : ℕ) (hk : 3 ≤ k) (ho : Odd k) :
     (xyRoutingOdd k hk ho).Minimal (fun u v => manhattan (gridPos u) (gridPos v)) :=
   fun d u v h => xyFlow_minimal k _ d u v h
 
-/-- **Detours add nothing on uniform traffic** (every `k ≥ 2`): the mesh's optimal throughput
-(`8 (k² - 1) / k³` for even `k`, `8 / k` for odd `k`) is reached by a minimal flow, one in which
-every link a commodity uses brings it strictly closer to its destination. -/
+/-- **Non-minimal routing adds nothing on uniform traffic** (every `k ≥ 2`): the mesh's optimal
+throughput (`8 (k² - 1) / k³` for even `k`, `8 / k` for odd `k`) is reached by a minimal flow, one
+in which every link a commodity uses brings it strictly closer to its destination. -/
 theorem uniform_minimal_opt (k : ℕ) (hk : 2 ≤ k) :
     IsGreatest {θ : ℚ | Routable (meshNet k) (uniform k) θ}
         (if Even k then 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 else 8 / (k : ℚ)) ∧

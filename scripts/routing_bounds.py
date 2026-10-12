@@ -8,14 +8,14 @@ Every directed link carries at most 2 packets per cycle (two virtual channels, o
 
 * `lp(k, lam, minimal)` : the largest per-node rate theta such that the traffic matrix theta * lam
   can be routed (maximum concurrent multicommodity flow, one commodity per destination), over
-  shortest paths only (`minimal`) or over any paths (detours allowed).
+  shortest paths only (`minimal`) or over any paths (non-minimal routes allowed).
 * `worst(fracs)` : the worst-case load of an oblivious routing over all permutations
   (Towles & Dally): for every link, the maximum-weight matching of source-destination pairs by
   the fraction of their traffic on that link.
 
 Usage: python3 scripts/routing_bounds.py [--k 8]
 
-Findings (8 x 8): detours raise the optimum by 0 % on uniform, transpose, shuffle, bit-reversal
+Findings (8 x 8): non-minimal routes raise the optimum by 0 % on uniform, transpose, shuffle, bit-reversal
 and bit-complement traffic and by 4.5 % on hotspot traffic -- the binding cuts (bisection,
 diagonal, the hotspot's links) cannot be bypassed.  Over all permutations, XY routing has a
 worst case of 2 / (k - 1) and O1TURN of 4 / k, the bisection bound that no routing exceeds.
@@ -120,7 +120,7 @@ def main():
     for p in PATTERNS:
         lam = matrix(k, p)
         a, b = lp(k, lam, True), lp(k, lam, False)
-        print(f'{p:<10} minimal {a:.3f}  any {b:.3f}  detour gain {b / a - 1:+.1%}')
+        print(f'{p:<10} minimal {a:.3f}  any {b:.3f}  non-minimal gain {b / a - 1:+.1%}')
     n = k * k
     pairs = [(s, d) for s in range(n) for d in range(n) if s != d]
     xy = {p: {e: 1.0 for e in dor_path(k, *p, 'xy')} for p in pairs}

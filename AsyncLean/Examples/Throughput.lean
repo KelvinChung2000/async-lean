@@ -9,7 +9,7 @@ import AsyncLean.AxiomAudit
 # Example: the throughput of the torus with `m` planes, with packets
 
 `torusPlanes k m B` (`AsyncLean.Examples.Planes`) is the `(k + 1) × (k + 1)` torus with `m`
-connections per link, used as `m` planes of the detour network.  With time
+connections per link, used as `m` planes of the two-phase network.  With time
 (`Network.TimedRun`: rounds in which every channel receives at most one packet):
 
 * `torusPlanes_bound` : **no timed run of the plane network, under any selection, sustains
@@ -78,16 +78,16 @@ theorem torus_nbrs_iff (k : ℕ) (u v : TV k) : v ∈ (torus k).nbrs u ↔ Torus
 
 /-- The torus with `m` planes, placed on the torus. -/
 abbrev torusPlanesPlacement (k m B : ℕ) : (torusPlanes k m B).Placement (TV k) :=
-  planesPlacement (List.finRange m) ((torus k).detourPlacement B (torus k).anyDetour)
+  planesPlacement (List.finRange m) ((torus k).twoPhasePlacement B (torus k).anyIntermediate)
 
 theorem torusPlanesPlacement_fits (k m B : ℕ) : (torusPlanesPlacement k m B).Fits :=
-  planesPlacement_fits _ ((torus k).detourPlacement_fits B _)
+  planesPlacement_fits _ ((torus k).twoPhasePlacement_fits B _)
 
 /-- **The fluid network of the torus with `m` planes is `m` copies of the fluid torus.** -/
 theorem torusPlanesPlacement_cap (k m B : ℕ) (u v : TV k) :
     (torusPlanesPlacement k m B).net.cap u v = m * (torusNet (k + 1)).cap u v := by
   rw [planesPlacement_cap, Fintype.card_fin]
-  unfold GraphData.detourPlacement
+  unfold GraphData.twoPhasePlacement
   rw [GraphData.placement_cap]
   by_cases h : TorusAdj u v
   · simp [torusNet, h, (torus_nbrs_iff k u v).2 h]
@@ -110,8 +110,8 @@ theorem torusPlanes_bound (k m B : ℕ) (hk : 2 ≤ k)
   have hD : 0 < hopDemand (uniform (k + 1)) torusDist := by
     rw [torus_hop_uniform]
     exact div_pos (mul_pos (by positivity) (ringTotal_pos (by omega))) hK
-  have hhop : IsHopDistance (torusPlanesPlacement k m B).net torusDist :=
-    ⟨(torus_isHopDistance (k + 1)).1, fun u v d hc => (torus_isHopDistance (k + 1)).2 u v d (by
+  have hhop : IsHopPotential (torusPlanesPlacement k m B).net torusDist :=
+    ⟨(torus_isHopPotential (k + 1)).1, fun u v d hc => (torus_isHopPotential (k + 1)).2 u v d (by
       rw [torusPlanesPlacement_cap] at hc
       exact pos_of_mul_pos_right hc (Nat.cast_nonneg m))⟩
   have h := R.hop_bound (torusPlanesPlacement k m B)
@@ -125,15 +125,15 @@ theorem torusPlanes_bound (k m B : ℕ) (hk : 2 ≤ k)
     linarith
   exact le_of_mul_le_mul_right this hD
 
-/-- **`m` planes sustain `m` times the load of one**: any timed run of one plane (the detour
+/-- **`m` planes sustain `m` times the load of one**: any timed run of one plane (the two-phase
 network on the torus) is run in all `m` planes at once, round by round, as a timed run of the plane
 network that injects, from every source for every destination, `m` times the packets. -/
 theorem torusPlanes_timed (k m B : ℕ)
-    (R : ((torus k).detourNet B (torus k).anyDetour).TimedRun
-      ((torus k).detourNet B (torus k).anyDetour).adaptive) :
+    (R : ((torus k).twoPhaseNet B (torus k).anyIntermediate).TimedRun
+      ((torus k).twoPhaseNet B (torus k).anyIntermediate).adaptive) :
     ∃ R' : (torusPlanes k m B).TimedRun (torusPlanes k m B).adaptive,
       ∀ T s d, R'.injected (torusPlanesPlacement k m B) T s d =
-        m * R.injected ((torus k).detourPlacement B (torus k).anyDetour) T s d := by
+        m * R.injected ((torus k).twoPhasePlacement B (torus k).anyIntermediate) T s d := by
   refine ⟨planesTimed (L := List.finRange m) (fun i _ => List.mem_finRange i)
     (List.nodup_finRange m) (fun _ => R), fun T s d => ?_⟩
   rw [planesTimed_injected]
@@ -142,11 +142,11 @@ theorem torusPlanes_timed (k m B : ℕ)
 /-- **Linear scaling with packets**: if one plane sustains the load `ρ * dem`, the torus with
 `m` planes sustains `m ρ * dem`. -/
 theorem torusPlanes_sustains (k m B : ℕ)
-    (R : ((torus k).detourNet B (torus k).anyDetour).TimedRun
-      ((torus k).detourNet B (torus k).anyDetour).adaptive)
+    (R : ((torus k).twoPhaseNet B (torus k).anyIntermediate).TimedRun
+      ((torus k).twoPhaseNet B (torus k).anyIntermediate).adaptive)
     {dem : TV k → TV k → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤
-      R.injected ((torus k).detourPlacement B (torus k).anyDetour) T s d) :
+      R.injected ((torus k).twoPhasePlacement B (torus k).anyIntermediate) T s d) :
     ∃ R' : (torusPlanes k m B).TimedRun (torusPlanes k m B).adaptive,
       ∀ T s d, T * (m * ρ) * dem s d - m * K ≤
         R'.injected (torusPlanesPlacement k m B) T s d := by

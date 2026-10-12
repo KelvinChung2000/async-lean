@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Examples.MeshTiered
+import AsyncLean.Examples.MeshPriority
 import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 
@@ -17,12 +17,12 @@ configurations), with injections that may never stop, packets are delivered.
 
 The meshes, for every size `k`:
 
-* `duatoTiers_underLoad k hg ht`, `westFirstTiers_underLoad`, `northLastTiers_underLoad` : under
-  every tiered selection containing the throttled escape tier (`Mesh.escTier`; in particular the
-  tiered, source-throttled selection of `AsyncLean.Examples.MeshTiered`), every packet outside
-  the injection channels (`dir c = 4`) is delivered.  A packet held back in its injection channel
-  by the throttle may wait for ever when the network stays saturated: the throttle need only open
-  once the rest of the network is empty.
+* `duatoPriorities_underLoad k hg ht`, `westFirstPriorities_underLoad`,
+  `northLastPriorities_underLoad` : under every priority selection containing the throttled escape
+  level (`Mesh.escPriority`; in particular the priority, source-throttled selection of
+  `AsyncLean.Examples.MeshPriority`), every packet outside the injection channels (`dir c = 4`) is
+  delivered.  A packet held back in its injection channel by the throttle may wait for ever when the
+  network stays saturated: the throttle need only open once the rest of the network is empty.
 * `duatoMesh_underLoad k`, `westFirstMesh_underLoad k`, `northLastMesh_underLoad k` : under
   every valid (work-conserving) selection, *every* packet is delivered, those in their injection
   channels included.
@@ -94,49 +94,49 @@ theorem duato_dist {k c d : ℕ} {q : ℕ × ℕ} (hl : wfLegal k c d)
 
 end Mesh
 
-/-- **Duato's mesh under saturation, with throttled sources**: for every size, under every tiered
-selection containing the throttled escape tier, every packet outside the injection channels is
+/-- **Duato's mesh under saturation, with throttled sources**: for every size, under every priority
+selection containing the throttled escape level, every packet outside the injection channels is
 delivered along every channel-fair run, however the sources inject. -/
-theorem duatoTiers_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
-    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
-    (duatoMesh k).StarvationFreeUnderLoad ((duatoMesh k).tieredSel tiers) (fun c => dir c = 4) :=
+theorem duatoPriorities_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {levels : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escPriority k g ∈ levels) :
+    (duatoMesh k).StarvationFreeUnderLoad ((duatoMesh k).prioritySel levels) (fun c => dir c = 4) :=
   (duatoMesh k).starvationFreeUnderLoad_of_source (duato_closed k) (xyEscape k)
     (fun _ _ _ _ => by simp [xyEscape]) (wf_wf k) (fun _ _ _ _ _ hq => esc_not_source hq)
     (fun _ _ _ _ _ hq => duato_not_source hq) (wfDist k) (fun _ _ _ hl ha hq => duato_dist hl ha hq)
-    (tieredSel_sourceSel (duatoMesh k) (k := k) (fun _ _ => by simp [duatoMesh]) hg ht)
+    (prioritySel_sourceSel (duatoMesh k) (k := k) (fun _ _ => by simp [duatoMesh]) hg ht)
 
 /-- **The west-first mesh under saturation, with throttled sources**: every packet outside the
 injection channels is delivered along every channel-fair run. -/
-theorem westFirstTiers_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
-    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
-    (westFirstMesh k).StarvationFreeUnderLoad ((westFirstMesh k).tieredSel tiers)
+theorem westFirstPriorities_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {levels : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escPriority k g ∈ levels) :
+    (westFirstMesh k).StarvationFreeUnderLoad ((westFirstMesh k).prioritySel levels)
       (fun c => dir c = 4) :=
   (westFirstMesh k).starvationFreeUnderLoad_of_source (wf_closed k) (xyEscape k) wf_esc_conn
     (wf_wf k) (fun _ _ _ _ _ hq => esc_not_source hq)
     (fun _ _ _ _ _ hq => turnDuato_not_source (fun _ _ _ _ h => westFirst_sub h) hq) (wfDist k)
     (fun _ _ _ hl ha hq => by have := wf_dist hl ha hq; omega)
-    (tieredSel_sourceSel (westFirstMesh k) (k := k)
+    (prioritySel_sourceSel (westFirstMesh k) (k := k)
       (fun _ _ => by simp [westFirstMesh, turnDuatoMesh]) hg ht)
 
 /-- **The north-last mesh under saturation, with throttled sources**: every packet outside the
 injection channels is delivered along every channel-fair run. -/
-theorem northLastTiers_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
-    {tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escTier k g ∈ tiers) :
-    (northLastMesh k).StarvationFreeUnderLoad ((northLastMesh k).tieredSel tiers)
+theorem northLastPriorities_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8)
+    {levels : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)} (ht : escPriority k g ∈ levels) :
+    (northLastMesh k).StarvationFreeUnderLoad ((northLastMesh k).prioritySel levels)
       (fun c => dir c = 4) :=
   (northLastMesh k).starvationFreeUnderLoad_of_source (nl_closed k) (xyEscape k) nl_esc_conn
     (nl_wf k) (fun _ _ _ _ _ hq => esc_not_source hq)
     (fun _ _ _ _ _ hq => turnDuato_not_source (fun _ _ _ _ h => northLast_sub h) hq) (meshDist k)
     (fun _ _ _ hl ha hq => nl_dist hl ha hq)
-    (tieredSel_sourceSel (northLastMesh k) (k := k)
+    (prioritySel_sourceSel (northLastMesh k) (k := k)
       (fun _ _ => by simp [northLastMesh, turnDuatoMesh]) hg ht)
 
-/-- **The tiered, source-throttled selection on Duato's mesh under saturation**: every packet
+/-- **The priority, source-throttled selection on Duato's mesh under saturation**: every packet
 outside the injection channels is delivered along every channel-fair run. -/
-theorem duatoTiered_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
-    (duatoMesh k).StarvationFreeUnderLoad ((duatoMesh k).tieredSel (meshTiers k g))
+theorem duatoPriority_underLoad (k : ℕ) {g : ℕ} (hg : g ≤ 8) :
+    (duatoMesh k).StarvationFreeUnderLoad ((duatoMesh k).prioritySel (meshPriorities k g))
       (fun c => dir c = 4) :=
-  duatoTiers_underLoad k hg (escTier_mem_meshTiers k g)
+  duatoPriorities_underLoad k hg (escPriority_mem_meshPriorities k g)
 
 /-- **Duato's mesh under saturation**: for every size, under every valid selection, every packet
 (including those in their injection channels) is delivered along every channel-fair run, with
@@ -232,8 +232,9 @@ end AsyncLean
 
 namespace AsyncLean.Examples
 
-#assert_standard_axioms duatoTiers_underLoad westFirstTiers_underLoad northLastTiers_underLoad
-#assert_standard_axioms duatoTiered_underLoad duatoMesh_underLoad westFirstMesh_underLoad
+#assert_standard_axioms duatoPriorities_underLoad westFirstPriorities_underLoad
+  northLastPriorities_underLoad
+#assert_standard_axioms duatoPriority_underLoad duatoMesh_underLoad westFirstMesh_underLoad
 #assert_standard_axioms northLastMesh_underLoad
 
 end AsyncLean.Examples

@@ -298,7 +298,7 @@ theorem cube_uniform_hop (n : ℕ) (hn : 1 ≤ n) :
   ring
 
 /-- **Uniform traffic on the hypercube** (`n ≥ 1`): the optimal throughput, over all routings,
-is `4 (2ⁿ - 1) / 2ⁿ`, reached by a minimal flow (no detours) loading every link to exactly its
+is `4 (2ⁿ - 1) / 2ⁿ`, reached by a minimal flow (minimal) loading every link to exactly its
 capacity. -/
 theorem cube_uniform_opt (n : ℕ) (hn : 1 ≤ n) :
     IsGreatest {θ : ℚ | Routable (cubeNet n) (cubeUniform n) θ} (4 * (2 ^ n - 1) / 2 ^ n) ∧
