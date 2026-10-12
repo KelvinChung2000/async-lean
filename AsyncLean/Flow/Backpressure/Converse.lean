@@ -4,11 +4,11 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.Flow.Backpressure.Model
 
 /-!
-# Backpressure, part 5: the ceiling for every scheduler
+# Backpressure, part 5: the converse for every scheduler
 
 The traffic a run carries in `T` slots is a flow in `T` copies of the network (`Run.totalFlow`),
 so a run with a bounded backlog respects every potential bound of the fluid model
-(`Run.potential_ceiling`, `Run.cut_ceiling`, `Run.hop_ceiling`, and `Run.potentialFeasibleOn`
+(`Run.potential_bound`, `Run.cut_bound`, `Run.hop_bound`, and `Run.potentialFeasibleOn`
 for runs restricted to some links): no scheduler beats the fluid optimum.
 -/
 
@@ -26,7 +26,7 @@ namespace Run
 
 variable {N : Net V} (r : Run N)
 
-/-! ### The ceiling: no scheduler beats the fluid model -/
+/-! ### The converse: no scheduler beats the fluid model -/
 
 /-- The traffic carried in the first `T` slots is a flow, in `T` copies of the network, of what
 arrived less the growth of the backlog. -/
@@ -61,10 +61,10 @@ theorem exists_pos_of_sum_pos {T : ℕ} (d u v : V)
   have : (r.totalFlow T).f d u v ≤ 0 := sum_nonpos fun t ht => hn t ht
   linarith
 
-/-- **The potential ceiling**, for every scheduler: if the arrivals are `ρ * dem` in every slot
+/-- **The potential bound**, for every scheduler: if the arrivals are `ρ * dem` in every slot
 and the backlog stays at most `C`, the load respects every potential bound of the fluid model
 with a bounded potential `0 ≤ φ ≤ M`: `ρ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`. -/
-theorem potential_ceiling_on {dem : V → V → ℚ} {ρ : ℚ}
+theorem potential_bound_on {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     {S : V → V → V → Prop} (hS : ∀ t d u v, 0 < r.x t d u v → S d u v)
     (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
@@ -129,17 +129,17 @@ theorem potential_ceiling_on {dem : V → V → ℚ} {ρ : ℚ}
   have := mul_sub (T : ℚ) (ρ * Φ) K
   linarith
 
-/-- **The potential ceiling**, for every scheduler: if the arrivals are `ρ * dem` in every slot
+/-- **The potential bound**, for every scheduler: if the arrivals are `ρ * dem` in every slot
 and the backlog stays bounded, the load respects every potential bound of the fluid model with
 a bounded potential `0 ≤ φ ≤ M`: `ρ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`. -/
-theorem potential_ceiling {dem : V → V → ℚ} {ρ : ℚ}
+theorem potential_bound {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (φ : V → V → ℚ) (hφd : ∀ d, φ d d = 0)
     (hφ : ∀ d u v, 0 < N.cap u v → φ d u - φ d v ≤ len u v)
     (hφ0 : ∀ d v, 0 ≤ φ d v) {M : ℚ} (hM : ∀ d v, φ d v ≤ M) :
     ρ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v :=
-  r.potential_ceiling_on harr hb (S := fun _ _ _ => True) (fun _ _ _ _ _ => trivial) len hlen φ
+  r.potential_bound_on harr hb (S := fun _ _ _ => True) (fun _ _ _ _ _ => trivial) len hlen φ
     hφd (fun d u v _ hc => hφ d u v hc) hφ0 hM
 
 /-- **A stable run moving traffic only on `S` respects every potential bound on `S`**, as a flow
@@ -148,19 +148,19 @@ theorem potentialFeasibleOn {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     {S : V → V → V → Prop} (hS : ∀ t d u v, 0 < r.x t d u v → S d u v) :
     PotentialFeasibleOn N S dem ρ := fun len φ hlen hφd hφ hφ0 =>
-  r.potential_ceiling_on harr hb hS len hlen φ hφd hφ hφ0 (M := ∑ a, ∑ b, φ a b) fun d v =>
+  r.potential_bound_on harr hb hS len hlen φ hφd hφ hφ0 (M := ∑ a, ∑ b, φ a b) fun d v =>
     (single_le_sum (f := fun b => φ d b) (fun b _ => hφ0 d b) (mem_univ v)).trans
       (single_le_sum (f := fun a => ∑ b, φ a b) (fun a _ => sum_nonneg fun b _ => hφ0 a b)
         (mem_univ d))
 
-/-- **The cut ceiling**, for every scheduler: a run that keeps its backlog bounded under the load
+/-- **The cut bound**, for every scheduler: a run that keeps its backlog bounded under the load
 `ρ * dem` carries across every cut at most the cut's capacity. -/
-theorem cut_ceiling {dem : V → V → ℚ} {ρ : ℚ}
+theorem cut_bound {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     (S : V → Prop) [DecidablePred S] :
     ρ * ∑ s, ∑ d, (if S s ∧ ¬ S d then dem s d else 0) ≤
       ∑ u, ∑ v, if S u ∧ ¬ S v then N.cap u v else 0 := by
-  have key := r.potential_ceiling harr hb (fun u v => if S u ∧ ¬ S v then 1 else 0)
+  have key := r.potential_bound harr hb (fun u v => if S u ∧ ¬ S v then 1 else 0)
     (fun u v => by split_ifs <;> norm_num)
     (fun d v => if S v ∧ ¬ S d then 1 else 0) (fun d => by simp)
     (fun _ u v _ => by
@@ -175,10 +175,10 @@ theorem cut_ceiling {dem : V → V → ℚ} {ρ : ℚ}
   rw [e1, e2] at key
   exact key
 
-/-- **The hop ceiling**, for every scheduler: a run that keeps its backlog bounded under the load
+/-- **The hop bound**, for every scheduler: a run that keeps its backlog bounded under the load
 `ρ * dem` has `ρ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v` for every nonnegative hop
 distance. -/
-theorem hop_ceiling {dem : V → V → ℚ} {ρ : ℚ}
+theorem hop_bound {dem : V → V → ℚ} {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     {dist : V → V → ℚ} (hd : IsHopDistance N dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
     ρ * hopDemand dem dist ≤ ∑ u, ∑ v, N.cap u v := by
@@ -186,7 +186,7 @@ theorem hop_ceiling {dem : V → V → ℚ} {ρ : ℚ}
     (single_le_sum (f := fun b => dist v b) (fun b _ => hd0 v b) (mem_univ d)).trans
       (single_le_sum (f := fun a => ∑ b, dist a b) (fun a _ => sum_nonneg fun b _ => hd0 a b)
         (mem_univ v))
-  have := r.potential_ceiling harr hb (fun _ _ => 1) (fun _ _ => zero_le_one)
+  have := r.potential_bound harr hb (fun _ _ => 1) (fun _ _ => zero_le_one)
     (fun d v => dist v d) hd.1 (fun d u v hc => hd.2 u v d hc) (fun d v => hd0 v d) hM
   simpa [hopDemand] using this
 
@@ -203,15 +203,15 @@ namespace Run
 
 variable {N : Net V} (r : Run N)
 
-/-- **The hop ceiling is the optimum on symmetric networks.**  If the hop bound is tight for
+/-- **The hop bound is the optimum on symmetric networks.**  If the hop bound is tight for
 `dem` (`θ * hopDemand dem dist = ∑ cap`, as on the torus and the hypercube), a run on `m` copies
 of the network that keeps its backlog bounded under `ρ * dem` has `ρ ≤ m * θ`. -/
-theorem copies_hop_ceiling {m : ℕ} (r : Run (N.copies m)) {dem : V → V → ℚ} {ρ θ : ℚ}
+theorem copies_hop_bound {m : ℕ} (r : Run (N.copies m)) {dem : V → V → ℚ} {ρ θ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hb : r.BoundedBacklog)
     {dist : V → V → ℚ} (hd : IsHopDistance N dist) (hd0 : ∀ u v, 0 ≤ dist u v)
     (hD : 0 < hopDemand dem dist) (htight : θ * hopDemand dem dist = ∑ u, ∑ v, N.cap u v) :
     ρ ≤ m * θ := by
-  have h := r.hop_ceiling harr hb (hd.copies m) hd0
+  have h := r.hop_bound harr hb (hd.copies m) hd0
   simp only [Net.copies_cap, ← mul_sum] at h
   rw [← htight] at h
   have : ρ * hopDemand dem dist ≤ (m * θ) * hopDemand dem dist := by linarith

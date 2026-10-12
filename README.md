@@ -25,7 +25,7 @@ Deeper results live in [`docs/`](docs/README.md):
   and selections that perform.
 * [Beyond the mesh](docs/topologies.md): safe routing on every graph, topologies and their
   throughput in the fluid model.
-* [Scaling with the connections](docs/scaling.md): linear scaling, lanes, and backpressure
+* [Scaling with the connections](docs/scaling.md): linear scaling, planes, and backpressure
   reaching the fluid optimum.
 * [Library map](docs/library-map.md): every file and what it contains.
 
@@ -430,7 +430,7 @@ The routing results go well beyond these checks. Each has its own guide:
   hypercube is exact for many traffic patterns; on the mesh routing has no room left, on the
   torus detours gain up to 60 %.
 * **[Scaling with the connections](docs/scaling.md).** With `m` connections per link no routing
-  beats `m` times one connection, and `m` independent lanes reach it, safely and with packets.
+  beats `m` times one connection, and `m` independent planes reach it, safely and with packets.
   Backpressure scheduling reaches the fluid optimum exactly; adaptive routing and
   per-destination queues are both necessary.
 

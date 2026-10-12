@@ -1,17 +1,17 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Routing.Lanes
+import AsyncLean.Routing.Planes
 import AsyncLean.Flow.Backpressure
 
 /-!
-# Packet networks in time, part 1: placements, timed runs and the ceiling
+# Packet networks in time, part 1: placements, timed runs and the throughput bound
 
 A placement (`Network.Placement`) puts a packet network on a graph; a timed run
 (`Network.TimedRun`) runs it in rounds in which every channel receives at most one packet.  The
-potential accounting (`TimedRun.injected_le`) gives the ceiling: a timed run sustaining
+potential accounting (`TimedRun.injected_le`) gives the throughput bound: a timed run sustaining
 `ρ * dem` respects every bound of the fluid network of its placement, under any selection
-(`TimedRun.ceiling`, `cut_ceiling`, `hop_ceiling`).  A timed run delivers all it injects but for
+(`TimedRun.potential_bound`, `cut_bound`, `hop_bound`).  A timed run delivers all it injects but for
 what the network holds (`TimedRun.ejected_ge`).
 
 See `AsyncLean.Routing.Throughput` for the overview.
@@ -331,11 +331,12 @@ theorem sum_lenOf (L : N.Placement V) [Fintype V] [DecidableEq V] (len : V → V
   refine sum_congr rfl fun v _ => ?_
   simp only [Placement.net, sum_ite, sum_const_zero, add_zero, sum_const, nsmul_eq_mul]
 
-/-- **The packet ceiling.**  A timed run that sustains the load `ρ * dem` (at least
+/-- **The packet bound.**  A timed run that sustains the load `ρ * dem` (at least
 `T ρ dem s d - K` packets injected from `s` for `d` in the first `T` rounds, for every `T`)
 respects every potential bound of the fluid network of its placement: whatever the routing and
 the selection, the packet network carries no more than the fluid model allows. -/
-theorem ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V] {dem : V → V → ℚ} {ρ K : ℚ}
+theorem potential_bound (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V]
+    {dem : V → V → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤ R.injected L T s d)
     (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v) (φ : V → V → ℚ) (hφd : ∀ d, φ d d = 0)
     (hφ : ∀ d u v, 0 < L.net.cap u v → φ d u - φ d v ≤ len u v)
@@ -375,14 +376,15 @@ theorem ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [Decidab
   have := mul_sub (T : ℚ) (ρ * Φ) Kc
   linarith
 
-/-- **The cut ceiling** for packets: a timed run sustaining `ρ * dem` carries across every cut
+/-- **The cut bound** for packets: a timed run sustaining `ρ * dem` carries across every cut
 at most the number of channels leaving it. -/
-theorem cut_ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V] {dem : V → V → ℚ} {ρ K : ℚ}
+theorem cut_bound (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V]
+    {dem : V → V → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤ R.injected L T s d)
     (S : V → Prop) [DecidablePred S] :
     ρ * ∑ s, ∑ d, (if S s ∧ ¬ S d then dem s d else 0) ≤
       ∑ u, ∑ v, if S u ∧ ¬ S v then L.net.cap u v else 0 := by
-  have key := R.ceiling L hsel hload (fun u v => if S u ∧ ¬ S v then 1 else 0)
+  have key := R.potential_bound L hsel hload (fun u v => if S u ∧ ¬ S v then 1 else 0)
     (fun u v => by split_ifs <;> norm_num)
     (fun d v => if S v ∧ ¬ S d then 1 else 0) (fun d => by simp)
     (fun _ u v _ => by
@@ -397,10 +399,11 @@ theorem cut_ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [Dec
   rw [e1, e2] at key
   exact key
 
-/-- **The hop ceiling** for packets: a timed run sustaining `ρ * dem` has
+/-- **The hop bound** for packets: a timed run sustaining `ρ * dem` has
 `ρ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v` for every nonnegative hop distance of the
 fluid network of its placement. -/
-theorem hop_ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V] {dem : V → V → ℚ} {ρ K : ℚ}
+theorem hop_bound (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [DecidableEq V]
+    {dem : V → V → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤ R.injected L T s d)
     {dist : V → V → ℚ} (hd : Fluid.IsHopDistance L.net dist) (hd0 : ∀ u v, 0 ≤ dist u v) :
     ρ * Fluid.hopDemand dem dist ≤ ∑ u, ∑ v, L.net.cap u v := by
@@ -408,7 +411,7 @@ theorem hop_ceiling (L : N.Placement V) (hsel : L.Respects sel) [Fintype V] [Dec
     (single_le_sum (f := fun b => dist v b) (fun b _ => hd0 v b) (mem_univ d)).trans
       (single_le_sum (f := fun a => ∑ b, dist a b) (fun a _ => sum_nonneg fun b _ => hd0 a b)
         (mem_univ v))
-  have := R.ceiling L hsel hload (fun _ _ => 1) (fun _ _ => zero_le_one)
+  have := R.potential_bound L hsel hload (fun _ _ => 1) (fun _ _ => zero_le_one)
     (fun d v => dist v d) hd.1 (fun d u v hc => hd.2 u v d hc) (fun d v => hd0 v d) hM
   simpa [Fluid.hopDemand] using this
 

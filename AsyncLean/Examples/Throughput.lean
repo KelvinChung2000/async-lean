@@ -1,26 +1,26 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Examples.Lanes
+import AsyncLean.Examples.Planes
 import AsyncLean.Routing.Throughput
 import AsyncLean.AxiomAudit
 
 /-!
-# Example: the throughput of the torus with `m` lanes, with packets
+# Example: the throughput of the torus with `m` planes, with packets
 
-`torusLanes k m B` (`AsyncLean.Examples.Lanes`) is the `(k + 1) × (k + 1)` torus with `m`
-connections per link, used as `m` lanes of the detour network.  With time
+`torusPlanes k m B` (`AsyncLean.Examples.Planes`) is the `(k + 1) × (k + 1)` torus with `m`
+connections per link, used as `m` planes of the detour network.  With time
 (`Network.TimedRun`: rounds in which every channel receives at most one packet):
 
-* `torusLanes_ceiling` : **no timed run of the lane network, under any selection, sustains
+* `torusPlanes_bound` : **no timed run of the plane network, under any selection, sustains
   uniform traffic above `m` times the fluid optimum of one connection** (`torus_uniform_opt`);
-* `torusLanes_timed` : **any timed run of one lane, run in all `m` lanes, is a timed run of the
-  lane network injecting `m` times the packets**: whatever load one connection sustains, `m`
+* `torusPlanes_timed` : **any timed run of one plane, run in all `m` planes, is a timed run of the
+  plane network injecting `m` times the packets**: whatever load one connection sustains, `m`
   connections sustain `m` times it;
-* `torusLanes_delivered` : every timed run delivers all it injects but for the packets the
+* `torusPlanes_delivered` : every timed run delivers all it injects but for the packets the
   network holds.
 
-So the packet throughput of the lanes is exactly linear in `m`, up to the fluid optimum, which
+So the packet throughput of the planes is exactly linear in `m`, up to the fluid optimum, which
 it can never exceed.
 -/
 
@@ -76,32 +76,32 @@ theorem torus_nbrs_iff (k : ℕ) (u v : TV k) : v ∈ (torus k).nbrs u ↔ Torus
       Or.inr (Or.inr (Or.inl ⟨h'.symm, h⟩)), Or.inr (Or.inr (Or.inr ⟨h'.symm, h⟩))]
 
 
-/-- The torus with `m` lanes, placed on the torus. -/
-abbrev torusLanesPlacement (k m B : ℕ) : (torusLanes k m B).Placement (TV k) :=
-  lanesPlacement (List.finRange m) ((torus k).detourPlacement B (torus k).anyDetour)
+/-- The torus with `m` planes, placed on the torus. -/
+abbrev torusPlanesPlacement (k m B : ℕ) : (torusPlanes k m B).Placement (TV k) :=
+  planesPlacement (List.finRange m) ((torus k).detourPlacement B (torus k).anyDetour)
 
-theorem torusLanesPlacement_fits (k m B : ℕ) : (torusLanesPlacement k m B).Fits :=
-  lanesPlacement_fits _ ((torus k).detourPlacement_fits B _)
+theorem torusPlanesPlacement_fits (k m B : ℕ) : (torusPlanesPlacement k m B).Fits :=
+  planesPlacement_fits _ ((torus k).detourPlacement_fits B _)
 
-/-- **The fluid network of the torus with `m` lanes is `m` copies of the fluid torus.** -/
-theorem torusLanesPlacement_cap (k m B : ℕ) (u v : TV k) :
-    (torusLanesPlacement k m B).net.cap u v = m * (torusNet (k + 1)).cap u v := by
-  rw [lanesPlacement_cap, Fintype.card_fin]
+/-- **The fluid network of the torus with `m` planes is `m` copies of the fluid torus.** -/
+theorem torusPlanesPlacement_cap (k m B : ℕ) (u v : TV k) :
+    (torusPlanesPlacement k m B).net.cap u v = m * (torusNet (k + 1)).cap u v := by
+  rw [planesPlacement_cap, Fintype.card_fin]
   unfold GraphData.detourPlacement
   rw [GraphData.placement_cap]
   by_cases h : TorusAdj u v
   · simp [torusNet, h, (torus_nbrs_iff k u v).2 h]
   · simp [torusNet, h, torus_nbrs_iff]
 
-/-- **The packet ceiling of the torus with `m` lanes** (`k + 1 ≥ 3`): no timed run, under any
+/-- **The packet bound of the torus with `m` planes** (`k + 1 ≥ 3`): no timed run, under any
 selection offering only permitted hops, sustains uniform traffic at more than `m` times the
 fluid optimum of one connection (`torus_uniform_opt`). -/
-theorem torusLanes_ceiling (k m B : ℕ) (hk : 2 ≤ k)
+theorem torusPlanes_bound (k m B : ℕ) (hk : 2 ≤ k)
     {sel : Selection (Fin m × GChan (TV k)) (THdr k)}
-    (hsub : ∀ f c p q, q ∈ sel f c p → q ∈ (torusLanes k m B).route c p)
-    (R : (torusLanes k m B).TimedRun sel) {ρ K : ℚ}
+    (hsub : ∀ f c p q, q ∈ sel f c p → q ∈ (torusPlanes k m B).route c p)
+    (R : (torusPlanes k m B).TimedRun sel) {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * uniform (k + 1) s d - K ≤
-      R.injected (torusLanesPlacement k m B) T s d) :
+      R.injected (torusPlanesPlacement k m B) T s d) :
     ρ ≤ m * (if Even (k + 1) then 16 * (((k + 1 : ℕ) : ℚ) ^ 2 - 1) / ((k + 1 : ℕ) : ℚ) ^ 3
       else 16 / ((k + 1 : ℕ) : ℚ)) := by
   have hk3 : 3 ≤ k + 1 := by omega
@@ -110,14 +110,14 @@ theorem torusLanes_ceiling (k m B : ℕ) (hk : 2 ≤ k)
   have hD : 0 < hopDemand (uniform (k + 1)) torusDist := by
     rw [torus_hop_uniform]
     exact div_pos (mul_pos (by positivity) (ringTotal_pos (by omega))) hK
-  have hhop : IsHopDistance (torusLanesPlacement k m B).net torusDist :=
+  have hhop : IsHopDistance (torusPlanesPlacement k m B).net torusDist :=
     ⟨(torus_isHopDistance (k + 1)).1, fun u v d hc => (torus_isHopDistance (k + 1)).2 u v d (by
-      rw [torusLanesPlacement_cap] at hc
+      rw [torusPlanesPlacement_cap] at hc
       exact pos_of_mul_pos_right hc (Nat.cast_nonneg m))⟩
-  have h := R.hop_ceiling (torusLanesPlacement k m B)
-    ((torusLanesPlacement_fits k m B).respects hsub) hload hhop
+  have h := R.hop_bound (torusPlanesPlacement k m B)
+    ((torusPlanesPlacement_fits k m B).respects hsub) hload hhop
     (fun u v => by rw [torusDist_eq]; positivity)
-  simp only [torusLanesPlacement_cap, ← mul_sum] at h
+  simp only [torusPlanesPlacement_cap, ← mul_sum] at h
   rw [torus_sum_cap (by omega), ← torus_uniform_hop (k + 1) hk3] at h
   have : ρ * hopDemand (uniform (k + 1)) torusDist ≤
       (m * (if Even (k + 1) then 16 * (((k + 1 : ℕ) : ℚ) ^ 2 - 1) / ((k + 1 : ℕ) : ℚ) ^ 3
@@ -125,62 +125,63 @@ theorem torusLanes_ceiling (k m B : ℕ) (hk : 2 ≤ k)
     linarith
   exact le_of_mul_le_mul_right this hD
 
-/-- **`m` lanes sustain `m` times the load of one**: any timed run of one lane (the detour
-network on the torus) is run in all `m` lanes at once, round by round, as a timed run of the lane
+/-- **`m` planes sustain `m` times the load of one**: any timed run of one plane (the detour
+network on the torus) is run in all `m` planes at once, round by round, as a timed run of the plane
 network that injects, from every source for every destination, `m` times the packets. -/
-theorem torusLanes_timed (k m B : ℕ)
+theorem torusPlanes_timed (k m B : ℕ)
     (R : ((torus k).detourNet B (torus k).anyDetour).TimedRun
       ((torus k).detourNet B (torus k).anyDetour).adaptive) :
-    ∃ R' : (torusLanes k m B).TimedRun (torusLanes k m B).adaptive,
-      ∀ T s d, R'.injected (torusLanesPlacement k m B) T s d =
+    ∃ R' : (torusPlanes k m B).TimedRun (torusPlanes k m B).adaptive,
+      ∀ T s d, R'.injected (torusPlanesPlacement k m B) T s d =
         m * R.injected ((torus k).detourPlacement B (torus k).anyDetour) T s d := by
-  refine ⟨lanesTimed (L := List.finRange m) (fun i _ => List.mem_finRange i)
+  refine ⟨planesTimed (L := List.finRange m) (fun i _ => List.mem_finRange i)
     (List.nodup_finRange m) (fun _ => R), fun T s d => ?_⟩
-  rw [lanesTimed_injected]
+  rw [planesTimed_injected]
   simp
 
-/-- **Linear scaling with packets**: if one lane sustains the load `ρ * dem`, the torus with
-`m` lanes sustains `m ρ * dem`. -/
-theorem torusLanes_sustains (k m B : ℕ)
+/-- **Linear scaling with packets**: if one plane sustains the load `ρ * dem`, the torus with
+`m` planes sustains `m ρ * dem`. -/
+theorem torusPlanes_sustains (k m B : ℕ)
     (R : ((torus k).detourNet B (torus k).anyDetour).TimedRun
       ((torus k).detourNet B (torus k).anyDetour).adaptive)
     {dem : TV k → TV k → ℚ} {ρ K : ℚ}
     (hload : ∀ T s d, T * ρ * dem s d - K ≤
       R.injected ((torus k).detourPlacement B (torus k).anyDetour) T s d) :
-    ∃ R' : (torusLanes k m B).TimedRun (torusLanes k m B).adaptive,
-      ∀ T s d, T * (m * ρ) * dem s d - m * K ≤ R'.injected (torusLanesPlacement k m B) T s d := by
-  obtain ⟨R', hR'⟩ := torusLanes_timed k m B R
+    ∃ R' : (torusPlanes k m B).TimedRun (torusPlanes k m B).adaptive,
+      ∀ T s d, T * (m * ρ) * dem s d - m * K ≤
+        R'.injected (torusPlanesPlacement k m B) T s d := by
+  obtain ⟨R', hR'⟩ := torusPlanes_timed k m B R
   refine ⟨R', fun T s d => ?_⟩
   rw [hR']
   push_cast
   have := mul_le_mul_of_nonneg_left (hload T s d) (Nat.cast_nonneg (α := ℚ) m)
   linarith
 
-/-- Every timed run of the torus with `m` lanes delivers all it injects but for the packets the
+/-- Every timed run of the torus with `m` planes delivers all it injects but for the packets the
 network holds (at most its number of channels). -/
-theorem torusLanes_delivered (k m B : ℕ) {sel : Selection (Fin m × GChan (TV k)) (THdr k)}
-    (R : (torusLanes k m B).TimedRun sel) (T : ℕ) :
+theorem torusPlanes_delivered (k m B : ℕ) {sel : Selection (Fin m × GChan (TV k)) (THdr k)}
+    (R : (torusPlanes k m B).TimedRun sel) (T : ℕ) :
     (R.injectedAll T : ℤ) - Fintype.card (Fin m × GChan (TV k)) ≤ R.ejected T :=
   R.ejected_ge T
 
 /-- **Backpressure-style hop choices are safe**: choosing, among the free permitted hops of the
-torus with `m` lanes, those of largest score (any score: backlog differences, congestion
+torus with `m` planes, those of largest score (any score: backlog differences, congestion
 estimates) keeps the network deadlock and livelock free. -/
-theorem torusLanes_scoreSel (k m B : ℕ)
+theorem torusPlanes_scoreSel (k m B : ℕ)
     (score : Config (Fin m × GChan (TV k)) (THdr k) → Fin m × GChan (TV k) → THdr k →
       (Fin m × GChan (TV k)) × THdr k → ℚ) :
-    (torusLanes k m B).DeadlockFreeWith ((torusLanes k m B).scoreSel score) ∧
-      (torusLanes k m B).LivelockFreeWith ((torusLanes k m B).scoreSel score) :=
-  (torusLanes_correct k m B).1.scoreSel score
+    (torusPlanes k m B).DeadlockFreeWith ((torusPlanes k m B).scoreSel score) ∧
+      (torusPlanes k m B).LivelockFreeWith ((torusPlanes k m B).scoreSel score) :=
+  (torusPlanes_correct k m B).1.scoreSel score
 
-/-- The same for the widened torus (one escape and `2m - 1` adaptive channels per link). -/
-theorem torusWide_scoreSel (k m B : ℕ) (hm : 0 < m) (score : _) :
-    (torusWide k m B hm).DeadlockFreeWith ((torusWide k m B hm).scoreSel score) ∧
-      (torusWide k m B hm).LivelockFreeWith ((torusWide k m B hm).scoreSel score) :=
-  (torusWide_correct k m B hm).1.scoreSel score
+/-- The same for the replicated torus (one escape and `2m - 1` adaptive channels per link). -/
+theorem torusReplicated_scoreSel (k m B : ℕ) (hm : 0 < m) (score : _) :
+    (torusReplicated k m B hm).DeadlockFreeWith ((torusReplicated k m B hm).scoreSel score) ∧
+      (torusReplicated k m B hm).LivelockFreeWith ((torusReplicated k m B hm).scoreSel score) :=
+  (torusReplicated_correct k m B hm).1.scoreSel score
 
-#assert_standard_axioms torusLanes_scoreSel torusWide_scoreSel
-#assert_standard_axioms torus_nbrs_iff torusLanesPlacement_cap torusLanes_ceiling
-#assert_standard_axioms torusLanes_timed torusLanes_sustains torusLanes_delivered
+#assert_standard_axioms torusPlanes_scoreSel torusReplicated_scoreSel
+#assert_standard_axioms torus_nbrs_iff torusPlanesPlacement_cap torusPlanes_bound
+#assert_standard_axioms torusPlanes_timed torusPlanes_sustains torusPlanes_delivered
 
 end AsyncLean.Examples

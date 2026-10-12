@@ -8,7 +8,7 @@ checks in the kernel, and the validators cross-check results independently. The 
 need only the standard library, except `backpressure_sim.py` (`numpy`); the certificate
 generators and `routing_bounds.py` need `scipy`.
 
-Run them from the repository root, for example `python3 scripts/lane_scaling.py --help`.
+Run them from the repository root, for example `python3 scripts/plane_scaling.py --help`.
 
 ## Simulators (measurements, not theorems)
 
@@ -21,10 +21,10 @@ Run them from the repository root, for example `python3 scripts/lane_scaling.py 
 | `torus_experiments.py` | routing schemes and detour rules on the 8 × 8 torus | [topologies.md](../docs/topologies.md) |
 | `torus_final.py` | the final torus comparison (4 seeds) | [topologies.md](../docs/topologies.md) |
 | `torus_significance.py` | the same with standard errors (8 fresh seeds) | [topologies.md](../docs/topologies.md) |
-| `lane_scaling.py` | throughput per connection with `m` connections: lanes, shared lanes, widening | [scaling.md](../docs/scaling.md) |
+| `plane_scaling.py` | throughput per connection with `m` connections: planes, shared planes, replication | [scaling.md](../docs/scaling.md) |
 | `backpressure_sim.py` | backpressure with whole packets: throughput, delay, buffer needs (`--buffers`, `--cap`) | [scaling.md](../docs/scaling.md) |
 
-`routing_graph_sim.py` and `routing_sim.py` are also libraries: `lane_scaling.py`,
+`routing_graph_sim.py` and `routing_sim.py` are also libraries: `plane_scaling.py`,
 `torus_*.py` and `backpressure_sim.py` reuse their network and traffic definitions.
 
 ## Certificate generators (data checked by Lean)

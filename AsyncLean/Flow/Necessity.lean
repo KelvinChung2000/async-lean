@@ -13,7 +13,7 @@ scheduler that moves every packet only along shortest paths — whatever else it
 uses the backlogs — is bounded by the fluid optimum *over minimal routings*, which can be far
 below the optimum.
 
-* `GraphCert.Model.run_minimal_ceiling` : on a network certified by a port graph
+* `GraphCert.Model.run_minimal_bound` : on a network certified by a port graph
   (`GraphCert.Model`), a stable queueing run whose transmissions all bring their traffic
   strictly closer to its destination is bounded by every dual certificate on the minimal links
   (the ones the library checks in the kernel).  The bridge is `Fluid.PotentialFeasibleOn`: a
@@ -29,7 +29,7 @@ below the optimum.
   the optimum, backpressure from empty fits in buffers of `145 m k⁷ / (16 δ) + m` packets per
   destination, never deadlocks, and is stable: a finite-buffer network near the optimum without
   deadlock.
-* `Run.singleHead_ceiling`, `mesh_headOfLine` : **head-of-line blocking**: a vertex with one
+* `Run.singleFifo_bound`, `mesh_headOfLine` : **head-of-line blocking**: a vertex with one
   first-in first-out queue sends at most one packet per slot, so no such run is stable above one
   packet per vertex and slot, whatever the capacities; on the mesh with `m` connections,
   backpressure with a queue per destination is stable up to `m` times the optimum.  Per
@@ -75,13 +75,15 @@ theorem potentialFeasibleOn_transfer (M : Model G C N dist) {dem : V → V → �
   rw [e1, e2] at key
   exact key
 
-/-- **Shortest paths only: the minimal ceiling for runs.**  On a network certified by a port
+/-- **Shortest paths only: the minimal bound for runs.**  On a network certified by a port
 graph, a queueing run with arrivals `ρ * dem` and a bounded backlog, whose transmissions all
 bring their traffic strictly closer to its destination, has `ρ ≤ p / q` for every dual
 certificate on the minimal links. -/
-theorem run_minimal_ceiling (M : Model G C N dist) (dem : V → V → ℚ) (demN : ℕ → ℕ → ℕ)
-    (R : ℕ) (hdem : ∀ s d, dem s d = (demN (M.e s) (M.e d) : ℚ) / R) (phi lenT : ℕ → ℕ → ℕ)
-    (p q : ℕ) (hR : 0 < R) (hq : 0 < q) (hd : G.dualCheck phi lenT true = true)
+theorem run_minimal_bound (M : Model G C N dist) (dem : V → V → ℚ)
+    (demN : ℕ → ℕ → ℕ) (R : ℕ)
+    (hdem : ∀ s d, dem s d = (demN (M.e s) (M.e d) : ℚ) / R)
+    (phi lenT : ℕ → ℕ → ℕ) (p q : ℕ) (hR : 0 < R) (hq : 0 < q)
+    (hd : G.dualCheck phi lenT true = true)
     (hb : G.boundCheck C demN phi lenT R p q = true) (r : Run N) {ρ : ℚ}
     (harr : ∀ t v d, v ≠ d → r.a t v d = ρ * dem v d) (hbd : r.BoundedBacklog)
     (hmin : ∀ t d u v, 0 < r.x t d u v → dist v d < dist u d) :
@@ -114,7 +116,7 @@ theorem torusTornado_adaptivity (r : Run (torusNet 8)) {ρ : ℚ} :
     exact r.backpressure_optimal hr torusTornado_opt.1 torus_uniform_opt_eight.1.1
       tornado8_nonneg hunn (c := 1 / (((8 : ℕ) : ℚ) ^ 2 - 1)) (by norm_num) hunc (by norm_num)
       hρ hρθ harr
-  · have h := torusModel.run_minimal_ceiling tornado8 _ 1 torusTornado_dem torusTornadoMinP
+  · have h := torusModel.run_minimal_bound tornado8 _ 1 torusTornado_dem torusTornadoMinP
       torusTornadoMinL 2 3 one_pos (by norm_num) torusTornadoMin_dual torusTornadoMin_bound r
       harr hbd hmin
     norm_num at h ⊢
@@ -297,14 +299,14 @@ namespace Run
 
 variable {V : Type*} [Fintype V] [DecidableEq V] {N : Net V} (r : Run N)
 
-/-- **A single head per vertex**: every vertex sends at most one packet per slot in all, as a
+/-- **A single FIFO per vertex**: every vertex sends at most one packet per slot in all, as a
 vertex with one first-in first-out queue for all destinations does (only the packet at its head
 can leave). -/
-def SingleHead : Prop := ∀ t u, ∑ d, ∑ v, r.x t d u v ≤ 1
+def SingleFifo : Prop := ∀ t u, ∑ d, ∑ v, r.x t d u v ≤ 1
 
 omit [DecidableEq V] in
-/-- With a single head per vertex, at most `|V|` packets are delivered per slot. -/
-theorem delivered_le_card (h : r.SingleHead) (t : ℕ) : r.delivered t ≤ Fintype.card V := by
+/-- With a single FIFO per vertex, at most `|V|` packets are delivered per slot. -/
+theorem delivered_le_card (h : r.SingleFifo) (t : ℕ) : r.delivered t ≤ Fintype.card V := by
   unfold delivered
   calc ∑ d, ∑ u, r.x t d u d ≤ ∑ d, ∑ u, ∑ v, r.x t d u v :=
         sum_le_sum fun d _ => sum_le_sum fun u _ =>
@@ -313,9 +315,9 @@ theorem delivered_le_card (h : r.SingleHead) (t : ℕ) : r.delivered t ≤ Finty
     _ ≤ ∑ _u : V, (1 : ℚ) := sum_le_sum fun u _ => h t u
     _ = Fintype.card V := by simp
 
-/-- **Head-of-line ceiling**: a single-head run whose arrivals total `A` per slot and whose
+/-- **Head-of-line bound**: a single-FIFO run whose arrivals total `A` per slot and whose
 backlog stays bounded has `A ≤ |V|`, whatever the capacities. -/
-theorem singleHead_ceiling (h : r.SingleHead) {A : ℚ} (harr : ∀ t, r.arrived t = A)
+theorem singleFifo_bound (h : r.SingleFifo) {A : ℚ} (harr : ∀ t, r.arrived t = A)
     (hb : r.BoundedBacklog) : A ≤ Fintype.card V := by
   obtain ⟨C, hC⟩ := hb
   have hT : ∀ T : ℕ, (T : ℚ) * A ≤ T * Fintype.card V + C := by
@@ -366,7 +368,7 @@ theorem mesh_headOfLine (k : ℕ) (hk : 2 ≤ k) {m : ℕ} {ρ : ℚ} (hρ1 : 1 
     (hρθ : ρ < m * (8 * ((k : ℚ) ^ 2 - 1) / k ^ 3)) :
     (∀ r : Run ((meshNet k).copies m), r.Backpressure →
         (∀ t v d, v ≠ d → r.a t v d ≤ ρ * uniform k v d) → r.Stable) ∧
-      (∀ r : Run ((meshNet k).copies m), r.SingleHead →
+      (∀ r : Run ((meshNet k).copies m), r.SingleFifo →
         (∀ t v d, v ≠ d → r.a t v d = ρ * uniform k v d) → ¬ r.BoundedBacklog) := by
   refine ⟨fun r hr harr => ?_, fun r hh harr hb => ?_⟩
   · have hk' : (2 : ℚ) ≤ k := by exact_mod_cast hk
@@ -382,7 +384,7 @@ theorem mesh_headOfLine (k : ℕ) (hk : 2 ≤ k) {m : ℕ} {ρ : ℚ} (hρ1 : 1 
         · subst h; rw [r.a_dest]; simp [uniform]
         · exact harr t v d h
       simp only [e, ← mul_sum, uniform_total k hk]
-    have := r.singleHead_ceiling hh hA hb
+    have := r.singleFifo_bound hh hA hb
     simp only [Fintype.card_prod, Fintype.card_fin] at this
     push_cast at this
     have hk2 : (0 : ℚ) < (k : ℚ) ^ 2 := by

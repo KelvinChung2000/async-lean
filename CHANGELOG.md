@@ -75,17 +75,17 @@
     exactly `m` times one connection's (`opt_copies`, `worstOpt_copies`); layers of unequal
     connections add (`layered_routable`); exact worst cases `4m/k` (mesh), `8m/k` (torus), `2m`
     (hypercube).
-  * *Lanes* (`Routing/Lanes.lean`, `Examples/Lanes.lean`): `m` copies of a network side by side,
-    safe for every `m` (`Network.SafeCert`, `SafeCert.lanes`, `lanes_correct`, on every graph);
-    the lanes do not interfere (`lanes_reachable_iff`, `copies_path`). Sharing the connections
-    is safe too (`GraphData.sharedNet`, `Network.widen`).
+  * *Planes* (`Routing/Planes.lean`, `Examples/Planes.lean`): `m` copies of a network side by side,
+    safe for every `m` (`Network.SafeCert`, `SafeCert.planes`, `planes_correct`, on every graph);
+    the planes do not interfere (`planes_reachable_iff`, `copies_path`). Sharing the connections
+    is safe too (`GraphData.sharedNet`, `Network.replicate`).
   * *Packets in time* (`Routing/Throughput/`, `Examples/Throughput.lean`): timed runs respect
-    every fluid bound under any selection (`TimedRun.ceiling`); lanes add their timed throughput
-    (`lanesTimed_injected`); the torus with `m` lanes is exactly linear up to the optimum
-    (`torusLanes_ceiling`, `torusLanes_sustains`); score-based selections are safe
+    every fluid bound under any selection (`TimedRun.potential_bound`); planes add their timed throughput
+    (`planesTimed_injected`); the torus with `m` planes is exactly linear up to the optimum
+    (`torusPlanes_bound`, `torusPlanes_sustains`); score-based selections are safe
     (`scoreSel_valid`).
   * *Backpressure* (`Flow/Backpressure/`, `Flow/Stochastic.lean`): stable at every load below
-    the fluid optimum and no scheduler above it (`backpressure_optimal`, `potential_ceiling`);
+    the fluid optimum and no scheduler above it (`backpressure_optimal`, `potential_bound`);
     with `m` connections the threshold is `m` times the optimum on mesh, torus and hypercube;
     finite buffers suffice (`mesh_buffer`); bursty and whole-packet arrivals
     (`backpressure_stable_bursty`, `mesh_backpressure_packets`); random arrivals
@@ -97,8 +97,8 @@
     (`mesh_headOfLine`). `GraphCert.PortGraph.upper_of_check'` takes potential feasibility
     instead of a flow; `mesh_upper_of_cut`, `torus_uniform_hop`, `cube_uniform_hop` expose the
     tight bounds.
-  * *Simulation* (`scripts/lane_scaling.py`, `scripts/backpressure_sim.py`): lanes scale within
-    0.006 of linear; widening gains 6 to 63 % per connection; backpressure accepts 99 % of the
+  * *Simulation* (`scripts/plane_scaling.py`, `scripts/backpressure_sim.py`): planes scale within
+    0.006 of linear; replication gains 6 to 63 % per connection; backpressure accepts 99 % of the
     optimum with about `24 m` packets per destination.
 
 * **Documentation reorganised.** The README is the user guide; the routing research moved to
@@ -110,6 +110,15 @@
   `Examples/MeshMetrics`, and the generated `Flow/GraphPatterns/Data` (one part per checking
   module; `scripts/graph_certificates.py` writes the same layout). The module of the old name
   imports all its parts, so every import and every name is unchanged.
+* **Names follow the literature** (glossary: `docs/scaling.md`, section 8). The `m` copies of a
+  network are *planes* (multiple physical networks), not *lanes*, which is Dally's word for
+  virtual channels: `Routing/Lanes` → `Routing/Planes`, `SharedLanes` → `SharedPlanes`,
+  `Network.lanes` → `Network.planes`, `torusLanes_*` → `torusPlanes_*`,
+  `scripts/lane_scaling.py` → `scripts/plane_scaling.py`. Widening is channel *replication*
+  (`Routing/Widen` → `Routing/Replicate`, `Network.widen` → `Network.replicate`). The bounds are
+  named like the fluid model's (`*_ceiling` → `*_bound`, `TimedRun.ceiling` →
+  `TimedRun.potential_bound`; `Backpressure/Ceiling` → `Backpressure/Converse`); `energy` is the
+  quadratic `lyapunov` function; `SingleHead` → `SingleFifo`.
 
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the

@@ -12,7 +12,7 @@ This module gathers the backpressure development, in seven parts:
 2. `Backpressure.Stability` — the drift, stability and throughput optimality;
 3. `Backpressure.Buffers` — finite per-destination buffers suffice;
 4. `Backpressure.Bursty` — leaky-bucket arrivals, whole packets at fractional rates;
-5. `Backpressure.Ceiling` — no scheduler beats the fluid model;
+5. `Backpressure.Converse` — no scheduler beats the fluid model;
 6. `Backpressure.Scheduler` — the greedy scheduler, with fractional or whole-packet sends;
 7. `Backpressure.Instances` — the mesh, the torus and the hypercube with `m` connections.
 
@@ -20,7 +20,7 @@ The fluid model (`Fluid.Routable`) says which throughputs a network can carry at
 modules prove that one scheduler, **backpressure** (max-weight scheduling, Tassiulas and
 Ephremides), carries every one of them: every load strictly inside the fluid optimum keeps its
 backlog bounded and is delivered in full.  Conversely no scheduler whatever keeps its backlog
-bounded above any fluid upper bound (`Run.potential_ceiling`).  So the fluid optimum is exactly
+bounded above any fluid upper bound (`Run.potential_bound`).  So the fluid optimum is exactly
 the throughput of backpressure.
 
 ## The model
@@ -46,8 +46,8 @@ with packets as divisible as the fluid's.  The backpressure scheduler (`Run.Back
 * `Run.backlog_succ`, `Run.delivered_sum` : conservation: the delivered traffic is what arrived
   less what is still queued.
 * `Run.drift` : **the drift bound.**  If `dem` is routable at throughput `1` and the arrivals
-  stay `ε` below it (`a t v d + ε ≤ dem v d`), the energy `∑ Q²` of a backpressure run obeys
-  `E (t+1) ≤ E t + B - 2 ε ∑ Q`, for a constant `B` of the network and the traffic.
+  stay `ε` below it (`a t v d + ε ≤ dem v d`), the Lyapunov function `∑ Q²` of a backpressure run
+  obeys `E (t+1) ≤ E t + B - 2 ε ∑ Q`, for a constant `B` of the network and the traffic.
 * `Run.backpressure_stable` : the backlog of a backpressure run stays bounded, and it delivers
   all its arrivals up to a constant.
 * `Run.backpressure_optimal` : **backpressure is throughput optimal.**  If `dem` is routable at
@@ -66,9 +66,9 @@ with packets as divisible as the fluid's.  The backpressure scheduler (`Run.Back
   `Run.ofArrivalsSeq` : backpressure with sequential sends (`sendSeq`), which moves whole packets
   only (`Run.ofArrivalsSeq_int`); `mesh_backpressure_packets` : on the mesh with `m` connections
   it is stable for whole packets at every leaky-bucket rate below `m` times the optimum.
-* `Run.potential_ceiling` : **the ceiling**, for every scheduler: a run that keeps its backlog
+* `Run.potential_bound` : **the converse**, for every scheduler: a run that keeps its backlog
   bounded under the load `ρ * dem` respects every potential bound of the fluid model
-  (`potential_bound`); `Run.cut_ceiling`, `Run.hop_ceiling` are the cut and hop forms.
+  (`potential_bound`); `Run.cut_bound`, `Run.hop_bound` are the cut and hop forms.
 * Instances, with `m` connections per link: on the `k × k` mesh (even `k`) under uniform traffic
   backpressure is stable at every load below `m * 8 (k² - 1) / k³`, no scheduler is stable
   above it (`mesh_backpressure`); likewise on the torus (`torus_backpressure`, `m` times

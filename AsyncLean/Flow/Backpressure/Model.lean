@@ -10,7 +10,8 @@ The discrete-time queueing network of the fluid model (`Fluid.Run`): per-destina
 every vertex, rates offered within the capacities, traffic carried, arrivals.  The definitions of
 the scheduler (`Run.MaxWeight`, `Run.WorkConserving`, `Run.Backpressure`) and of stability
 (`Run.BoundedBacklog`, `Run.Stable`), conservation (`Run.backlog_succ`, `Run.delivered_sum`), the
-energy `∑ Q²` and the algebra of flows the later parts use (`Flow.normalize`, `Flow.mix`).
+Lyapunov function `∑ Q²` and the algebra of flows the later parts use (`Flow.normalize`,
+`Flow.mix`).
 
 See `AsyncLean.Flow.Backpressure` for the overview.
 -/
@@ -38,8 +39,8 @@ def weight (Q : V → V → ℚ) (μ : V → V → V → ℚ) : ℚ :=
 /-- The total backlog. -/
 def backlog (Q : V → V → ℚ) : ℚ := ∑ d, ∑ v, Q v d
 
-/-- The energy `∑ Q²` of the backlogs, the Lyapunov function of backpressure. -/
-def energy (Q : V → V → ℚ) : ℚ := ∑ d, ∑ v, Q v d ^ 2
+/-- The quadratic Lyapunov function `∑ Q²` of the backlogs. -/
+def lyapunov (Q : V → V → ℚ) : ℚ := ∑ d, ∑ v, Q v d ^ 2
 
 omit [DecidableEq V] in
 /-- A flow is feasible as rates. -/
@@ -66,27 +67,27 @@ theorem Flow.weight_eq {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (F : Flow 
   sum_congr rfl fun d _ => F.telescope d (fun v => Q v d) (hQ d)
 
 omit [DecidableEq V] in
-/-- For nonnegative backlogs the energy is at most the square of the total backlog. -/
-theorem energy_le_backlog_sq {Q : V → V → ℚ} (hQ : ∀ v d, 0 ≤ Q v d) :
-    energy Q ≤ backlog Q ^ 2 := by
+/-- For nonnegative backlogs the Lyapunov function is at most the square of the total backlog. -/
+theorem lyapunov_le_backlog_sq {Q : V → V → ℚ} (hQ : ∀ v d, 0 ≤ Q v d) :
+    lyapunov Q ≤ backlog Q ^ 2 := by
   have hle : ∀ v d, Q v d ≤ backlog Q := fun v d =>
     (single_le_sum (f := fun v => Q v d) (fun v _ => hQ v d) (mem_univ v)).trans
       (single_le_sum (f := fun d => ∑ v, Q v d) (fun d _ => sum_nonneg fun v _ => hQ v d)
         (mem_univ d))
-  calc energy Q = ∑ d, ∑ v, Q v d * Q v d := by simp only [energy, sq]
+  calc lyapunov Q = ∑ d, ∑ v, Q v d * Q v d := by simp only [lyapunov, sq]
     _ ≤ ∑ d, ∑ v, Q v d * backlog Q :=
         sum_le_sum fun d _ => sum_le_sum fun v _ => mul_le_mul_of_nonneg_left (hle v d) (hQ v d)
     _ = backlog Q ^ 2 := by simp only [← sum_mul, sq, backlog]
 
 omit [DecidableEq V] in
-/-- The total backlog is at most `|V|² + energy`. -/
-theorem backlog_le_energy (Q : V → V → ℚ) :
-    backlog Q ≤ (Fintype.card V : ℚ) ^ 2 + energy Q := by
+/-- The total backlog is at most `|V|² + lyapunov`. -/
+theorem backlog_le_lyapunov (Q : V → V → ℚ) :
+    backlog Q ≤ (Fintype.card V : ℚ) ^ 2 + lyapunov Q := by
   have h : ∀ v d, Q v d ≤ 1 + Q v d ^ 2 := fun v d => by nlinarith [sq_nonneg (Q v d - 1)]
   calc backlog Q ≤ ∑ d : V, ∑ v : V, (1 + Q v d ^ 2) :=
         sum_le_sum fun d _ => sum_le_sum fun v _ => h v d
-    _ = (Fintype.card V : ℚ) ^ 2 + energy Q := by
-        simp only [sum_add_distrib, sum_const, card_univ, nsmul_eq_mul, mul_one, energy]
+    _ = (Fintype.card V : ℚ) ^ 2 + lyapunov Q := by
+        simp only [sum_add_distrib, sum_const, card_univ, nsmul_eq_mul, mul_one, lyapunov]
         ring
 
 /-- **One queue for one slot.**  A queue `Q ≥ 0` offered the rate `b ≥ 0` sends `out`, at most

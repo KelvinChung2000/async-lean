@@ -67,10 +67,10 @@ import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
-import AsyncLean.Routing.Lanes
-import AsyncLean.Routing.SharedLanes
+import AsyncLean.Routing.Planes
+import AsyncLean.Routing.SharedPlanes
 import AsyncLean.Routing.Throughput
-import AsyncLean.Routing.Widen
+import AsyncLean.Routing.Replicate
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -118,6 +118,6 @@ import AsyncLean.Examples.GraphRouting
 import AsyncLean.Examples.Saturation
 import AsyncLean.Examples.GraphBudget
 import AsyncLean.Examples.GraphDetour
-import AsyncLean.Examples.Lanes
+import AsyncLean.Examples.Planes
 import AsyncLean.Examples.Throughput
 import AsyncLean.Tutorial

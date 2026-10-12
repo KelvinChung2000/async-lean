@@ -55,8 +55,8 @@ theorem exists_max_score {α : Type*} (g : α → ℚ) :
 
 omit [DecidableEq C] in
 /-- **Selection by score is valid**: it offers only permitted hops and is work conserving.  So
-every network proved correct under all valid selections (`Network.Correct`) — the lanes, the
-shared lanes, the widened networks — stays deadlock and livelock free when its hops are chosen
+every network proved correct under all valid selections (`Network.Correct`) — the planes, the
+shared planes, the replicated networks — stays deadlock and livelock free when its hops are chosen
 by any score, backlog differences included. -/
 theorem scoreSel_valid (score : Config C P → C → P → C × P → ℚ) :
     N.ValidSel (N.scoreSel score) := by

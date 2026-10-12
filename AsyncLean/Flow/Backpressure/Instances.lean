@@ -3,7 +3,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 -/
 import AsyncLean.Flow.Backpressure.Buffers
 import AsyncLean.Flow.Backpressure.Bursty
-import AsyncLean.Flow.Backpressure.Ceiling
+import AsyncLean.Flow.Backpressure.Converse
 import AsyncLean.Flow.Backpressure.Scheduler
 
 /-!
@@ -55,7 +55,7 @@ theorem mesh_backpressure (k : ℕ) (hk : 2 ≤ k) (he : Even k) {m : ℕ} (hm :
   refine ⟨fun hr hρ hρθ harr => r.backpressure_optimal hr hR hR hunn hunn
     (div_pos one_pos hK) hunc (mul_pos hm' (div_pos (by linarith) (by positivity))) hρ hρθ harr,
     fun harr hb => ?_⟩
-  have h := r.cut_ceiling harr hb (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k)
+  have h := r.cut_bound harr hb (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k)
   beta_reduce at h
   have e : ∀ u v : Fin k × Fin k,
       (if 2 * (u.1 : ℕ) < k ∧ ¬ 2 * (v.1 : ℕ) < k then ((meshNet k).copies m).cap u v else 0) =
@@ -105,7 +105,7 @@ theorem torus_backpressure (k : ℕ) (hk : 3 ≤ k) {m : ℕ} (hm : 0 < m)
   have hD : 0 < hopDemand (uniform k) torusDist := by
     rw [torus_hop_uniform]
     exact div_pos (mul_pos (by positivity) (ringTotal_pos (by omega))) hK
-  exact r.copies_hop_ceiling harr hb (torus_isHopDistance k)
+  exact r.copies_hop_bound harr hb (torus_isHopDistance k)
     (fun u v => by rw [torusDist_eq]; positivity) hD
     (by rw [torus_sum_cap (by omega)]; exact torus_uniform_hop k hk)
 
@@ -145,7 +145,7 @@ theorem cube_backpressure (n : ℕ) (hn : 1 ≤ n) {m : ℕ} (hm : 0 < m)
     rw [cube_hop_uniform]
     have hn' : (1 : ℚ) ≤ n := by exact_mod_cast hn
     exact div_pos (by positivity) (by positivity)
-  exact r.copies_hop_ceiling harr hb (cube_isHopDistance n)
+  exact r.copies_hop_bound harr hb (cube_isHopDistance n)
     (fun u v => by rw [cubeDist_eq]; positivity) hD
     (by rw [cube_sum_cap]; exact cube_uniform_hop n hn)
 

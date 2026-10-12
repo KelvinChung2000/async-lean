@@ -4,7 +4,7 @@ traffic, `Fluid.Run` in AsyncLean/Flow/Backpressure/, is: there backpressure is 
 every load below the fluid optimum, and no scheduler is stable above it).
 
 The network: the k x k mesh or torus, every directed link with m connections, each carrying 2
-packets per slot (the 2 virtual channels of a connection in scripts/lane_scaling.py, the
+packets per slot (the 2 virtual channels of a connection in scripts/plane_scaling.py, the
 capacity 2 of `meshNet` / `torusNet`).  Every vertex keeps an unbounded queue per destination.
 In every slot:
 

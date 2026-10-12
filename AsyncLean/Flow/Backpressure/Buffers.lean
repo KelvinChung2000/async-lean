@@ -31,10 +31,10 @@ on overflow, then behaves exactly like the run: the overflow never happens. -/
 def FitsIn (b : ℚ) : Prop := ∀ t v d, r.Q t v d ≤ b
 
 omit [DecidableEq V] in
-/-- A queue is at most `x + ε` when the energy is at most `x² + 2 x ε`. -/
-theorem queue_le_of_energy {Q : V → V → ℚ} {x ε : ℚ} (hx : 0 ≤ x)
-    (hε : 0 < ε) (hE : energy Q ≤ x ^ 2 + 2 * x * ε) (v d : V) : Q v d ≤ x + ε := by
-  have h1 : Q v d ^ 2 ≤ energy Q :=
+/-- A queue is at most `x + ε` when the Lyapunov function is at most `x² + 2 x ε`. -/
+theorem queue_le_of_lyapunov {Q : V → V → ℚ} {x ε : ℚ} (hx : 0 ≤ x)
+    (hε : 0 < ε) (hE : lyapunov Q ≤ x ^ 2 + 2 * x * ε) (v d : V) : Q v d ≤ x + ε := by
+  have h1 : Q v d ^ 2 ≤ lyapunov Q :=
     (single_le_sum (f := fun v => Q v d ^ 2) (fun v _ => sq_nonneg _) (mem_univ v)).trans
       (single_le_sum (f := fun d => ∑ v, Q v d ^ 2) (fun d _ => sum_nonneg fun v _ => sq_nonneg _)
         (mem_univ d))
@@ -56,15 +56,15 @@ theorem backpressure_fitsIn (hr : r.Backpressure) {dem : V → V → ℚ} (F : F
   have hB := driftConst_nonneg N dem
   set x := B / (2 * ε) with hxdef
   have hx : 0 ≤ x := div_nonneg hB (by positivity)
-  have hE0 : energy (r.Q 0) = 0 := by simp [energy, h0]
+  have hE0 : lyapunov (r.Q 0) = 0 := by simp [lyapunov, h0]
   have hfit : r.FitsIn (x + ε) := fun t v d => by
-    have h := r.energy_bounded hr F hdem hε harr t
+    have h := r.lyapunov_bounded hr F hdem hε harr t
     rw [hE0, max_eq_right (by positivity)] at h
     have e : B = 2 * x * ε := by
       rw [hxdef, show (2 : ℚ) * (B / (2 * ε)) * ε = B / (2 * ε) * (2 * ε) by ring,
         div_mul_cancel₀ B (by positivity)]
     have e' : (B / (2 * ε)) ^ 2 + B = x ^ 2 + 2 * x * ε := by rw [← e]
-    exact queue_le_of_energy hx hε (h.trans e'.le) v d
+    exact queue_le_of_lyapunov hx hε (h.trans e'.le) v d
   refine ⟨hfit, fun t => ?_⟩
   have hb : backlog (r.Q t) ≤ (Fintype.card V : ℚ) ^ 2 * (x + ε) := by
     calc backlog (r.Q t) ≤ ∑ _d : V, ∑ _v : V, (x + ε) :=

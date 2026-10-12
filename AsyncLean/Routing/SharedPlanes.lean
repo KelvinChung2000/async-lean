@@ -1,44 +1,44 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Routing.Lanes
+import AsyncLean.Routing.Planes
 
 /-!
-# Shared lanes: escapes per lane, adaptive hops on every lane
+# Shared planes: escapes per plane, adaptive hops on every plane
 
-`AsyncLean.Routing.Lanes` keeps a packet in the lane it was injected into, which makes `m` lanes
+`AsyncLean.Routing.Planes` keeps a packet in the plane it was injected into, which makes `m` planes
 exactly `m` copies of one network.  With packets that leaves throughput unused: a packet blocked
-in its own lane cannot take a free channel of another lane going the same way.
-`scripts/lane_scaling.py` measures that letting packets use the adaptive channels of every lane
-gains 4 to 13 % per connection over the lanes on the 8 × 8 torus with two
+in its own plane cannot take a free channel of another plane going the same way.
+`scripts/plane_scaling.py` measures that letting packets use the adaptive channels of every plane
+gains 4 to 13 % per connection over the planes on the 8 × 8 torus with two
 connections per link, and 5 to 23 % with four.  This file proves that this
-**shared** use of the lanes stays safe on every graph, for every number of lanes.
+**shared** use of the planes stays safe on every graph, for every number of planes.
 
 ## The network (`GraphData.sharedNet`)
 
-Each lane `i` of `ls` has its own graph data `Gs i` (the same graph with a different spanning
-tree, for example), and every directed link carries, in every lane, the two virtual channels of
-`GraphData.budgetNet`.  A packet header `(L, d, b)` carries the lane `L` chosen at the source,
+Each plane `i` of `ls` has its own graph data `Gs i` (the same graph with a different spanning
+tree, for example), and every directed link carries, in every plane, the two virtual channels of
+`GraphData.budgetNet`.  A packet header `(L, d, b)` carries the plane `L` chosen at the source,
 the destination and the remaining return budget.
 
-* The **escape hop** is the spanning-tree hop of the packet's own lane `L`, on lane `L`'s
-  virtual channel 0: the escapes of different lanes never mix.
+* The **escape hop** is the spanning-tree hop of the packet's own plane `L`, on plane `L`'s
+  virtual channel 0: the escapes of different planes never mix.
 * The **adaptive hops** are the minimal adaptive hops of `Gs L`, on virtual channel 1 of
-  **every** lane.
+  **every** plane.
 * Returns from an escape channel to an adaptive channel cost one unit of budget, as in
   `GraphData.budgetNet`.
 
-Every hop of the lane network of `budgetNet`s (`Network.lanes`) is a hop of `sharedNet`, so the
+Every hop of the plane network of `budgetNet`s (`Network.planes`) is a hop of `sharedNet`, so the
 shared network is at least as adaptive.
 
 ## Main results
 
 * `GraphData.shared_dep`, `GraphData.shared_esc_wf` : an escape dependency of `sharedNet` lands
-  on an escape channel, and from an escape channel of lane `L` it is an escape dependency of lane
+  on an escape channel, and from an escape channel of plane `L` it is an escape dependency of plane
   `L`'s `budgetNet`; so the escape dependency graph is well founded (the adaptive channels have
   no incoming escape dependencies).
 * `GraphData.sharedCert` : the safety certificate (`Network.SafeCert`).
-* `GraphData.shared_correct` : for every finite connected graph data, every list of lanes and
+* `GraphData.shared_correct` : for every finite connected graph data, every list of planes and
   every return budget, deadlock and livelock free under every valid selection, starvation free
   under strong fairness, and every packet delivered under saturation along every channel-fair
   run.
@@ -56,14 +56,14 @@ variable {V : Type*} [DecidableEq V] {ι : Type*}
 
 /-! ### The network -/
 
-/-- The channels a hop of lane `L`'s `budgetNet` may use: an escape hop stays in lane `L`, an
-adaptive hop may use every lane of `ls`.  The header records the lane `L`. -/
+/-- The channels a hop of plane `L`'s `budgetNet` may use: an escape hop stays in plane `L`, an
+adaptive hop may use every plane of `ls`.  The header records the plane `L`. -/
 def spread (ls : List ι) (L : ι) (q : GChan V × (V × ℕ)) :
     List ((ι × GChan V) × (ι × (V × ℕ))) :=
   if q.1.isEsc then [((L, q.1), (L, q.2))] else ls.map fun j => ((j, q.1), (L, q.2))
 
-/-- **Shared lanes**: a packet of lane `L` is routed by `(Gs L).budgetNet B`, its escape hops on
-lane `L`, its adaptive hops on every lane of `ls`. -/
+/-- **Shared planes**: a packet of plane `L` is routed by `(Gs L).budgetNet B`, its escape hops on
+plane `L`, its adaptive hops on every plane of `ls`. -/
 def sharedNet (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) :
     Network (ι × GChan V) (ι × (V × ℕ)) where
   arrived x p := decide (x.2.head = p.2.1)
@@ -105,13 +105,13 @@ theorem budgetEscape_isEsc (G : GraphData V) {c : GChan V} {p : V × ℕ} {q : G
 
 /-! ### Legal pairs and the escape -/
 
-/-- The legal pairs: lanes of `ls`, a legal pair of the packet's lane, and a packet on an escape
-channel belongs to that channel's lane. -/
+/-- The legal pairs: planes of `ls`, a legal pair of the packet's plane, and a packet on an escape
+channel belongs to that channel's plane. -/
 def sharedLegal (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) (x : ι × GChan V)
     (p : ι × (V × ℕ)) : Prop :=
   x.1 ∈ ls ∧ p.1 ∈ ls ∧ (Gs p.1).budgetLegal B x.2 p.2 ∧ (x.2.isEsc = true → x.1 = p.1)
 
-/-- The escape subfunction: the escape hop of the packet's lane, in that lane. -/
+/-- The escape subfunction: the escape hop of the packet's plane, in that plane. -/
 def sharedEsc (Gs : ι → GraphData V) (x : ι × GChan V) (p : ι × (V × ℕ)) :
     List ((ι × GChan V) × (ι × (V × ℕ))) :=
   ((Gs p.1).budgetEscape x.2 p.2).map fun q => ((p.1, q.1), (p.1, q.2))
@@ -134,7 +134,7 @@ theorem shared_closed : (sharedNet ls Gs B).Closed (sharedLegal ls Gs B) where
     · exact hj
 
 /-- **The escape dependencies**: an escape dependency lands on an escape channel, and from an
-escape channel of lane `j` it stays in lane `j` and is an escape dependency of lane `j`'s
+escape channel of plane `j` it stays in plane `j` and is an escape dependency of plane `j`'s
 `budgetNet`. -/
 theorem shared_dep {j j' : ι} {c c' : GChan V}
     (h : (sharedNet ls Gs B).Dep (sharedLegal ls Gs B) (sharedEsc Gs) (j, c) (j', c')) :
@@ -150,7 +150,7 @@ theorem shared_dep {j j' : ι} {c c' : GChan V}
   exact ⟨rfl, p.2, q0.2, hl.2.2.1, ha, hq0⟩
 
 /-- **The escape dependency graph is well founded**: from an escape channel the dependencies are
-those of its lane, and an adaptive or injection channel only leads to escape channels. -/
+those of its plane, and an adaptive or injection channel only leads to escape channels. -/
 theorem shared_esc_wf :
     WellFounded (flip ((sharedNet ls Gs B).Dep (sharedLegal ls Gs B) (sharedEsc Gs))) := by
   have hesc : ∀ j c, c.isEsc = true →
@@ -169,7 +169,7 @@ theorem shared_esc_wf :
   obtain ⟨j', c'⟩ := y
   exact hesc j' c' (shared_dep hy).1
 
-/-- **The safety certificate of shared lanes.** -/
+/-- **The safety certificate of shared planes.** -/
 def sharedCert (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) : SafeCert (sharedNet ls Gs B) where
   legal := sharedLegal ls Gs B
   closed := shared_closed
@@ -193,13 +193,13 @@ def sharedCert (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) : SafeCert (sh
     rw [h1, h2]
     exact (Gs p.1).budget_rank_lt B x.2 p.2 q0 hl.2.2.1 ha hq0
 
-/-- **Shared lanes are at least as adaptive as lanes**: every hop of the lane network of
-`budgetNet`s, with the lane recorded in the header, is a hop of the shared network. -/
-theorem lanes_route_sub {i : ι} (hi : i ∈ ls) {c : GChan V} {p : V × ℕ}
+/-- **Shared planes are at least as adaptive as planes**: every hop of the plane network of
+`budgetNet`s, with the plane recorded in the header, is a hop of the shared network. -/
+theorem planes_route_sub {i : ι} (hi : i ∈ ls) {c : GChan V} {p : V × ℕ}
     {q : (ι × GChan V) × (V × ℕ)}
-    (hq : q ∈ (Network.lanes ls fun i => (Gs i).budgetNet B).route (i, c) p) :
+    (hq : q ∈ (Network.planes ls fun i => (Gs i).budgetNet B).route (i, c) p) :
     (q.1, (i, q.2)) ∈ (sharedNet ls Gs B).route (i, c) (i, p) := by
-  obtain ⟨q0, hq0, rfl⟩ := mem_lanes_route.1 hq
+  obtain ⟨q0, hq0, rfl⟩ := mem_planes_route.1 hq
   refine mem_sharedRoute.2 ⟨q0, hq0, ?_⟩
   unfold spread
   split_ifs
@@ -210,8 +210,8 @@ theorem lanes_route_sub {i : ι} (hi : i ∈ ls) {c : GChan V} {p : V × ℕ}
 
 variable [DecidableEq ι]
 
-/-- **Shared lanes are correct on every graph**: for every list of lanes, every graph data per
-lane and every return budget, deadlock and livelock free under every valid selection, starvation
+/-- **Shared planes are correct on every graph**: for every list of planes, every graph data per
+plane and every return budget, deadlock and livelock free under every valid selection, starvation
 free under strong fairness, and every packet delivered under saturation along every channel-fair
 run. -/
 theorem shared_correct (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) :
@@ -221,7 +221,7 @@ theorem shared_correct (ls : List ι) (Gs : ι → GraphData V) (B : ℕ) :
   ⟨(sharedCert ls Gs B).correct.1, (sharedCert ls Gs B).correct.2,
     fun _ hsel => ((sharedCert ls Gs B).underLoad_of_valid hsel).2.2⟩
 
-/-- **Shared lanes with throttled sources are correct**: under every selection that never refuses
+/-- **Shared planes with throttled sources are correct**: under every selection that never refuses
 a free escape hop outside the injection channels and releases a source once the rest of the
 network is empty, deadlock and livelock free, and every packet outside the injection channels is
 delivered along every channel-fair run. -/

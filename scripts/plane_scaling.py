@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Throughput against the number of connections per link (nothing here is proved; the three
-networks are `Network.lanes` (AsyncLean/Routing/Lanes.lean), `GraphData.sharedNet`
-(SharedLanes.lean) and `Network.widen` with `GraphData.sharedSlots` (Widen.lean), whose safety
+networks are `Network.planes` (AsyncLean/Routing/Planes.lean), `GraphData.sharedNet`
+(SharedPlanes.lean) and `Network.replicate` with `GraphData.sharedSlots` (Replicate.lean), whose safety
 is).
 
 Every directed link has m connections, each with 2 one-packet virtual channels, and every node
@@ -10,14 +10,14 @@ rate `rate`).  The mechanics are those of scripts/routing_graph_sim.py (routing 
 ejection, one hop per packet per cycle in random order, tiered selection, bounded returns,
 throttled injection), with three ways to use the m connections:
 
-  lanes   `Network.lanes`: lane L is a full copy of the network on virtual channels 2L (escape,
-          spanning tree or XY) and 2L + 1 (minimal adaptive); a packet picks a lane at its
-          source (the first free injection channel, lanes in random order) and stays on it.
-          With --trees, lane L uses a spanning tree rooted at a different node.
-  shared  the widening, one wide network: virtual channel 0 is the escape, virtual channels
+  planes   `Network.planes`: plane L is a full copy of the network on virtual channels 2L (escape,
+          spanning tree or XY) and 2L + 1 (minimal adaptive); a packet picks a plane at its
+          source (the first free injection channel, planes in random order) and stays on it.
+          With --trees, plane L uses a spanning tree rooted at a different node.
+  shared  the replication, one wide network: virtual channel 0 is the escape, virtual channels
           1 .. 2m - 1 are all minimal adaptive; a packet may take any of them.
-  hybrid  shared lanes: the escapes of the lanes (virtual channel 2L for a packet of lane L, its
-          own spanning tree with --trees), the adaptive channels of every lane for every packet.
+  hybrid  shared planes: the escapes of the planes (virtual channel 2L for a packet of plane L, its
+          own spanning tree with --trees), the adaptive channels of every plane for every packet.
 
 The script prints the peak accepted throughput per node and per connection
 (packets / cycle / node / m): linear scaling keeps it constant as m grows.
@@ -37,21 +37,21 @@ def simulate(nets, m, mode, rate, pattern, g=4, budget=2, cycles=6000, warmup=20
     ch = lambda u, p, vc: (u * 5 + p) * V + vc
     head = lambda c: adj[c // V // 5][c // V % 5] if c // V % 5 < 4 else c // V // 5
     rnd = random.Random(seed)
-    occ = {}            # channel -> [dest, born, hops, dist, returns, lane]
+    occ = {}            # channel -> [dest, born, hops, dist, returns, plane]
     queues = [deque() for _ in range(n)]
     out = [[ch(u, p, vc) for p in range(4) if adj[u][p] >= 0 for vc in range(V)] for u in range(n)]
     thr_free = [g * len(out[v]) / 8 for v in range(n)]
     dist = base.dist
     delivered = 0
 
-    def esc_of(c, d, lane):
-        """The escape hop of a packet in channel c for d, on the escape VC of its lane."""
+    def esc_of(c, d, plane):
+        """The escape hop of a packet in channel c for d, on the escape VC of its plane."""
         u, p = c // V // 5, c // V % 5
-        net = nets[lane % len(nets)] if mode != 'shared' else base
+        net = nets[plane % len(nets)] if mode != 'shared' else base
         # a packet on an adaptive VC (or injected) starts a fresh up*/down* path: phase 0,
         # the base table's VC1 entry; on an escape VC the phase is that of the link
         eb = net.esc[(u * 5 + p) * 2 + (0 if p == 4 or is_esc(c) else 1)][d] // 2
-        return ch(eb // 5, eb % 5, 2 * lane if mode != 'shared' else 0)
+        return ch(eb // 5, eb % 5, 2 * plane if mode != 'shared' else 0)
 
     def is_esc(c):
         vc = c % V
@@ -69,16 +69,16 @@ def simulate(nets, m, mode, rate, pattern, g=4, budget=2, cycles=6000, warmup=20
             if c in moved:
                 continue
             pk = occ[c]
-            d, lane = pk[0], pk[5]
+            d, plane = pk[0], pk[5]
             u = head(c)
             src = c // V % 5 == 4
-            e = esc_of(c, d, lane)
+            e = esc_of(c, d, plane)
             if is_esc(c) and not src and pk[4] >= budget:
                 hops = [e]
             else:
                 ports = [q // 2 % 5 for q in base.vc1[u][d]]
-                if mode == 'lanes':
-                    ad = [ch(u, p, 2 * lane + 1) for p in ports]
+                if mode == 'planes':
+                    ad = [ch(u, p, 2 * plane + 1) for p in ports]
                 elif mode == 'hybrid':
                     ad = [ch(u, p, vc) for p in ports for vc in range(1, V, 2)]
                 else:
@@ -102,11 +102,11 @@ def simulate(nets, m, mode, rate, pattern, g=4, budget=2, cycles=6000, warmup=20
                     d = RANDPERM[s] if pattern == 'randperm' else destination(pattern, s, k, rnd)
                     if d != s:
                         queues[s].append((d, t))
-            for lane in rnd.sample(range(m), m):
-                c = ch(s, 4, lane)
+            for plane in rnd.sample(range(m), m):
+                c = ch(s, 4, plane)
                 if queues[s] and c not in occ:
                     d, born = queues[s].popleft()
-                    occ[c] = [d, born, 0, dist[s][d], 0, lane if mode != 'shared' else 0]
+                    occ[c] = [d, born, 0, dist[s][d], 0, plane if mode != 'shared' else 0]
     return delivered / ((cycles - warmup) * n)
 
 
@@ -114,11 +114,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--topology', default='torus', choices=['torus', 'mesh', 'mesh_xy'])
     ap.add_argument('--ms', default='1,2,4')
-    ap.add_argument('--modes', default='lanes,hybrid,shared')
+    ap.add_argument('--modes', default='planes,hybrid,shared')
     ap.add_argument('--patterns', default=','.join(ALL_PATTERNS))
     ap.add_argument('--rates', default='0.3,0.4,0.5,0.6,0.7,0.8,1.0')
     ap.add_argument('--seeds', type=int, default=2)
-    ap.add_argument('--trees', action='store_true', help='a different spanning-tree root per lane')
+    ap.add_argument('--trees', action='store_true', help='a different spanning-tree root per plane')
     ap.add_argument('--cycles', type=int, default=6000)
     args = ap.parse_args()
     k = 8

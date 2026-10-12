@@ -19,12 +19,12 @@ throughput of `m` connections is exactly `m` times the best throughput of one
 throughput times the traffic's hop count is at most the total capacity, the number of
 connections times their capacity.
 
-**Lanes reach it.**  The routing that reaches the optimum is the simplest one: treat the `m`
-connections of every link as `m` **lanes**, each a full copy of the network, let every packet
-pick a lane at its source and stay on it, and route inside each lane with the best scheme for
-one connection.  Lane `i` carries the flow of that scheme; the flows add (`Flow.add`,
+**Planes reach it.**  The routing that reaches the optimum is the simplest one: treat the `m`
+connections of every link as `m` **planes**, each a full copy of the network, let every packet
+pick a plane at its source and stay on it, and route inside each plane with the best scheme for
+one connection.  Plane `i` carries the flow of that scheme; the flows add (`Flow.add`,
 `Flow.sum`).  No other routing on `m` connections does better, adaptive or not, with or without
-detours, whatever it does across lanes.
+detours, whatever it does across planes.
 
 **Unequal connections.**  When the connections are not copies of one network (a mesh plus a
 layer of express links, a torus plus a second torus with another wiring), split them into
@@ -48,10 +48,10 @@ some links than on others, the guarantee is linear in the smallest number (`Rout
 * Instances, for every number `m ≥ 1` of connections per link: the worst case over admissible
   traffic is exactly `4m / k` on the `k × k` mesh (even `k`, `mesh_copies_worst`), `8m / k` on
   the torus (even `k ≥ 4`, `torus_copies_worst`) and `2m` on the hypercube
-  (`cube_copies_worst`), reached by Valiant's routing in every lane; under uniform traffic the
+  (`cube_copies_worst`), reached by Valiant's routing in every plane; under uniform traffic the
   optimum is `m` times `mesh_opt_all`, `torus_uniform_opt` and `cube_uniform_opt`
   (`mesh_copies_uniform`, `torus_copies_uniform`, `cube_copies_uniform`), reached by minimal
-  routing in every lane.
+  routing in every plane.
 
 All results are over `ℚ`.
 -/
@@ -176,15 +176,15 @@ theorem layered_routable {ι : Type*} [DecidableEq ι] (s : Finset ι) (N : ι �
     Routable N' dem (∑ i ∈ s, θ i) :=
   (routable_sum s N h).mono hcap
 
-/-- `m` lanes, each routing the traffic at `θ` on one connection per link, route it at
-`m * θ` on `m` connections per link: lane `i` carries the flow of one connection. -/
+/-- `m` planes, each routing the traffic at `θ` on one connection per link, route it at
+`m * θ` on `m` connections per link: plane `i` carries the flow of one connection. -/
 theorem Routable.copies {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : Routable N dem θ) (m : ℕ) :
     Routable (N.copies m) dem (m * θ) :=
   h.smul m (Nat.cast_nonneg m) fun _ _ => le_rfl
 
 /-! ### Exact linear scaling of the optimum -/
 
-/-- **No routing on `m` connections beats `m` lanes**: on `m ≥ 1` connections per link the
+/-- **No routing on `m` connections beats `m` planes**: on `m ≥ 1` connections per link the
 traffic is routable at `θ` exactly when it is routable at `θ / m` on one. -/
 theorem copies_routable_iff {N : Net V} {dem : V → V → ℚ} {θ : ℚ} {m : ℕ} (hm : 0 < m) :
     Routable (N.copies m) dem θ ↔ Routable N dem (θ / m) := by
@@ -200,7 +200,7 @@ theorem copies_routable_iff {N : Net V} {dem : V → V → ℚ} {θ : ℚ} {m : 
     rwa [mul_div_cancel₀ _ hm'.ne'] at this
 
 /-- **The optimum scales exactly linearly**: if `θ` is the best throughput of `dem` on one
-connection per link, `m * θ` is the best on `m ≥ 1` connections, reached by `m` lanes. -/
+connection per link, `m * θ` is the best on `m ≥ 1` connections, reached by `m` planes. -/
 theorem opt_copies {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : IsGreatest {x | Routable N dem x} θ)
     {m : ℕ} (hm : 0 < m) : IsGreatest {x | Routable (N.copies m) dem x} (m * θ) := by
   have hm' : (0 : ℚ) < m := by exact_mod_cast hm
@@ -211,7 +211,7 @@ theorem opt_copies {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : IsGreates
 
 /-- **The worst case scales exactly linearly**: for any class `D` of traffic matrices, if `w`
 is the best throughput guaranteed for every matrix of `D` on one connection per link, `m * w` is
-the best on `m ≥ 1` connections, reached by `m` lanes running the same scheme. -/
+the best on `m ≥ 1` connections, reached by `m` planes running the same scheme. -/
 theorem worstOpt_copies {N : Net V} {D : (V → V → ℚ) → Prop} {w : ℚ}
     (h : IsGreatest {x | ∀ T, D T → Routable N T x} w) {m : ℕ} (hm : 0 < m) :
     IsGreatest {x | ∀ T, D T → Routable (N.copies m) T x} (m * w) := by
@@ -235,41 +235,41 @@ end General
 section Instances
 
 /-- **The mesh with `m` connections per link** (even `k ≥ 2`, `m ≥ 1`): the best worst case over
-admissible traffic is `m * (4 / k)`, reached by Valiant's routing in every lane. -/
+admissible traffic is `m * (4 / k)`, reached by Valiant's routing in every plane. -/
 theorem mesh_copies_worst (k : ℕ) (hk : 2 ≤ k) (he : Even k) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | ∀ T, AdmissibleGen T → Routable ((meshNet k).copies m) T θ}
       (m * (4 / k)) :=
   worstOpt_copies (valiant_mesh_opt k hk he) hm
 
 /-- **The torus with `m` connections per link** (even `k ≥ 4`, `m ≥ 1`): the best worst case over
-admissible traffic is `m * (8 / k)`, reached by Valiant's routing in every lane. -/
+admissible traffic is `m * (8 / k)`, reached by Valiant's routing in every plane. -/
 theorem torus_copies_worst (k : ℕ) (hk : 4 ≤ k) (he : Even k) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | ∀ T, AdmissibleGen T → Routable ((torusNet k).copies m) T θ}
       (m * (8 / k)) :=
   worstOpt_copies (torus_worst_opt' k hk he) hm
 
 /-- **The hypercube with `m` connections per link** (`n ≥ 1`, `m ≥ 1`): the best worst case over
-admissible traffic is `2 m`, reached by Valiant's routing in every lane. -/
+admissible traffic is `2 m`, reached by Valiant's routing in every plane. -/
 theorem cube_copies_worst (n : ℕ) (hn : 1 ≤ n) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | ∀ T, AdmissibleGen T → Routable ((cubeNet n).copies m) T θ} (m * 2) :=
   worstOpt_copies (cube_worst_opt' n hn) hm
 
 /-- **Uniform traffic on the mesh with `m` connections per link** (`k ≥ 2`, `m ≥ 1`): `m` times
-the optimum of one connection, reached by XY routing in every lane. -/
+the optimum of one connection, reached by XY routing in every plane. -/
 theorem mesh_copies_uniform (k : ℕ) (hk : 2 ≤ k) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | Routable ((meshNet k).copies m) (uniform k) θ}
       (m * if Even k then 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 else 8 / (k : ℚ)) :=
   opt_copies (mesh_opt_all k hk) hm
 
 /-- **Uniform traffic on the torus with `m` connections per link** (`k ≥ 3`, `m ≥ 1`): `m` times
-the optimum of one connection, reached by minimal routing in every lane. -/
+the optimum of one connection, reached by minimal routing in every plane. -/
 theorem torus_copies_uniform (k : ℕ) (hk : 3 ≤ k) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | Routable ((torusNet k).copies m) (uniform k) θ}
       (m * if Even k then 16 * ((k : ℚ) ^ 2 - 1) / k ^ 3 else 16 / (k : ℚ)) :=
   opt_copies (torus_uniform_opt k hk).1 hm
 
 /-- **Uniform traffic on the hypercube with `m` connections per link** (`n ≥ 1`, `m ≥ 1`): `m`
-times the optimum of one connection, reached by minimal routing in every lane. -/
+times the optimum of one connection, reached by minimal routing in every plane. -/
 theorem cube_copies_uniform (n : ℕ) (hn : 1 ≤ n) {m : ℕ} (hm : 0 < m) :
     IsGreatest {θ : ℚ | Routable ((cubeNet n).copies m) (cubeUniform n) θ}
       (m * (4 * (2 ^ n - 1) / 2 ^ n)) :=

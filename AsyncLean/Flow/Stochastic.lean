@@ -31,8 +31,9 @@ stochastic stability (strong stability).
 
 * `Run.drift_random` : the drift of one sample path, with the total arrivals of the slot in place
   of a bound on them.
-* `expected_drift` : **the expected drift**: `E[energy (t + 1)] ≤ E[energy t] + B - 2 ε E[backlog t]`.
-* `backpressure_strongly_stable` : `2 ε ∑_{t < T} E[backlog t] ≤ E[energy 0] + T B`: the
+* `expected_drift` : **the expected drift**:
+  `E[lyapunov (t + 1)] ≤ E[lyapunov t] + B - 2 ε E[backlog t]`.
+* `backpressure_strongly_stable` : `2 ε ∑_{t < T} E[backlog t] ≤ E[lyapunov 0] + T B`: the
   time-average expected backlog is at most `B / (2 ε)` plus a term vanishing in `T`.
 -/
 
@@ -123,7 +124,7 @@ def capConst (N : Net V) : ℚ :=
 /-- **The drift of one sample path**, with the total arrivals of the slot in place of a bound on
 the arrivals. -/
 theorem drift_random (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1) (t : ℕ) :
-    energy (r.Q (t + 1)) ≤ energy (r.Q t) + capConst N +
+    lyapunov (r.Q (t + 1)) ≤ lyapunov (r.Q t) + capConst N +
       2 * (Fintype.card V : ℚ) ^ 2 * r.totalArr t ^ 2 -
       2 * ∑ d, ∑ v, (r.Q t v d * dem v d - r.Q t v d * r.a t v d) := by
   have hA : ∀ v d, r.a t v d ≤ r.totalArr t := fun v d =>
@@ -159,13 +160,13 @@ theorem expected_drift (X : Expect Ω K) (R : Ω → Run N) (hr : ∀ ω, (R ω)
     {dem : V → V → ℚ} (F : Flow N dem 1) {ε : ℚ} {A₂ : K}
     (hQ : ∀ t v d, X.Int fun ω => (R ω).Q t v d)
     (hQa : ∀ t v d, X.Int fun ω => (R ω).Q t v d * (R ω).a t v d)
-    (hE : ∀ t, X.Int fun ω => energy ((R ω).Q t))
+    (hE : ∀ t, X.Int fun ω => lyapunov ((R ω).Q t))
     (hA : ∀ t, X.Int fun ω => (R ω).totalArr t ^ 2)
     (hA₂ : ∀ t, X.E (fun ω => (R ω).totalArr t ^ 2) ≤ A₂)
     (hmean : ∀ t v d, v ≠ d →
       X.E (fun ω => (R ω).Q t v d * (R ω).a t v d) ≤ ((dem v d - ε : ℚ) : K) *
         X.E (fun ω => (R ω).Q t v d)) (t : ℕ) :
-    X.E (fun ω => energy ((R ω).Q (t + 1))) ≤ X.E (fun ω => energy ((R ω).Q t)) +
+    X.E (fun ω => lyapunov ((R ω).Q (t + 1))) ≤ X.E (fun ω => lyapunov ((R ω).Q t)) +
       ((Run.capConst N : ℚ) : K) + 2 * (Fintype.card V : K) ^ 2 * A₂ -
       2 * (ε : K) * X.E (fun ω => backlog ((R ω).Q t)) := by
   -- the integrable pieces
@@ -243,28 +244,28 @@ theorem expected_drift (X : Expect Ω K) (R : Ω → Run N) (hr : ∀ ω, (R ω)
 /-- **Backpressure is strongly stable under random arrivals.**  Under the hypotheses of
 `expected_drift` (arrivals with mean, given the past, `ε > 0` below a traffic routable at
 throughput `1`, and total arrivals per slot with second moment at most `A₂`, Poisson arrivals for
-instance), `2 ε ∑_{t < T} E[backlog t] ≤ E[energy 0] + T B` with
+instance), `2 ε ∑_{t < T} E[backlog t] ≤ E[lyapunov 0] + T B` with
 `B = capConst N + 2 |V|² A₂`: the expected backlog, averaged over time, is at most `B / (2 ε)`
 up to a term vanishing as `T` grows. -/
 theorem backpressure_strongly_stable (X : Expect Ω K) (R : Ω → Run N)
     (hr : ∀ ω, (R ω).Backpressure) {dem : V → V → ℚ} (hRt : Routable N dem 1) {ε : ℚ} {A₂ : K}
     (hQ : ∀ t v d, X.Int fun ω => (R ω).Q t v d)
     (hQa : ∀ t v d, X.Int fun ω => (R ω).Q t v d * (R ω).a t v d)
-    (hE : ∀ t, X.Int fun ω => energy ((R ω).Q t))
+    (hE : ∀ t, X.Int fun ω => lyapunov ((R ω).Q t))
     (hA : ∀ t, X.Int fun ω => (R ω).totalArr t ^ 2)
     (hA₂ : ∀ t, X.E (fun ω => (R ω).totalArr t ^ 2) ≤ A₂)
     (hmean : ∀ t v d, v ≠ d →
       X.E (fun ω => (R ω).Q t v d * (R ω).a t v d) ≤ ((dem v d - ε : ℚ) : K) *
         X.E (fun ω => (R ω).Q t v d)) (T : ℕ) :
     2 * (ε : K) * ∑ t ∈ range T, X.E (fun ω => backlog ((R ω).Q t)) ≤
-      X.E (fun ω => energy ((R ω).Q 0)) +
+      X.E (fun ω => lyapunov ((R ω).Q 0)) +
         T * (((Run.capConst N : ℚ) : K) + 2 * (Fintype.card V : K) ^ 2 * A₂) := by
   obtain ⟨F⟩ := hRt
   set B : K := ((Run.capConst N : ℚ) : K) + 2 * (Fintype.card V : K) ^ 2 * A₂
   have hstep := expected_drift X R hr F hQ hQa hE hA hA₂ hmean
-  have hT : ∀ T, X.E (fun ω => energy ((R ω).Q T)) + 2 * (ε : K) *
+  have hT : ∀ T, X.E (fun ω => lyapunov ((R ω).Q T)) + 2 * (ε : K) *
       ∑ t ∈ range T, X.E (fun ω => backlog ((R ω).Q t)) ≤
-      X.E (fun ω => energy ((R ω).Q 0)) + T * B := by
+      X.E (fun ω => lyapunov ((R ω).Q 0)) + T * B := by
     intro T
     induction T with
     | zero => simp
@@ -273,7 +274,7 @@ theorem backpressure_strongly_stable (X : Expect Ω K) (R : Ω → Run N)
       rw [sum_range_succ]
       push_cast
       linarith
-  have h0 : 0 ≤ X.E (fun ω => energy ((R ω).Q T)) :=
+  have h0 : 0 ≤ X.E (fun ω => lyapunov ((R ω).Q T)) :=
     X.E_nonneg (hE T) fun ω => sum_nonneg fun d _ => sum_nonneg fun v _ => sq_nonneg _
   linarith [hT T]
 

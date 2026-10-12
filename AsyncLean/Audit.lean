@@ -39,10 +39,10 @@ import AsyncLean.Routing.Graph
 import AsyncLean.Routing.Saturation
 import AsyncLean.Routing.GraphBudget
 import AsyncLean.Routing.GraphDetour
-import AsyncLean.Routing.Lanes
-import AsyncLean.Routing.SharedLanes
+import AsyncLean.Routing.Planes
+import AsyncLean.Routing.SharedPlanes
 import AsyncLean.Routing.Throughput
-import AsyncLean.Routing.Widen
+import AsyncLean.Routing.Replicate
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -136,15 +136,16 @@ open LTS
   GraphData.detour_hops_le GraphData.detour_hops_le_some GraphData.detour_phase_hops_le
   GraphData.detour_route_adj GraphData.detourNet_route_none GraphData.exists_detour_correct
   Network.SafeCert.correct Network.SafeCert.underLoad Network.SafeCert.underLoad_of_valid
-  Network.SafeCert.sourceSel Network.SafeCert.lanes_dep Network.SafeCert.lanes_esc_wf
-  Network.lanes_correct Network.lanes_underLoad Network.lanes_step Network.lanes_path_one
-  Network.lanes_path Network.ejections_flatMap Network.copies_path Network.lanes_reachable_iff
-  Network.lanes_reachable_lane GraphData.lanes_correct GraphData.lanes_budget_correct
-  GraphData.lanes_detour_correct GraphData.lanes_detour_sourceSel
+  Network.SafeCert.sourceSel Network.SafeCert.planes_dep Network.SafeCert.planes_esc_wf
+  Network.planes_correct Network.planes_underLoad Network.planes_step Network.planes_path_one
+  Network.planes_path Network.ejections_flatMap Network.copies_path Network.planes_reachable_iff
+  Network.planes_reachable_plane GraphData.planes_correct GraphData.planes_budget_correct
+  GraphData.planes_detour_correct GraphData.planes_detour_sourceSel
   GraphData.shared_closed GraphData.shared_dep GraphData.shared_esc_wf GraphData.shared_correct
-  GraphData.shared_sourceSel GraphData.lanes_route_sub
-  Network.SafeCert.widen_dep Network.widen_correct Network.widen_sourceSel GraphData.wide_correct
-  GraphData.wide_detour_correct GraphData.wide_detour_sourceSel GraphData.shared_slots_correct
+  GraphData.shared_sourceSel GraphData.planes_route_sub
+  Network.SafeCert.replicate_dep Network.replicate_correct Network.replicate_sourceSel
+  GraphData.replicated_correct GraphData.replicated_detour_correct
+  GraphData.replicated_detour_sourceSel GraphData.shared_slots_correct
   Network.wormholeDeadlockFree_of_escape Network.wormholeDeadlockFree_of_cdg
   Network.wormholeLivelockFree_of_ranking Network.wdrain Network.WormholeCorrect.drain
   Network.not_wormholeDeadlockFree_of_refuteB Network.not_wormholeLivelockFree_of_refuteB
@@ -287,7 +288,7 @@ open LTS
   Fluid.potential_bound Fluid.Flow.potential_bound_on Fluid.wire_bound Fluid.cut_bound
   Fluid.sum_manhattan Fluid.uniform_dist Fluid.uniform_wire_bound Fluid.throughput_le_wire
   Fluid.mesh_routable Fluid.mesh_upper Fluid.mesh_opt Fluid.mesh_wire Fluid.mesh_len
-  Fluid.mesh_cap_le Fluid.wire_ceiling Fluid.wire_ceiling_opt Fluid.mesh_per_wire
+  Fluid.mesh_cap_le Fluid.wire_bound Fluid.wire_ceiling_opt Fluid.mesh_per_wire
   Fluid.ceiling_factor_lt Fluid.mesh_opt_eight Fluid.wire_ceiling_eight
 
 -- Fluid model: the mesh's optimum for every size; no detours needed under uniform traffic
@@ -315,7 +316,7 @@ open LTS
   Fluid.torus_bitcomp_upper Fluid.torus_worst_upper Fluid.cube_comp_upper Fluid.cube_worst_upper
   Fluid.valiant_torus Fluid.torus_worst_opt Fluid.valiant_cube Fluid.cube_worst_opt
 
--- Fluid model: throughput scales exactly linearly with the connections; lanes reach it
+-- Fluid model: throughput scales exactly linearly with the connections; planes reach it
 #assert_standard_axioms
   Fluid.Routable.zero Fluid.Routable.smul Fluid.Routable.mono Fluid.Routable.add
   Fluid.routable_sum Fluid.layered_routable Fluid.Routable.copies Fluid.copies_routable_iff
@@ -323,41 +324,41 @@ open LTS
   Fluid.torus_copies_worst Fluid.cube_copies_worst Fluid.mesh_copies_uniform
   Fluid.torus_copies_uniform Fluid.cube_copies_uniform Fluid.torus_eight_copies_worst
 
--- Packet networks in time: the throughput ceiling of the fluid model, lanes add their throughput
+-- Packet networks in time: the fluid throughput bound, planes add their throughput
 #assert_standard_axioms
   Network.Placement.Fits.respects Network.Placement.restrict_respects Network.sum_update_cval
   Network.step_injW Network.path_injW Network.sum_hopLen Network.round_hopLen
   Network.TimedRun.injW_eq Network.TimedRun.sum_injW Network.TimedRun.injected_le
-  Network.TimedRun.sum_lenOf Network.TimedRun.ceiling Network.TimedRun.cut_ceiling
-  Network.TimedRun.hop_ceiling Network.TimedRun.occ_update Network.TimedRun.step_occ
-  Network.TimedRun.path_occ Network.TimedRun.ejected_ge Network.lanesPlacement_fits
-  Network.lanesPlacement_cap Network.lanesTimed Network.lanesTimed_injected
+  Network.TimedRun.sum_lenOf Network.TimedRun.potential_bound Network.TimedRun.cut_bound
+  Network.TimedRun.hop_bound Network.TimedRun.occ_update Network.TimedRun.step_occ
+  Network.TimedRun.path_occ Network.TimedRun.ejected_ge Network.planesPlacement_fits
+  Network.planesPlacement_cap Network.planesTimed Network.planesTimed_injected
   GraphData.placement_fits GraphData.placement_cap GraphData.netPlacement_fits
   GraphData.budgetPlacement_fits GraphData.detourPlacement_fits Network.scoreSel_valid
   Network.Correct.scoreSel
 
 -- Fluid model: backpressure is stable below the fluid optimum, no scheduler above it
 #assert_standard_axioms
-  Fluid.weight_eq Fluid.Flow.weight_eq Fluid.energy_le_backlog_sq Fluid.backlog_le_energy
+  Fluid.weight_eq Fluid.Flow.weight_eq Fluid.lyapunov_le_backlog_sq Fluid.backlog_le_lyapunov
   Fluid.queue_sq Fluid.exists_nat_gt_rat Fluid.Run.bounded_of_drift Fluid.Flow.mix
   Fluid.Run.Q_nonneg Fluid.Run.backlog_succ Fluid.Run.delivered_sum Fluid.Run.drift
-  Fluid.Run.energy_bounded Fluid.Run.backpressure_stable Fluid.Run.backpressure_optimal
-  Fluid.Run.totalFlow Fluid.Run.potential_ceiling Fluid.Run.cut_ceiling Fluid.Run.hop_ceiling
-  Fluid.IsHopDistance.copies Fluid.Run.copies_hop_ceiling Fluid.bpRates_maxWeight
+  Fluid.Run.lyapunov_bounded Fluid.Run.backpressure_stable Fluid.Run.backpressure_optimal
+  Fluid.Run.totalFlow Fluid.Run.potential_bound Fluid.Run.cut_bound Fluid.Run.hop_bound
+  Fluid.IsHopDistance.copies Fluid.Run.copies_hop_bound Fluid.bpRates_maxWeight
   Fluid.bpRates_feasible Fluid.sendAll_sum Fluid.Run.ofArrivals
   Fluid.Run.ofArrivals_backpressure Fluid.mesh_backpressure Fluid.torus_backpressure
   Fluid.cube_backpressure Fluid.mesh_backpressure_exists Fluid.mesh_upper_of_cut
-  Fluid.torus_uniform_hop Fluid.cube_uniform_hop Fluid.Run.queue_le_of_energy
+  Fluid.torus_uniform_hop Fluid.cube_uniform_hop Fluid.Run.queue_le_of_lyapunov
   Fluid.Run.backpressure_fitsIn Fluid.Flow.normalize Fluid.meshAdj_symm Fluid.mesh_out_cap
   Fluid.mesh_in_cap Fluid.mesh_buffer
   Fluid.Run.drift_gen Fluid.Run.step_change Fluid.Run.frame_change Fluid.Run.frame_drift
   Fluid.Run.backpressure_stable_bursty Fluid.clamp_eq Fluid.seqPre_total Fluid.sendSeq_sum
   Fluid.Run.ofArrivalsSeq Fluid.Run.ofArrivalsSeq_backpressure Fluid.Run.ofArrivalsSeq_int
-  Fluid.mesh_backpressure_packets Fluid.Flow.potentialFeasibleOn Fluid.Run.potential_ceiling_on
+  Fluid.mesh_backpressure_packets Fluid.Flow.potentialFeasibleOn Fluid.Run.potential_bound_on
   Fluid.Run.potentialFeasibleOn Fluid.GraphCert.PortGraph.upper_of_check'
-  Fluid.GraphCert.Model.potentialFeasibleOn_transfer Fluid.GraphCert.Model.run_minimal_ceiling
+  Fluid.GraphCert.Model.potentialFeasibleOn_transfer Fluid.GraphCert.Model.run_minimal_bound
   Fluid.torusTornado_adaptivity Fluid.Run.descent Fluid.Run.backpressure_progress Fluid.mesh_reach
-  Fluid.mesh_finite_buffer_network Fluid.Run.delivered_le_card Fluid.Run.singleHead_ceiling
+  Fluid.mesh_finite_buffer_network Fluid.Run.delivered_le_card Fluid.Run.singleFifo_bound
   Fluid.uniform_total Fluid.mesh_headOfLine Fluid.Run.drift_of Fluid.Run.stable_of
   Fluid.Run.BackpressureOn.supported Fluid.Run.backpressureOn_optimal
   Fluid.torusTornado_minimal_backpressure Fluid.Expect.int_sum Fluid.Expect.int_sub

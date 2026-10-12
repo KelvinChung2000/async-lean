@@ -27,12 +27,12 @@ variable {N : Net V} (r : Run N)
 
 /-! ### Bursty arrivals: integer packets at fractional rates -/
 
-/-- **The drift for arbitrary arrivals** (at most `A` per queue and slot): the energy of a
-backpressure run grows by at most a constant less twice the backlog times the slack
+/-- **The drift for arbitrary arrivals** (at most `A` per queue and slot): the Lyapunov function of
+a backpressure run grows by at most a constant less twice the backlog times the slack
 `dem - a` of the slot. -/
 theorem drift_gen (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1) {A : ℚ}
     (t : ℕ) (hA : ∀ v d, r.a t v d ≤ A) :
-    energy (r.Q (t + 1)) ≤ energy (r.Q t) + driftConst N (fun _ _ => A) -
+    lyapunov (r.Q (t + 1)) ≤ lyapunov (r.Q t) + driftConst N (fun _ _ => A) -
       2 * ∑ d, ∑ v, r.Q t v d * (dem v d - r.a t v d) := by
   set Q := r.Q t with hQdef
   set μ := r.μ t
@@ -68,22 +68,22 @@ theorem drift_gen (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 
       nlinarith
   have hw : weight Q F.f ≤ weight Q μ := hr.1 t F.f F.feasible
   rw [F.weight_eq Q (r.Q_dest t), weight_eq] at hw
-  calc energy (r.Q (t + 1)) = ∑ d, ∑ v, r.Q (t + 1) v d ^ 2 := rfl
+  calc lyapunov (r.Q (t + 1)) = ∑ d, ∑ v, r.Q (t + 1) v d ^ 2 := rfl
     _ ≤ ∑ d, ∑ v, (Q v d ^ 2 + ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + A) ^ 2) -
         2 * Q v d * (∑ w, μ d v w - ∑ u, μ d u v) + 2 * Q v d * r.a t v d) :=
         sum_le_sum fun d _ => sum_le_sum fun v _ => hq d v
-    _ = energy Q + driftConst N (fun _ _ => A) -
+    _ = lyapunov Q + driftConst N (fun _ _ => A) -
         2 * ∑ d, ∑ u, Q u d * (∑ w, μ d u w - ∑ x, μ d x u) +
         2 * ∑ d, ∑ v, Q v d * r.a t v d := by
-        rw [show energy Q + driftConst N (fun _ _ => A) = ∑ d, ∑ v, (Q v d ^ 2 +
+        rw [show lyapunov Q + driftConst N (fun _ _ => A) = ∑ d, ∑ v, (Q v d ^ 2 +
             ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + A) ^ 2)) by
-          simp only [energy, driftConst, ← sum_add_distrib]]
+          simp only [lyapunov, driftConst, ← sum_add_distrib]]
         simp only [mul_sum, ← sum_sub_distrib, ← sum_add_distrib]
         refine sum_congr rfl fun d _ => sum_congr rfl fun v _ => ?_
         ring_nf
-    _ ≤ energy Q + driftConst N (fun _ _ => A) - 2 * ∑ d, (1 : ℚ) * ∑ s, dem s d * Q s d +
+    _ ≤ lyapunov Q + driftConst N (fun _ _ => A) - 2 * ∑ d, (1 : ℚ) * ∑ s, dem s d * Q s d +
         2 * ∑ d, ∑ v, Q v d * r.a t v d := by linarith
-    _ = energy Q + driftConst N (fun _ _ => A) -
+    _ = lyapunov Q + driftConst N (fun _ _ => A) -
         2 * ∑ d, ∑ v, Q v d * (dem v d - r.a t v d) := by
         simp only [one_mul, mul_sub, sum_sub_distrib]
         have : ∑ d, ∑ s, dem s d * Q s d = ∑ d, ∑ v, Q v d * dem v d :=
@@ -149,7 +149,7 @@ theorem frame_drift (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N de
     (hA0 : 0 ≤ A) (hA : ∀ t v d, r.a t v d ≤ A) {ε σ : ℚ}
     (hburst : ∀ t W v d, v ≠ d → ∑ s ∈ range W, r.a (t + s) v d ≤ W * (dem v d - ε) + σ)
     (t W : ℕ) :
-    energy (r.Q (t + W)) ≤ energy (r.Q t) +
+    lyapunov (r.Q (t + W)) ≤ lyapunov (r.Q t) +
       (W * driftConst N (fun _ _ => A) +
         2 * (Fintype.card V : ℚ) ^ 2 * W ^ 2 * ((2 * capTot N + A) * (D + A))) -
       2 * (W * ε - σ) * backlog (r.Q t) := by
@@ -157,7 +157,7 @@ theorem frame_drift (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N de
   have hΔ : 0 ≤ Δ := by have := capTot_nonneg N; positivity
   have hDA : 0 ≤ D + A := by linarith
   -- one slot at a time, comparing the backlogs with those at the start of the frame
-  have hslot : ∀ s, energy (r.Q (t + s + 1)) ≤ energy (r.Q (t + s)) +
+  have hslot : ∀ s, lyapunov (r.Q (t + s + 1)) ≤ lyapunov (r.Q (t + s)) +
       driftConst N (fun _ _ => A) - 2 * ∑ d, ∑ v, r.Q t v d * (dem v d - r.a (t + s) v d) +
       2 * (Fintype.card V : ℚ) ^ 2 * (s * Δ * (D + A)) := by
     intro s
@@ -185,7 +185,7 @@ theorem frame_drift (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N de
     rw [show t + s + 1 = t + s + 1 from rfl]
     linarith
   -- the frame
-  have hsum : energy (r.Q (t + W)) ≤ energy (r.Q t) + W * driftConst N (fun _ _ => A) -
+  have hsum : lyapunov (r.Q (t + W)) ≤ lyapunov (r.Q t) + W * driftConst N (fun _ _ => A) -
       2 * ∑ d, ∑ v, r.Q t v d * (W * dem v d - ∑ s ∈ range W, r.a (t + s) v d) +
       2 * (Fintype.card V : ℚ) ^ 2 * (W ^ 2 * Δ * (D + A)) := by
     induction W with
@@ -246,19 +246,21 @@ theorem backpressure_stable_bursty (hr : r.Backpressure) {dem : V → V → ℚ}
   have hε' : 0 < ε' := by linarith
   set B := (W : ℚ) * driftConst N (fun _ _ => A) +
     2 * (Fintype.card V : ℚ) ^ 2 * W ^ 2 * ((2 * capTot N + A) * (D + A))
-  -- the energy at the frame boundaries
-  have hframe : ∀ j, energy (r.Q (j * W)) ≤ max (energy (r.Q 0)) ((B / (2 * ε')) ^ 2 + B) := by
+  -- the Lyapunov function at the frame boundaries
+  have hframe :
+      ∀ j, lyapunov (r.Q (j * W)) ≤ max (lyapunov (r.Q 0)) ((B / (2 * ε')) ^ 2 + B) := by
     intro j
-    have := bounded_of_drift (E := fun j => energy (r.Q (j * W)))
+    have := bounded_of_drift (E := fun j => lyapunov (r.Q (j * W)))
       (S := fun j => backlog (r.Q (j * W))) (B := B) hε'
-      (fun j => r.backlog_nonneg _) (fun j => energy_le_backlog_sq fun v d => r.Q_nonneg _ v d)
+      (fun j => r.backlog_nonneg _) (fun j => lyapunov_le_backlog_sq fun v d => r.Q_nonneg _ v d)
       (fun j => by
         have h := r.frame_drift hr F hdem hD0 hD hA0 hA hburst (j * W) W
-        show energy (r.Q ((j + 1) * W)) ≤ energy (r.Q (j * W)) + B - 2 * ε' * backlog (r.Q (j * W))
+        show lyapunov (r.Q ((j + 1) * W)) ≤
+          lyapunov (r.Q (j * W)) + B - 2 * ε' * backlog (r.Q (j * W))
         rw [show (j + 1) * W = j * W + W by ring]
         exact h) j
     simpa using this
-  set K := max (energy (r.Q 0)) ((B / (2 * ε')) ^ 2 + B)
+  set K := max (lyapunov (r.Q 0)) ((B / (2 * ε')) ^ 2 + B)
   set Δ := 2 * capTot N + A
   have hΔ : 0 ≤ Δ := by have := capTot_nonneg N; positivity
   have hb : ∀ t, backlog (r.Q t) ≤ (Fintype.card V : ℚ) ^ 2 + K +
@@ -270,7 +272,7 @@ theorem backpressure_stable_bursty (hr : r.Backpressure) {dem : V → V → ℚ}
     obtain ⟨j, s, hs, rfl⟩ : ∃ j s, s < W ∧ t = j * W + s :=
       ⟨t / W, t % W, Nat.mod_lt _ hWpos, by rw [mul_comm]; exact (Nat.div_add_mod t W).symm⟩
     have h1 : backlog (r.Q (j * W)) ≤ (Fintype.card V : ℚ) ^ 2 + K :=
-      (backlog_le_energy _).trans (by linarith [hframe j])
+      (backlog_le_lyapunov _).trans (by linarith [hframe j])
     have h2 : backlog (r.Q (j * W + s)) ≤ backlog (r.Q (j * W)) +
         (Fintype.card V : ℚ) ^ 2 * (W * Δ) := by
       have e : (Fintype.card V : ℚ) ^ 2 * (W * Δ) = ∑ _d : V, ∑ _v : V, (W * Δ) := by

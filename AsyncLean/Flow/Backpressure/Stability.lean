@@ -6,11 +6,11 @@ import AsyncLean.Flow.Backpressure.Model
 /-!
 # Backpressure, part 2: stability below the fluid optimum
 
-The quadratic drift (`Run.drift`, `Run.drift_of`): the energy of a backpressure run drops by
-`2 ε` times its backlog, up to a constant, because the max-weight rates beat any flow of the
-traffic.  Hence bounded energy (`Run.energy_bounded`), stability (`Run.backpressure_stable`,
-`Run.stable_of`) and throughput optimality (`Run.backpressure_optimal`): every load strictly
-below a routable traffic is carried in full.
+The quadratic drift (`Run.drift`, `Run.drift_of`): the Lyapunov function of a backpressure run drops
+by `2 ε` times its backlog, up to a constant, because the max-weight rates beat any flow of the
+traffic.  Hence a bounded Lyapunov function (`Run.lyapunov_bounded`), stability
+(`Run.backpressure_stable`, `Run.stable_of`) and throughput optimality (`Run.backpressure_optimal`):
+every load strictly below a routable traffic is carried in full.
 -/
 
 namespace AsyncLean
@@ -36,13 +36,13 @@ def driftConst (N : Net V) (dem : V → V → ℚ) : ℚ :=
 
 /-- **The drift bound**, for any rates that beat the flow `F` in weight and are served in a
 work-conserving way.  If `dem` is routable at throughput `1` and the arrivals stay `ε > 0`
-below it, the energy of a backpressure run drops by `2 ε` times the backlog, up to the
+below it, the Lyapunov function of a backpressure run drops by `2 ε` times the backlog, up to the
 constant `driftConst N dem`. -/
 theorem drift_of {dem : V → V → ℚ} (F : Flow N dem 1)
     (hw' : ∀ t, weight (r.Q t) F.f ≤ weight (r.Q t) (r.μ t)) (hwc : r.WorkConserving)
     (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
     (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) (t : ℕ) :
-    energy (r.Q (t + 1)) ≤ energy (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) := by
+    lyapunov (r.Q (t + 1)) ≤ lyapunov (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) := by
   set Q := r.Q t with hQdef
   set μ := r.μ t
   -- the arrivals are below the demand
@@ -91,38 +91,39 @@ theorem drift_of {dem : V → V → ℚ} (F : Flow N dem 1)
     · subst h; rw [hQdef, r.Q_dest]; simp
     · have := harr t v d h
       nlinarith [r.Q_nonneg t v d]
-  calc energy (r.Q (t + 1)) = ∑ d, ∑ v, r.Q (t + 1) v d ^ 2 := rfl
+  calc lyapunov (r.Q (t + 1)) = ∑ d, ∑ v, r.Q (t + 1) v d ^ 2 := rfl
     _ ≤ ∑ d, ∑ v, (Q v d ^ 2 + ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + dem v d) ^ 2) -
         2 * Q v d * (∑ w, μ d v w - ∑ u, μ d u v) + 2 * Q v d * r.a t v d) :=
         sum_le_sum fun d _ => sum_le_sum fun v _ => hq d v
-    _ = energy Q + driftConst N dem - 2 * ∑ d, ∑ u, Q u d * (∑ w, μ d u w - ∑ x, μ d x u) +
+    _ = lyapunov Q + driftConst N dem -
+          2 * ∑ d, ∑ u, Q u d * (∑ w, μ d u w - ∑ x, μ d x u) +
         2 * ∑ d, ∑ v, Q v d * r.a t v d := by
-        rw [show energy Q + driftConst N dem = ∑ d, ∑ v, (Q v d ^ 2 +
+        rw [show lyapunov Q + driftConst N dem = ∑ d, ∑ v, (Q v d ^ 2 +
             ((∑ w, N.cap v w) ^ 2 + (∑ u, N.cap u v + dem v d) ^ 2)) by
-          simp only [energy, driftConst, ← sum_add_distrib]]
+          simp only [lyapunov, driftConst, ← sum_add_distrib]]
         simp only [mul_sum, ← sum_sub_distrib, ← sum_add_distrib]
         refine sum_congr rfl fun d _ => sum_congr rfl fun v _ => ?_
         ring_nf
-    _ ≤ energy Q + driftConst N dem - 2 * ∑ d, (1 : ℚ) * ∑ s, dem s d * Q s d +
+    _ ≤ lyapunov Q + driftConst N dem - 2 * ∑ d, (1 : ℚ) * ∑ s, dem s d * Q s d +
         2 * ∑ d, ∑ v, Q v d * r.a t v d := by linarith
-    _ = energy Q + driftConst N dem - 2 * ∑ d, ∑ v, Q v d * (dem v d - r.a t v d) := by
+    _ = lyapunov Q + driftConst N dem - 2 * ∑ d, ∑ v, Q v d * (dem v d - r.a t v d) := by
         simp only [one_mul, mul_sub, sum_sub_distrib]
         have : ∑ d, ∑ s, dem s d * Q s d = ∑ d, ∑ v, Q v d * dem v d :=
           sum_congr rfl fun d _ => sum_congr rfl fun v _ => mul_comm _ _
         rw [this]; ring
-    _ ≤ energy Q + driftConst N dem - 2 * ε * backlog Q := by
+    _ ≤ lyapunov Q + driftConst N dem - 2 * ε * backlog Q := by
         have : ε * backlog Q ≤ ∑ d, ∑ v, Q v d * (dem v d - r.a t v d) := by
           rw [backlog, mul_sum]
           exact sum_le_sum fun d _ => by rw [mul_sum]; exact sum_le_sum fun v _ => hslack d v
         linarith
 
 /-- **The drift bound.**  If `dem` is routable at throughput `1` and the arrivals stay `ε > 0`
-below it, the energy of a backpressure run drops by `2 ε` times the backlog, up to the
+below it, the Lyapunov function of a backpressure run drops by `2 ε` times the backlog, up to the
 constant `driftConst N dem`. -/
 theorem drift (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1)
     (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
     (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) (t : ℕ) :
-    energy (r.Q (t + 1)) ≤ energy (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) :=
+    lyapunov (r.Q (t + 1)) ≤ lyapunov (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) :=
   r.drift_of F (fun t => hr.1 t F.f F.feasible) hr.2 hdem hε harr t
 
 omit [DecidableEq V] in
@@ -148,18 +149,18 @@ theorem bounded_of_drift {E S : ℕ → ℚ} {B ε : ℚ} (hε : 0 < ε)
       have h3 : 0 ≤ 2 * ε * S t := by positivity
       exact le_max_of_le_right (by linarith [hES t])
 
-/-- **The energy of a backpressure run stays bounded** below the fluid optimum. -/
-theorem energy_bounded (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1)
+/-- **The Lyapunov function of a backpressure run stays bounded** below the fluid optimum. -/
+theorem lyapunov_bounded (hr : r.Backpressure) {dem : V → V → ℚ} (F : Flow N dem 1)
     (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
     (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) (t : ℕ) :
-    energy (r.Q t) ≤
-      max (energy (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem) := by
-  have hd : ∀ t, energy (r.Q (t + 1)) ≤
-      energy (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) :=
+    lyapunov (r.Q t) ≤
+      max (lyapunov (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem) := by
+  have hd : ∀ t, lyapunov (r.Q (t + 1)) ≤
+      lyapunov (r.Q t) + driftConst N dem - 2 * ε * backlog (r.Q t) :=
     r.drift hr F hdem hε harr
-  have hES : ∀ t, energy (r.Q t) ≤ backlog (r.Q t) ^ 2 :=
-    fun t => energy_le_backlog_sq fun v d => r.Q_nonneg t v d
-  exact bounded_of_drift (E := fun t => energy (r.Q t)) (S := fun t => backlog (r.Q t))
+  have hES : ∀ t, lyapunov (r.Q t) ≤ backlog (r.Q t) ^ 2 :=
+    fun t => lyapunov_le_backlog_sq fun v d => r.Q_nonneg t v d
+  exact bounded_of_drift (E := fun t => lyapunov (r.Q t)) (S := fun t => backlog (r.Q t))
     (B := driftConst N dem) hε r.backlog_nonneg hES hd t
 
 /-- **Backpressure is stable** below the fluid optimum: if `dem` is routable at throughput `1`
@@ -169,13 +170,13 @@ theorem backpressure_stable (hr : r.Backpressure) {dem : V → V → ℚ}
     (hR : Routable N dem 1) (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
     (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) : r.Stable := by
   obtain ⟨F⟩ := hR
-  obtain ⟨K, hK⟩ : ∃ K, ∀ t, energy (r.Q t) ≤ K :=
-    ⟨_, r.energy_bounded hr F hdem hε harr⟩
+  obtain ⟨K, hK⟩ : ∃ K, ∀ t, lyapunov (r.Q t) ≤ K :=
+    ⟨_, r.lyapunov_bounded hr F hdem hε harr⟩
   refine ⟨(Fintype.card V : ℚ) ^ 2 + K, fun t => ⟨?_, ?_⟩⟩
-  · have h1 := backlog_le_energy (r.Q t)
+  · have h1 := backlog_le_lyapunov (r.Q t)
     have h2 := hK t
     linarith
-  · have h1 := backlog_le_energy (r.Q t)
+  · have h1 := backlog_le_lyapunov (r.Q t)
     have h2 := hK t
     have h3 := r.delivered_sum t
     have h4 := r.backlog_nonneg 0
@@ -188,16 +189,16 @@ theorem stable_of {dem : V → V → ℚ} (F : Flow N dem 1)
     (hw : ∀ t, weight (r.Q t) F.f ≤ weight (r.Q t) (r.μ t)) (hwc : r.WorkConserving)
     (hdem : ∀ v d, 0 ≤ dem v d) {ε : ℚ} (hε : 0 < ε)
     (harr : ∀ t v d, v ≠ d → r.a t v d + ε ≤ dem v d) : r.Stable := by
-  have hE : ∀ t, energy (r.Q t) ≤
-      max (energy (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem) :=
-    fun t => bounded_of_drift (E := fun t => energy (r.Q t)) (S := fun t => backlog (r.Q t))
+  have hE : ∀ t, lyapunov (r.Q t) ≤
+      max (lyapunov (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem) :=
+    fun t => bounded_of_drift (E := fun t => lyapunov (r.Q t)) (S := fun t => backlog (r.Q t))
       (B := driftConst N dem) hε r.backlog_nonneg
-      (fun t => energy_le_backlog_sq fun v d => r.Q_nonneg t v d)
+      (fun t => lyapunov_le_backlog_sq fun v d => r.Q_nonneg t v d)
       (r.drift_of F hw hwc hdem hε harr) t
-  set K := max (energy (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem)
+  set K := max (lyapunov (r.Q 0)) ((driftConst N dem / (2 * ε)) ^ 2 + driftConst N dem)
   refine ⟨(Fintype.card V : ℚ) ^ 2 + K, fun t => ⟨?_, ?_⟩⟩
-  · linarith [backlog_le_energy (r.Q t), hE t]
-  · linarith [backlog_le_energy (r.Q t), hE t, r.delivered_sum t, r.backlog_nonneg 0]
+  · linarith [backlog_le_lyapunov (r.Q t), hE t]
+  · linarith [backlog_le_lyapunov (r.Q t), hE t, r.delivered_sum t, r.backlog_nonneg 0]
 
 /-- **Backpressure is throughput optimal.**  If `dem ≥ 0` is routable at `θ` and some traffic
 `J` reaching every pair (`J v d ≥ c > 0` for `v ≠ d`) is routable at `η > 0`, then under every
