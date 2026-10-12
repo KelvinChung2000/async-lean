@@ -29,7 +29,7 @@ It only takes hops of Duato's mesh.  The extra hops of the maximally adaptive me
 pay off here: a fourth tier taking them (straight on) made transpose and shuffle traffic faster on
 8 × 8 meshes but made hotspot and bit-reversal traffic collapse on 16 × 16 meshes.
 
-In the simulation (README, "A selection that performs"; measurements, not theorems), with
+In the simulation (`docs/routing-adaptivity.md`, "A selection that performs"; measurements, not theorems), with
 `g = 4`, it has the highest peak throughput of the schemes compared (Duato's mesh with a random
 or a throttled random selection, XY on both virtual channels, O1TURN, the west-first mesh with a
 random selection) under uniform, shuffle, bit-reversal and hotspot traffic on 8 × 8 and 16 × 16

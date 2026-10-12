@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Backpressure with integer packets (nothing here is proved; the queueing model with divisible
-traffic, `Fluid.Run` in AsyncLean/Flow/Backpressure.lean, is: there backpressure is stable at
+traffic, `Fluid.Run` in AsyncLean/Flow/Backpressure/, is: there backpressure is stable at
 every load below the fluid optimum, and no scheduler is stable above it).
 
 The network: the k x k mesh or torus, every directed link with m connections, each carrying 2

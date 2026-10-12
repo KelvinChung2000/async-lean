@@ -70,67 +70,41 @@
   C-elements; tutorial
   paragraphs on potentials, bitmaps and routing logic.
 
-* **Packets in time, whole packets, adaptivity** (`Routing/Throughput.lean`,
-  `Examples/Throughput.lean`, `Flow/Necessity.lean`). Timed runs of packet networks
-  (`Network.TimedRun`) on a placement respect every fluid bound under any selection
-  (`TimedRun.ceiling`, `cut_ceiling`, `hop_ceiling`) and deliver all but what the network holds
-  (`ejected_ge`); lanes add their timed throughput (`lanesTimed_injected`); the torus with `m`
-  lanes is exactly linear with packets up to `m` times the optimum (`torusLanes_ceiling`,
-  `torusLanes_sustains`). Backpressure is stable for leaky-bucket arrivals
-  (`Run.backpressure_stable_bursty`) and with whole packets (`Run.ofArrivalsSeq_int`,
-  `mesh_backpressure_packets`). Stable runs respect every potential bound on the links they use
-  (`Fluid.PotentialFeasibleOn`, `Run.potentialFeasibleOn`); on the torus under tornado,
-  shortest-path-only scheduling is unstable above `2/3` while backpressure is stable below
-  `16/15` (`torusTornado_adaptivity`). Score-based selections are valid, so correct networks
-  stay safe under them (`scoreSel_valid`). `GraphCert.PortGraph.upper_of_check'` takes potential
-  feasibility instead of a flow. Backpressure never deadlocks where every destination is
-  reachable (`Run.backpressure_progress`); on the mesh it is a finite-buffer network near the
-  optimum without deadlock (`mesh_finite_buffer_network`). A single first-in first-out queue per
-  vertex is never stable above one packet per vertex and slot, so per-destination queues are
-  necessary for linear scaling (`Run.singleHead_ceiling`, `mesh_headOfLine`). Restricted
-  backpressure reaches the optimum over its permitted links (`Run.backpressureOn_optimal`,
-  `torusTornado_minimal_backpressure`). Under random arrivals (mean given the past `ε` below a
-  routable traffic, finite second moment: Poisson, for instance) backpressure is strongly stable
-  for every expectation operator (`Flow/Stochastic.lean`, `backpressure_strongly_stable`).
+* **Scaling with the connections** (guide: `docs/scaling.md`).
+  * *The ceiling* (`Flow/Scaling.lean`): with `m` connections per link the fluid optimum is
+    exactly `m` times one connection's (`opt_copies`, `worstOpt_copies`); layers of unequal
+    connections add (`layered_routable`); exact worst cases `4m/k` (mesh), `8m/k` (torus), `2m`
+    (hypercube).
+  * *Lanes* (`Routing/Lanes.lean`, `Examples/Lanes.lean`): `m` copies of a network side by side,
+    safe for every `m` (`Network.SafeCert`, `SafeCert.lanes`, `lanes_correct`, on every graph);
+    the lanes do not interfere (`lanes_reachable_iff`, `copies_path`). Sharing the connections
+    is safe too (`GraphData.sharedNet`, `Network.widen`).
+  * *Packets in time* (`Routing/Throughput/`, `Examples/Throughput.lean`): timed runs respect
+    every fluid bound under any selection (`TimedRun.ceiling`); lanes add their timed throughput
+    (`lanesTimed_injected`); the torus with `m` lanes is exactly linear up to the optimum
+    (`torusLanes_ceiling`, `torusLanes_sustains`); score-based selections are safe
+    (`scoreSel_valid`).
+  * *Backpressure* (`Flow/Backpressure/`, `Flow/Stochastic.lean`): stable at every load below
+    the fluid optimum and no scheduler above it (`backpressure_optimal`, `potential_ceiling`);
+    with `m` connections the threshold is `m` times the optimum on mesh, torus and hypercube;
+    finite buffers suffice (`mesh_buffer`); bursty and whole-packet arrivals
+    (`backpressure_stable_bursty`, `mesh_backpressure_packets`); random arrivals
+    (`backpressure_strongly_stable`).
+  * *What is necessary* (`Flow/Necessity.lean`): shortest-path-only scheduling loses on the
+    torus under tornado (`torusTornado_adaptivity`); restricted backpressure reaches the
+    restricted optimum (`backpressureOn_optimal`); backpressure never deadlocks and fits in
+    finite buffers (`mesh_finite_buffer_network`); a single FIFO per node does not scale
+    (`mesh_headOfLine`). `GraphCert.PortGraph.upper_of_check'` takes potential feasibility
+    instead of a flow; `mesh_upper_of_cut`, `torus_uniform_hop`, `cube_uniform_hop` expose the
+    tight bounds.
+  * *Simulation* (`scripts/lane_scaling.py`, `scripts/backpressure_sim.py`): lanes scale within
+    0.006 of linear; widening gains 6 to 63 % per connection; backpressure accepts 99 % of the
+    optimum with about `24 m` packets per destination.
 
-* **Backpressure reaches the fluid optimum** (`Flow/Backpressure.lean`,
-  `scripts/backpressure_sim.py`). A discrete-time queueing model of the fluid network
-  (`Fluid.Run`); max-weight, work-conserving scheduling (`Run.Backpressure`) keeps the backlog
-  bounded and delivers everything at every load below the fluid optimum (`Run.drift`,
-  `Run.backpressure_stable`, `Run.backpressure_optimal`); no scheduler keeps a bounded backlog
-  above any fluid bound (`Run.potential_ceiling`, `cut_ceiling`, `hop_ceiling`); the greedy
-  scheduler is max-weight and yields a run for every arrival sequence (`bpRates_maxWeight`,
-  `Run.ofArrivals`). With `m` connections per link under uniform traffic the threshold is exactly
-  `m` times the optimum on the mesh, torus and hypercube (`mesh_backpressure`,
-  `torus_backpressure`, `cube_backpressure`, `mesh_backpressure_exists`). `mesh_upper_of_cut`,
-  `torus_uniform_hop`, `cube_uniform_hop` expose the tight bounds. With integer packets on the
-  8 × 8 mesh and torus, backpressure accepts 99 % of the fluid optimum for `m = 1, 2, 4` (mesh
-  0.975 per node per connection, against 0.45 to 0.64 for the lane and widened networks), at the
-  cost of large per-destination queues and delays of hundreds of slots. Finite buffers suffice
-  (`Run.FitsIn`, `Run.backpressure_fitsIn`: at most `driftConst / (2 ε) + ε` per destination;
-  `mesh_buffer`: `145 m k⁷ / (16 δ) + m` on the mesh at `(1 − δ)` times the optimum); in
-  simulation `24 m` packets per destination reach 98 % of the optimum and `16 m` lose up to 30 %
-  (`backpressure_sim.py --buffers [--cap c]`).
-
-* **Routing that scales linearly with the connections** (`Flow/Scaling.lean`,
-  `Routing/Lanes.lean`, `Examples/Lanes.lean`, `scripts/lane_scaling.py`). In the fluid model the
-  best throughput of `m` connections per link is exactly `m` times that of one
-  (`copies_routable_iff`, `opt_copies`, `worstOpt_copies`), reached by `m` lanes each running the
-  one-connection scheme; layers of unequal connections add (`layered_routable`,
-  `opt_superadditive`). Worst case over admissible traffic with `m` connections: exactly `4m/k`
-  (mesh), `8m/k` (torus), `2m` (hypercube). `Network.lanes` makes the lanes a packet network;
-  `Network.SafeCert` packages the library's proof recipe and `SafeCert.lanes` lifts it to every
-  number of lanes (deadlock, livelock and starvation freedom, delivery under saturation:
-  `lanes_correct`, `lanes_underLoad`; on every graph for `GraphData.net`, `budgetNet` and
-  `detourNet`, throttled sources included). The lanes are independent
-  (`lanes_reachable_iff`, `lanes_path`), so `m` copies deliver `m` times the packets of one
-  (`copies_path`). Sharing the connections is proved safe too: `GraphData.sharedNet` (escapes per
-  lane, adaptive hops on every lane, `shared_correct`) and widening (`Network.widen`: any number of
-  copies of every channel of any certified network, every copy usable, `SafeCert.widen`,
-  `widen_correct`, `GraphData.wide_detour_correct`, `shared_slots_correct`). In simulation on the
-  8 × 8 torus (`scripts/lane_scaling.py`), lanes keep the throughput per connection within 0.006
-  of one connection's on every pattern for `m = 1, 2, 4`; widening to one escape and `2m - 1`
-  adaptive channels gains 6 to 63 % per connection over lanes at `m = 4`.
+* **Documentation reorganised.** The README is the user guide; the routing research moved to
+  `docs/routing-adaptivity.md` and `docs/topologies.md`, the library map to
+  `docs/library-map.md`, and the scripts are indexed in `scripts/README.md`.
+  `Flow/Backpressure.lean` and `Routing/Throughput.lean` are split into folders of parts.
 
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the

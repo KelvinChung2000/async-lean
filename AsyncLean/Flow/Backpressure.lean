@@ -16,8 +16,8 @@ This module gathers the backpressure development, in seven parts:
 6. `Backpressure.Scheduler` — the greedy scheduler, with fractional or whole-packet sends;
 7. `Backpressure.Instances` — the mesh, the torus and the hypercube with `m` connections.
 
-The fluid model (`Fluid.Routable`) says which throughputs a network can carry at best.  This
-file proves that one scheduler, **backpressure** (max-weight scheduling, Tassiulas and
+The fluid model (`Fluid.Routable`) says which throughputs a network can carry at best.  These
+modules prove that one scheduler, **backpressure** (max-weight scheduling, Tassiulas and
 Ephremides), carries every one of them: every load strictly inside the fluid optimum keeps its
 backlog bounded and is delivered in full.  Conversely no scheduler whatever keeps its backlog
 bounded above any fluid upper bound (`Run.potential_ceiling`).  So the fluid optimum is exactly

@@ -13,7 +13,7 @@ delivery), `Throughput.Lanes` (lanes add their throughput), `Throughput.Select` 
 selections are safe) and `Throughput.Graph` (the networks of `GraphData` on their graph).
 
 The packet networks of `AsyncLean.Routing.Basic` are transition systems: they say which moves
-are possible, not when they happen, so they have no throughput.  This file adds time and proves
+are possible, not when they happen, so they have no throughput.  These modules add time and prove
 that **no packet network, under any routing and any selection, carries more than the fluid
 model allows** (`Network.TimedRun.ceiling`): the bridge between the packet networks and
 `AsyncLean.Flow`.
