@@ -24,6 +24,22 @@ Run them from the repository root, for example `python3 scripts/plane_scaling.py
 | `plane_scaling.py` | throughput per connection with `m` connections: planes, shared planes, replication | [scaling.md](../docs/scaling.md) |
 | `backpressure_sim.py` | backpressure with whole packets: throughput, delay, buffer needs (`--buffers`, `--cap`) | [scaling.md](../docs/scaling.md) |
 
+### Experiments (`xp_*.py`)
+
+Further routing experiments on the 8 × 8 and 16 × 16 mesh and torus, each described in its
+docstring; results in [routing-adaptivity.md](../docs/routing-adaptivity.md) (the packet-level
+ceiling, ideas from other fields, the mesh and torus schemes) and
+[topologies.md](../docs/topologies.md).
+
+| Script | What it tries |
+|---|---|
+| `xp_ramp.py`, `xp_prices.py`, `xp_tolls.py`, `xp_physarum.py` | ideas from other fields: ramp metering, link prices, tolls, Physarum dynamics |
+| `xp_backpressure.py`, `xp_arbiter.py` | backpressure-style selections and arbitration orders, in both move models |
+| `xp_ceiling.py` | the packet-level throughput ceiling of the simulators' packet model |
+| `xp_combo.py`, `xp_combo2.py` | one combined torus scheme and one mesh scheme against every published scheme |
+| `xp_portfolio.py`, `xp_portfolio2.py`, `xp_transpose.py`, `xp_bitcomp.py` | mode-switching learners over proved mesh modes; transpose, tornado and bit complement |
+| `xp_scale.py`, `xp_scale2.py`, `xp_torus16.py`, `xp_fairtorus.py`, `xp_validate.py` | the schemes at 16 × 16, longer runs and fairness |
+
 `routing_graph_sim.py` and `routing_sim.py` are also libraries: `plane_scaling.py`,
 `torus_*.py` and `backpressure_sim.py` reuse their network and traffic definitions.
 

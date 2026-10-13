@@ -53,6 +53,10 @@ its parts.
 | `Routing/Graph.lean` | safe adaptive routing on every finite connected graph: minimal adaptive routing with a spanning-tree escape |
 | `Routing/GraphBudget.lean` | routing on every graph with bounded returns from the escape subnetwork: a packet may leave the escape subnetwork `B` times |
 | `Routing/GraphTwoPhase.lean` | source-chosen intermediate nodes (Valiant, long way round) on top of bounded returns: safe on every graph |
+| `Routing/Cycle.lean` | the simulators' cycle models (sequential, no chaining) as sequences of steps; safety per cycle; the injection limit of one packet per node per cycle |
+| `Routing/EscapeLayer.lean`, `Routing/UpDown.lean` | the two-phase network for any escape subnetwork; up*/down* escape on any finite connected graph, as simulated |
+| `Routing/Strategy.lean`, `Routing/StrategyTwoPhase.lean` | history-dependent strategies (any state, a selection per step): deadlock, livelock, starvation freedom and delivery under load; throttles on any graph |
+| `Packet/Exclusion.lean`, `Packet/Ceiling.lean` | one cycle of a ring of depth-N lanes under every move order; one-packet lanes carry at most 1/2 on average; fluid optima at scaled capacity |
 | `Routing/Saturation.lean` | delivery under sustained load: channel fairness, Duato's theorem for liveness with injections never stopping |
 
 ## The fluid model: throughput bounds

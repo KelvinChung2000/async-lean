@@ -21,8 +21,8 @@ reference material (properties, trust, limits) is at the end.
 
 Deeper results live in [`docs/`](docs/README.md):
 
-* [How adaptive can routing be?](docs/routing-adaptivity.md): maximally adaptive mesh routing
-  and selections that perform.
+* [How adaptive can routing be?](docs/routing-adaptivity.md): maximally adaptive mesh routing,
+  selections that perform, safe history-dependent strategies and the packet-level ceiling.
 * [Beyond the mesh](docs/topologies.md): safe routing on every graph, topologies and their
   throughput in the fluid model.
 * [Scaling with the connections](docs/scaling.md): linear scaling, planes, and backpressure
@@ -424,7 +424,10 @@ The routing results go well beyond these checks. Each has its own guide:
 * **[How adaptive can routing be?](docs/routing-adaptivity.md)** Deadlock-free mesh routing
   functions to which no hop can be added (the west-first and north-last meshes, proved for every
   mesh size), the trade-offs between hops, buffers and routing tables, and a source-throttled
-  selection (`priorityMesh`) that is safe for every size and fast in simulation.
+  selection (`priorityMesh`) that is safe for every size and fast in simulation. History-dependent
+  routing strategies are safe whenever every selection they use is (`Routing/Strategy.lean`);
+  one-packet lanes carry at most 1/2 packet per cycle, the packet-level ceiling
+  (`Packet/Ceiling.lean`); and ideas from other fields are compared in simulation.
 * **[Beyond the mesh](docs/topologies.md).** Minimal adaptive routing, bounded returns from the escape
   subnetwork and two-phase routing through source-chosen intermediates are safe on every finite connected graph (`GraphData.correct`,
   `budget_correct`, `twoPhase_correct`). In the fluid model the optimum of mesh, torus and

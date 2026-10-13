@@ -71,6 +71,11 @@ import AsyncLean.Routing.Planes
 import AsyncLean.Routing.SharedPlanes
 import AsyncLean.Routing.Throughput
 import AsyncLean.Routing.Replicate
+import AsyncLean.Routing.Strategy
+import AsyncLean.Routing.StrategyTwoPhase
+import AsyncLean.Routing.EscapeLayer
+import AsyncLean.Routing.UpDown
+import AsyncLean.Routing.Cycle
 import AsyncLean.Flow.Fluid
 import AsyncLean.Flow.MeshWire
 import AsyncLean.Flow.MeshOdd
@@ -87,6 +92,8 @@ import AsyncLean.Flow.Scaling
 import AsyncLean.Flow.Backpressure
 import AsyncLean.Flow.Necessity
 import AsyncLean.Flow.Stochastic
+import AsyncLean.Packet.Exclusion
+import AsyncLean.Packet.Ceiling
 import AsyncLean.AxiomAudit
 import AsyncLean.Audit
 import AsyncLean.Examples.MullerRing
@@ -120,4 +127,7 @@ import AsyncLean.Examples.GraphBudget
 import AsyncLean.Examples.GraphTwoPhase
 import AsyncLean.Examples.Planes
 import AsyncLean.Examples.Throughput
+import AsyncLean.Examples.Strategy
+import AsyncLean.Examples.UpDown
+import AsyncLean.Examples.Cycle
 import AsyncLean.Tutorial

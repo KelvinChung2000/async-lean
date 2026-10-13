@@ -132,6 +132,72 @@
   is now `priority`). `Fluid.IsHopDistance` → `IsHopPotential`, apart from the exact
   `UGraph.IsHopDist`.
 
+* **Cycle models and the injection limit** (`Routing/Cycle.lean`, `Examples/Cycle.lean`): both
+  simulated move models are sequences of single steps, so safety carries over cycle by cycle;
+  no scheme delivers more than one packet per node per cycle (`throughput_le`), which makes the
+  neighbour-traffic tie an optimum.
+
+* **The simulated up*/down* escape, proved** (`Routing/EscapeLayer.lean`, `Routing/UpDown.lean`,
+  `Examples/UpDown.lean`): two-phase networks, throttles and history-dependent strategies are safe for
+  any escape subnetwork; the up*/down* escape of the simulators is one on every finite connected graph;
+  the torus instances (`simUD_combo_safe` and others) match the simulated escape exactly.
+
+* `scripts/xp_torus16.py`: the torus combined scheme scaled to 16 × 16 is ahead of dimension
+  order, Valiant and UGAL on eight patterns in both move models and tied on neighbour traffic
+  (simulation; less even injection at its peak; simulated escape differs from the proved one).
+
+* `scripts/xp_scale2.py`: the mesh learner with a hotspot lock and a random-destination default is
+  ahead of every published mesh scheme on all eight patterns in both move models at 16 × 16 as
+  well as 8 × 8 (simulation; switching proved safe by `westFirstMesh_modes_safe`).
+
+* `scripts/xp_validate.py`: the 8 × 8 torus result holds at 10000 cycles; fairness checks and a
+  fairer tornado mode; at 16 × 16 with 8 × 8 settings the mesh learner loses hotspot and bit
+  complement (parameters must scale with size).
+
+* **A mesh scheme ahead of every published one on every pattern (simulation)**: the mode-switching
+  learner `PX:t5b` over five proved west-first modes (`scripts/xp_transpose.py`) is strictly
+  ahead of XY on both virtual channels, west-first random, Duato's mesh and O1TURN on all eight
+  patterns, with sequential moves and without chaining (+0.7 % to +21 %); switching proved safe by
+  `westFirstMesh_modes_safe`.
+
+* `scripts/xp_portfolio2.py`: the mesh mode-switching learner with the new XY mode is ahead of
+  every published mesh scheme on six of eight patterns in both move models, ties tornado and
+  trails west-first on transpose at offered load 1.0. Correction: west-first with a weak
+  throttle is not above published west-first on transpose at offered load 1.0.
+
+* `scripts/xp_portfolio.py`: a network-wide mode-switching learner over proved modes;
+  `westFirstMesh_strategy_safe`, `westFirstMesh_modes_safe` (`Examples/Strategy.lean`) prove the
+  switching on the west-first mesh. It matches the schemes it contains up to a learning cost of
+  0.1 to 4 % that shrinks only slowly with run length. Correction: XY on both virtual channels,
+  not the best mesh configuration, is best under random permutation traffic.
+
+* `scripts/xp_combo2.py`: a mesh configuration ahead of every scheme on four patterns (up to
+  +17 %) that loses transpose and bit complement (a trade-off every rule tried moves along), and
+  a torus variant with a three-way per-source throttle that trades hotspot for uniform.
+
+* **History-dependent routing proved safe** (`Routing/Strategy.lean`,
+  `Routing/StrategyTwoPhase.lean`, `Examples/Strategy.lean`): strategies with arbitrary state are
+  deadlock, livelock and starvation free and deliver under load whenever every selection they use
+  meets the existing conditions; the torus combined scheme of `xp_combo.py` (`torus_combo_safe`),
+  price and toll choices, and the escape-share throttles are instances.
+
+* `scripts/xp_combo.py`: price-chosen adaptive hops + toll-priced source detours with a
+  price-table filter + escape-share throttle. On the 8 × 8 torus it is at least as good as the
+  published schemes and every listed variant of ours on all nine patterns, with sequential moves
+  and without chaining (ahead on eight, tied at the injection limit on neighbour traffic;
+  two leads within noise).
+
+* Six ideas from other fields tried at equal resources (`scripts/xp_ramp.py`, `xp_prices.py`,
+  `xp_backpressure.py`, `xp_physarum.py`, `xp_tolls.py`, `xp_arbiter.py`): price-chosen
+  adaptive hops and Pigou tolls help on the torus; arbitration gains depend on the
+  move model (same-cycle chaining) and on starving sources, and vanish in a fair comparison;
+  every packet-level ranking is specific to the sequential-move model.
+
+* **The packet-level ceiling** (`Packet/Exclusion.lean`, `Packet/Ceiling.lean`,
+  `scripts/xp_ceiling.py`): one-packet lanes in a ring carry at most 1/2 packet per lane per
+  cycle on average under every configuration (`half_bound`, tight); lanes of depth 2 or more
+  carry 1. Fluid optima at half capacity on the 8 × 8 mesh and torus; depth-N simulations.
+
 * `scripts/torus_significance.py`: with 8 fresh seeds, `bandit2m7f5k` is ahead of dimension
   order, Valiant and UGAL on eight torus patterns by at least 3.5 standard errors and at the
   injection limit with them on neighbour traffic.
