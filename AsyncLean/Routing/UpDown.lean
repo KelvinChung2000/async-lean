@@ -4,14 +4,14 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.Routing.EscapeLayer
 
 /-!
-# Up*/down* routing over all the links of a graph as the escape layer
+# Up*/down* routing over all the links of a graph as the escape subnetwork
 
 The simulations (`scripts/routing_graph_sim.py`, class `Net` with `escape='updown'`) do not
-route the escape layer along the spanning tree, as `GraphData.net` does: they use **up*/down*
+route the escape subnetwork along the spanning tree, as `GraphData.net` does: they use **up*/down*
 routing over every link of the graph**.  This file formalises that escape and proves it is an
-escape layer (`GraphData.EscapeLayer`), so every theorem of `AsyncLean.Routing.EscapeLayer`
+escape subnetwork (`GraphData.EscapeLayer`), so every theorem of `AsyncLean.Routing.EscapeLayer`
 (deadlock, livelock and starvation freedom, delivery under load, history-dependent strategies,
-for the detour network with bounded returns) holds for it.
+for the two-phase network with bounded returns) holds for it.
 
 ## Up*/down* paths
 
@@ -53,12 +53,12 @@ injection channel starts a fresh up*/down* path.  The escape hop of a packet in 
 * `UpDown.escDep_wf` : **the escape dependency relation, with the phase in the channel, is
   well-founded**: up channels by decreasing key of their head, then down channels by increasing
   key (`UpDown.ord`).
-* `UpDown.esc` : the escape layer, with the escape distance `udDist` (bounded by `2 * maxKey`).
+* `UpDown.esc` : the escape subnetwork, with the escape distance `udDist` (bounded by `2 * maxKey`).
 * `UpDown.ofLevels` : the escape of the simulation on any graph with a rooted tree: key
   `dep v * n + idx v` (the lexicographic order on `(dep v, idx v)` when `idx < n`), next hop the
   first neighbour starting a shortest legal path.
 * `GraphData.exists_updown_correct` : **every finite connected undirected graph**, with any
-  distance estimate, return budget and choice of intermediates, carries the detour network with
+  distance estimate, return budget and choice of intermediates, carries the two-phase network with
   up*/down* escape over a breadth-first spanning tree from any root, with key
   `(BFS level, position in the vertex list)`, and it is deadlock, livelock and starvation free
   and delivers every packet under saturation.
@@ -422,7 +422,7 @@ omit [DecidableEq V] in
 theorem escDep_wf : WellFounded (flip U.EscDep) :=
   Network.wf_of_lexRank U.ord fun _ _ ⟨_, hl, h, e⟩ => e ▸ U.ord_lt hl h
 
-/-- **The up*/down* escape layer**: escape distance the up*/down* distance from the channel's
+/-- **The up*/down* escape subnetwork**: escape distance the up*/down* distance from the channel's
 head in its phase, below `2 * maxKey + 1`. -/
 noncomputable def esc : G.EscapeLayer where
   next := U.next
@@ -536,7 +536,7 @@ noncomputable def UpDown.ofLevels (G : GraphData V) (idx : V → ℕ) (n : ℕ)
 
 /-- **Every finite connected undirected graph carries a correct adaptive network with an
 up*/down* escape**: with any distance estimate `dist`, any return budget `B`, any choice of
-intermediates `W` and any root `r`, the detour network with up*/down* routing as the escape
+intermediates `W` and any root `r`, the two-phase network with up*/down* routing as the escape
 layer, over a breadth-first spanning tree from `r` with the key (BFS level, position in the
 vertex list) and the first shortest legal next hop, is deadlock and livelock free under every
 valid selection, starvation free under strongly fair scheduling, and delivers every packet

@@ -221,12 +221,12 @@ def psim(rate, pattern, seed=1, cycles=4000, warmup=1000, g=4, budget=2,
             e = esc[c][d]
             onesc = c % 2 == 0 and not issrc
             canret = not (onesc and pk[4] >= budget)
-            tiers = []
-            if canret: tiers.append(vc1[u][tgt])
-            tiers.append([e])
+            levels = []
+            if canret: levels.append(vc1[u][tgt])
+            levels.append([e])
             q = None
-            for ti, tier in enumerate(tiers):
-                free = [x for x in tier if x not in occ]
+            for ti, level in enumerate(levels):
+                free = [x for x in level if x not in occ]
                 if g and issrc: free = [x for x in free if sum(1 for o in out[head[x]] if o not in occ) >= thr[head[x]]]
                 if free:
                     if hop is not None and len(free) > 1 and free[0] % 2 == 1:

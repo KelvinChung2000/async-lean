@@ -56,6 +56,7 @@ structure Module where
 inductive Tok where
   | ident (s : String)
   | num (b : Bool)
+  | nat (n : ℕ)
   | sym (c : Char)
   deriving Inhabited, BEq
 
@@ -92,14 +93,15 @@ partial def tokenize : List Char → Except String (List Tok)
     else if c.isDigit then
       let n := (c :: rest).takeWhile fun d => d.isAlphanum || d == '\''
       let s := String.ofList n
-      let b ← match s with
-        | "0" | "1'b0" | "1'h0" | "1'd0" => pure false
-        | "1" | "1'b1" | "1'h1" | "1'd1" => pure true
-        | _ => .error s!"unsupported constant {s}"
-      return Tok.num b :: (← tokenize ((c :: rest).drop n.length))
-    else if "(),;=&|^~!.#[]".contains c then
-      if c == '[' then throw "buses are not supported"
-      else return Tok.sym c :: (← tokenize rest)
+      let t ← match s with
+        | "1'b0" | "1'h0" | "1'd0" => pure (Tok.num false)
+        | "1'b1" | "1'h1" | "1'd1" => pure (Tok.num true)
+        | _ => match s.toNat? with
+          | some v => pure (Tok.nat v)
+          | none => .error s!"unsupported constant {s}"
+      return t :: (← tokenize ((c :: rest).drop n.length))
+    else if "(),;=&|^~!.#[]:".contains c then
+      return Tok.sym c :: (← tokenize rest)
     else throw s!"unexpected character {c}"
 
 /-- Parser state. -/
@@ -114,17 +116,49 @@ def expectSym (c : Char) : P Unit := do
   match ← next with
   | .sym d => if c == d then pure () else throw s!"expected '{c}', found '{d}'"
   | .ident s => throw s!"expected '{c}', found {s}"
-  | .num _ => throw s!"expected '{c}', found a constant"
+  | _ => throw s!"expected '{c}', found a constant"
+def natLit : P ℕ := do
+  match ← next with
+  | .nat n => return n
+  | .num b => return if b then 1 else 0
+  | _ => throw "expected a number"
+/-- An identifier, possibly with a bit select `n[i]` (named `n[i]`). -/
 def ident : P String := do
   match ← next with
-  | .ident s => return s
+  | .ident s =>
+    if (← peek) == some (.sym '[') then
+      discard next
+      let i ← natLit
+      expectSym ']'
+      return s!"{s}[{i}]"
+    else return s
   | _ => throw "expected an identifier"
+/-- An optional range `[msb:lsb]`: the bit indices, in increasing order. -/
+def range? : P (Option (List ℕ)) := do
+  if (← peek) == some (.sym '[') then
+    discard next
+    let a ← natLit
+    expectSym ':'
+    let b ← natLit
+    expectSym ']'
+    let lo := min a b
+    return some ((List.range (max a b - lo + 1)).map (· + lo))
+  else return none
+/-- The names of a declared signal: its bits if it is a bus. -/
+def expand (r : Option (List ℕ)) (n : String) : List String :=
+  match r with
+  | some is => is.map fun i => s!"{n}[{i}]"
+  | none => [n]
 
 mutual
 partial def primary : P VExpr := do
+  match ← peek with
+  | some (.ident _) => return .var (← ident)
+  | _ => pure ()
   match ← next with
-  | .ident s => return .var s
   | .num b => return .const b
+  | .nat 0 => return .const false
+  | .nat 1 => return .const true
   | .sym '(' => let e ← orExpr; expectSym ')'; return e
   | .sym '~' => return .not (← primary)
   | .sym '!' => return .not (← primary)
@@ -146,13 +180,17 @@ partial def orExpr : P VExpr := do
   return e
 end
 
-/-- A comma-separated list of identifiers, up to `;`. -/
-partial def identList : P (List String) := do
+/-- A comma-separated list of identifiers, up to `;`, all with the range `r`. -/
+partial def identListR (r : Option (List ℕ)) : P (List String) := do
   let n ← ident
   match ← next with
-  | .sym ',' => return n :: (← identList)
-  | .sym ';' => return [n]
+  | .sym ',' => return expand r n ++ (← identListR r)
+  | .sym ';' => return expand r n
   | _ => throw "expected ',' or ';'"
+
+/-- A declaration list: an optional range, then identifiers. -/
+partial def identList : P (List String) := do
+  identListR (← range?)
 
 /-- The expression of a gate primitive or C-element applied to inputs. -/
 def gateExpr (kind : String) (out : String) (ins : List String) : Except String VExpr := do
@@ -215,6 +253,7 @@ where
     | .sym ';' => return [(lhs, e)]
     | _ => throw "expected ',' or ';' after an assignment"
 
+mutual
 /-- Parse an ANSI or plain port list `( … )`. -/
 partial def ports (m : Module) (dir : Option String) : P Module := do
   match ← next with
@@ -224,12 +263,36 @@ partial def ports (m : Module) (dir : Option String) : P Module := do
   | .ident "output" => ports m (some "output")
   | .ident "inout" => throw "inout ports are not supported"
   | .ident "wire" | .ident "reg" => ports m dir
+  | .sym '[' =>
+    -- a range in an ANSI port declaration: applies to the following names
+    let a ← natLit
+    expectSym ':'
+    let b ← natLit
+    expectSym ']'
+    let lo := min a b
+    let is := (List.range (max a b - lo + 1)).map (· + lo)
+    portsR m dir (some is)
   | .ident n =>
     match dir with
     | some "input" => ports { m with inputs := m.inputs ++ [n] } dir
     | some "output" => ports { m with outputs := m.outputs ++ [n] } dir
     | _ => ports m dir
   | _ => throw "malformed port list"
+
+/-- Parse port names with the range `r` (until the next direction or the end). -/
+partial def portsR (m : Module) (dir : Option String) (r : Option (List ℕ)) : P Module := do
+  match ← peek with
+  | some (.ident "input") | some (.ident "output") | some (.ident "inout")
+  | some (.sym ')') => ports m dir
+  | some (.sym ',') => discard next; portsR m dir r
+  | some (.ident n) =>
+    discard next
+    match dir with
+    | some "input" => portsR { m with inputs := m.inputs ++ expand r n } dir r
+    | some "output" => portsR { m with outputs := m.outputs ++ expand r n } dir r
+    | _ => portsR m dir r
+  | _ => throw "malformed port list"
+end
 
 /-- Parse a module. -/
 def parseModule (content : String) : Except String Module := do
@@ -271,6 +334,43 @@ def circuit (m : Module) : Except String Circuit := do
   let init := signals.map fun n => ((m.init.find? (·.1 == n)).map (·.2)).getD false
   return { signals := signals.length, gates, init }
 
+/-- A combinational netlist from a module: the inputs (in port order) are signals
+`0 … nin - 1`; the assignments, sorted topologically, are the gates; the outputs are read in
+port order.  Fails on a combinational cycle, an assigned input or a signal assigned twice. -/
+def comb (m : Module) : Except String Comb := do
+  let ins := m.inputs
+  let others := ((m.outputs ++ m.wires ++ m.assigns.map (·.1)).eraseDups).filter (!ins.contains ·)
+  let signals := ins ++ others
+  let idx (n : String) : Except String ℕ :=
+    match indexOf? signals n with
+    | some i => .ok i
+    | none => .error s!"unknown signal {n}"
+  for (lhs, _) in m.assigns do
+    if ins.contains lhs then throw s!"input {lhs} is assigned"
+  if (m.assigns.map (·.1)).eraseDups.length != m.assigns.length then
+    throw "a signal is assigned twice"
+  -- topological sort (Kahn)
+  let vars : VExpr → List String := fun e =>
+    let rec go : VExpr → List String
+      | .var n => [n]
+      | .const _ => []
+      | .not e => go e
+      | .and a b | .or a b | .xor a b => go a ++ go b
+    go e
+  let mut done : List String := ins
+  let mut rest := m.assigns
+  let mut order : Array (String × VExpr) := #[]
+  while !rest.isEmpty do
+    let (ready, blocked) := rest.partition fun (_, e) => (vars e).all done.contains
+    if ready.isEmpty then
+      throw s!"combinational cycle through {(blocked.map (·.1)).take 3}"
+    order := order ++ ready.toArray
+    done := done ++ ready.map (·.1)
+    rest := blocked
+  let gates ← order.toList.mapM fun (lhs, e) => do return (← idx lhs, ← toBExpr idx e)
+  let outs ← m.outputs.mapM idx
+  return { nin := ins.length, gates, outs }
+
 end Import.Verilog
 
 open Lean Elab Command Meta
@@ -298,6 +398,16 @@ elab "gates_from_verilog " id:ident path:str " for " spec:ident : command => do
     let doc := s!"Gates imported from `{path.getString}`."
     defineDesign id.getId (toTypeExpr (List Gate)) (toExpr gates) doc
   | .error e => throwError "gates_from_verilog: {e}"
+
+/-- `comb_from_verilog name "file.v"` defines `name : Comb`, the combinational netlist of a
+module: inputs and outputs in port order (a bus `[msb:lsb]` lists its bits from `lsb` up). -/
+elab "comb_from_verilog " id:ident path:str : command => do
+  let content ← readDesignFile path.getString
+  match Import.Verilog.parseModule content >>= Import.Verilog.comb with
+  | .ok c =>
+    let doc := s!"Combinational netlist imported from `{path.getString}`."
+    defineDesign id.getId (mkConst ``Comb) (toExpr c) doc
+  | .error e => throwError "comb_from_verilog: {e}"
 
 /-- `circuit_from_verilog name "file.v"` defines a closed `name : Circuit` from a netlist. -/
 elab "circuit_from_verilog " id:ident path:str : command => do

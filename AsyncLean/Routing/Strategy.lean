@@ -36,7 +36,7 @@ throttled sources) required only at the legal pairs whose packet has not arrived
 at which a selection is ever consulted.  `SourceSel` implies it (`SourceSel.sourceSelOn`), and so
 does `EscapeSel` (`EscapeSel.sourceSelOn`); the weaker form admits throttles that may refuse an
 escape hop at a source while offering an adaptive one, which needs an invariant of the legal
-pairs (used for the snapshot-based throttle of `AsyncLean.Routing.StrategyDetour`).
+pairs (used for the snapshot-based throttle of `AsyncLean.Routing.StrategyTwoPhase`).
 
 ## Fairness relative to the selection in force
 
@@ -74,7 +74,7 @@ admissible selection satisfying `SourceSelOn legal R₁ src`:
   no run of the strategy consists, from some point on, of moves only.
 * `Network.SelRun.hop_packetStep` — every hop of every run is a routing step of the packet from
   a legal pair, so the **hop bounds** of the routing function (`Network.packet_hops_le`, the
-  `detour_hops_le_*` theorems) hold for every packet of every run.
+  `twoPhase_hops_le_*` theorems) hold for every packet of every run.
 * `Network.SelRun.delivered_of_channelFair` — **delivery under load**: along every run that is
   channel fair relative to the selection in force, with injections going on for ever, every
   packet held outside the sources is delivered (no finiteness needed).
@@ -90,7 +90,7 @@ admissible selection satisfying `SourceSelOn legal R₁ src`:
 Generic building blocks for strategies: `Network.refineSel` (a history-dependent choice — the
 cheapest hop under link prices, the one with the best learned latency — among the free hops a
 selection offers keeps `SourceSelOn` and `EscapeSel`), `Network.minChoice` (the cheapest hops
-under any score), `Network.tieredSel_escapeSel` (a tiered selection with a tier admitting every
+under any score), `Network.prioritySel_escapeSel` (a priority selection with a level admitting every
 escape hop never refuses one), `Network.unionSel` (the union of the admissible selections).
 
 ## What is not covered
@@ -230,35 +230,35 @@ theorem minChoice_ok (score : Config C P → C → P → C × P → ℕ) : Choic
     simp only [List.all_eq_true, decide_eq_true_eq]
     exact hmin
 
-/-- A tiered selection only offers free channels. -/
-theorem tieredSel_freeOnly (tiers : List (Config C P → C → P → C × P → Bool)) :
-    FreeOnly (N.tieredSel tiers) := fun _ _ _ _ h => (N.mem_tieredSel h).2
+/-- A priority selection only offers free channels. -/
+theorem prioritySel_freeOnly (levels : List (Config C P → C → P → C × P → Bool)) :
+    FreeOnly (N.prioritySel levels) := fun _ _ _ _ h => (N.mem_prioritySel h).2
 
-/-- **A tiered selection with a tier admitting every escape hop never refuses a free escape
-hop**, whatever the other tiers prefer (and whatever they read: the configuration, or the
-history through the strategy that builds the tier list). -/
-theorem tieredSel_escapeSel {R₁ : C → P → List (C × P)}
+/-- **A priority selection with a level admitting every escape hop never refuses a free escape
+hop**, whatever the other levels prefer (and whatever they read: the configuration, or the
+history through the strategy that builds the level list). -/
+theorem prioritySel_escapeSel {R₁ : C → P → List (C × P)}
     (hR : ∀ c p q, q ∈ R₁ c p → q ∈ N.route c p)
-    {tiers : List (Config C P → C → P → C × P → Bool)} {t : Config C P → C → P → C × P → Bool}
-    (ht : t ∈ tiers) (hadm : ∀ f c p q, q ∈ R₁ c p → t f c p q = true) :
-    N.EscapeSel R₁ (N.tieredSel tiers) :=
-  ⟨fun _ _ _ _ h => (N.mem_tieredSel h).1, fun f c p _ ⟨q, hq, hfree⟩ =>
-    N.tieredSel_conserving ht (hR c p q hq) hfree (hadm f c p q hq)⟩
+    {levels : List (Config C P → C → P → C × P → Bool)} {t : Config C P → C → P → C × P → Bool}
+    (ht : t ∈ levels) (hadm : ∀ f c p q, q ∈ R₁ c p → t f c p q = true) :
+    N.EscapeSel R₁ (N.prioritySel levels) :=
+  ⟨fun _ _ _ _ h => (N.mem_prioritySel h).1, fun f c p _ ⟨q, hq, hfree⟩ =>
+    N.prioritySel_conserving ht (hR c p q hq) hfree (hadm f c p q hq)⟩
 
-/-- **A tiered selection with a throttled escape tier satisfies Duato's condition with throttled
-sources**: some tier admits every escape hop from a channel outside the sources, and from a
+/-- **A priority selection with a throttled escape level satisfies Duato's condition with throttled
+sources**: some priority level admits every escape hop from a channel outside the sources, and from a
 source whenever every channel outside the sources is empty. -/
-theorem tieredSel_sourceSel {R₁ : C → P → List (C × P)} {src : C → Prop}
+theorem prioritySel_sourceSel {R₁ : C → P → List (C × P)} {src : C → Prop}
     (hR : ∀ c p q, q ∈ R₁ c p → q ∈ N.route c p)
-    {tiers : List (Config C P → C → P → C × P → Bool)} {t : Config C P → C → P → C × P → Bool}
-    (ht : t ∈ tiers) (hnon : ∀ f c p q, ¬ src c → q ∈ R₁ c p → t f c p q = true)
+    {levels : List (Config C P → C → P → C × P → Bool)} {t : Config C P → C → P → C × P → Bool}
+    (ht : t ∈ levels) (hnon : ∀ f c p q, ¬ src c → q ∈ R₁ c p → t f c p q = true)
     (hsrc : ∀ f c p q, src c → (∀ c', ¬ src c' → f c' = none) → q ∈ R₁ c p → t f c p q = true) :
-    N.SourceSel R₁ src (N.tieredSel tiers) :=
-  ⟨fun _ _ _ _ h => (N.mem_tieredSel h).1,
+    N.SourceSel R₁ src (N.prioritySel levels) :=
+  ⟨fun _ _ _ _ h => (N.mem_prioritySel h).1,
     fun f c p hs _ ⟨q, hq, hfree⟩ =>
-      N.tieredSel_conserving ht (hR c p q hq) hfree (hnon f c p q hs hq),
+      N.prioritySel_conserving ht (hR c p q hq) hfree (hnon f c p q hs hq),
     fun f c p hs _ he ⟨q, hq, hfree⟩ =>
-      N.tieredSel_conserving ht (hR c p q hq) hfree (hsrc f c p q hs he hq)⟩
+      N.prioritySel_conserving ht (hR c p q hq) hfree (hsrc f c p q hs he hq)⟩
 
 end Choice
 

@@ -6,10 +6,10 @@ import AsyncLean.Routing.Reduce
 import AsyncLean.Routing.Saturation
 
 /-!
-# Adaptive routing on every graph with a bounded number of returns from the escape layer
+# Adaptive routing on every graph with a bounded number of returns from the escape subnetwork
 
 `AsyncLean.Routing.Graph` makes minimal adaptive routing safe on every finite connected graph
-with tree routing along a spanning tree as the escape layer, but its escape layer is
+with tree routing along a spanning tree as the escape subnetwork, but its escape subnetwork is
 **absorbing**: once a packet has entered virtual channel 0 it may only take escape hops, along
 the (generally much longer) tree path.  That costs throughput.  Letting packets return from
 virtual channel 0 to virtual channel 1 without limit is not livelock free in general: an escape
@@ -31,7 +31,7 @@ With `B = 0` this is the absorbing network of `AsyncLean.Routing.Graph`, with ev
 
 ## The proofs
 
-* **Deadlock freedom.**  The escape layer is the one of `GraphData.net`, and so are its channel
+* **Deadlock freedom.**  The escape subnetwork is the one of `GraphData.net`, and so are its channel
   dependencies: every dependency of `budgetEscape` on the legal pairs `budgetLegal` (the legal
   pairs of `GraphData.legal` for the destination, with a budget at most `B`) is a dependency of
   `GraphData.escape` on `GraphData.legal`, so the dependency graph is well-founded by
@@ -92,8 +92,8 @@ variable {V : Type*} [DecidableEq V] (G : GraphData V)
 virtual channel 1 channel, one unit of return budget less from a virtual channel 0 channel. -/
 def retHdr (c : GChan V) (p : V × ℕ) : V × ℕ := if c.isEsc then (p.1, p.2 - 1) else p
 
-/-- The adaptive hops are permitted: always outside the escape layer, and in the escape layer
-while the return budget is positive. -/
+/-- The adaptive hops are permitted: always outside the escape subnetwork, and in the escape
+subnetwork while the return budget is positive. -/
 def mayReturn (c : GChan V) (p : V × ℕ) : Bool := !c.isEsc || decide (p.2 ≠ 0)
 
 /-- The escape subfunction: the tree-routing escape hop of `GraphData.net`, header unchanged. -/
@@ -106,7 +106,7 @@ def budgetAdaptive (c : GChan V) (p : V × ℕ) : List (GChan V × (V × ℕ)) :
 
 /-- **The network with bounded returns**: headers `(d, b)` carry the destination and the
 remaining return budget, packets are injected with budget `B`.  From every channel the escape
-hop is permitted; the adaptive hops are permitted outside the escape layer, and from the escape
+hop is permitted; the adaptive hops are permitted outside the escape subnetwork, and from the escape
 layer while the budget is positive, at the cost of one unit of budget. -/
 def budgetNet (B : ℕ) : Network (GChan V) (V × ℕ) where
   arrived c p := decide (c.head = p.1)
@@ -118,8 +118,8 @@ theorem budgetNet_arrived (B : ℕ) (c : GChan V) (p : V × ℕ) :
     (G.budgetNet B).arrived c p = G.net.arrived c p.1 := rfl
 
 /-- The permitted hops of `budgetNet`: the escape hop with the header unchanged; an adaptive hop
-from outside the escape layer with the header unchanged; an adaptive hop from the escape layer,
-when the budget is positive, with one unit of budget less. -/
+from outside the escape subnetwork with the header unchanged; an adaptive hop from the escape
+subnetwork, when the budget is positive, with one unit of budget less. -/
 theorem mem_budgetRoute {B : ℕ} {c : GChan V} {p : V × ℕ} {q : GChan V × (V × ℕ)}
     (h : q ∈ (G.budgetNet B).route c p) :
     q = ((G.escHop c p.1).1, p) ∨
@@ -148,7 +148,7 @@ theorem escHop_mem_route (c : GChan V) (d : V) : G.escHop c d ∈ G.net.route c 
   · exact List.mem_singleton_self _
   · exact List.mem_append_left _ (List.mem_singleton_self _)
 
-/-- An adaptive hop from outside the escape layer is a permitted hop of `GraphData.net`. -/
+/-- An adaptive hop from outside the escape subnetwork is a permitted hop of `GraphData.net`. -/
 theorem adaptive_mem_route {c : GChan V} {d v : V} (hc : c.isEsc = false) (hv : v ∈ G.nbrs c.head)
     (hd : G.dist v d < G.dist c.head d) : (GChan.link c.head v true, d) ∈ G.net.route c d := by
   simp only [net, hc, Bool.false_eq_true, ↓reduceIte]
@@ -290,7 +290,7 @@ theorem rank_lt_rankBound (c : GChan V) (d : V) : G.rank c d < G.rankBound := by
 def budgetRank (c : GChan V) (p : V × ℕ) : ℕ := p.2 * G.rankBound + G.rank c p.1
 
 /-- **The ranking decreases on every hop**: a hop that keeps the header is a hop of
-`GraphData.net`, on which `GraphData.rank` decreases; a return from the escape layer lowers the
+`GraphData.net`, on which `GraphData.rank` decreases; a return from the escape subnetwork lowers the
 budget by one, which outweighs any increase of `GraphData.rank` (below `rankBound`). -/
 theorem budget_rank_lt (B : ℕ) : ∀ c p q, G.budgetLegal B c p →
     (G.budgetNet B).arrived c p = false → q ∈ (G.budgetNet B).route c p →

@@ -43,7 +43,7 @@ Spec  SQX:<set>[:opts]   (mode sets of xp_validate / xp_scale: s6 = t5b + Duato 
   cth=0, db=-1, xs=0 and th=<0.7/sqrt(r)> give back xp_scale's SPX bit for bit (`check`).
 Safety: the controller reads only history (deliveries, injection-channel occupancy and the
 destinations of packets in injection channels) and chooses among the modes of s6, each a
-west-first tier list containing escTier k g with g <= 8 (B, P: g = 4; T, X', D: g = 0; W6:
+west-first priority level list containing escPriority k g with g <= 8 (B, P: g = 4; T, X', D: g = 0; W6:
 g = 6), so `westFirstMesh_modes_safe` covers it, as for SPX.
 
 FINDINGS (SQX:s6:d=2:elim=0.1:xs=1; published schemes 6000 cycles at their own peaks, the

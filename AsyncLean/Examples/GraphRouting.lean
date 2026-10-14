@@ -8,7 +8,7 @@ import AsyncLean.AxiomAudit
 # Example: adaptive routing beyond the mesh
 
 `AsyncLean.Routing.Graph` makes minimal adaptive routing safe on every finite connected graph,
-with tree routing along a spanning tree as the escape layer.  Two instances:
+with tree routing along a spanning tree as the escape subnetwork.  Two instances:
 
 Starvation freedom is under strong fairness, which makes a run revisit the empty network (see
 `AsyncLean.Routing.Graph`).
@@ -22,7 +22,7 @@ Starvation freedom is under strong fairness, which makes a run revisit the empty
   fair scheduling; `torus_correct_of_sourceSel` : the same under every selection that never
   refuses a free escape hop outside the sources and may throttle the sources.  The torus has
   cyclic channel dependencies on its wraparound links, which minimal adaptive routing uses; the
-  escape layer avoids them.
+  escape subnetwork avoids them.
 * `petersen` : the Petersen graph (10 vertices, 3-regular, diameter 2, not a mesh, a torus
   or a ring), with its graph distance (`petersen_dist`) and a breadth-first spanning tree, all
   checked by `decide`.  `petersen_correct` : it is deadlock, livelock and starvation free;

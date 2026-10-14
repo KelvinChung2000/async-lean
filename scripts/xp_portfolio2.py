@@ -2,12 +2,12 @@
 """The mesh portfolio of `xp_portfolio.py` with mode X (XY on both virtual channels, = `dualXY`)
 replaced by the XY mode of `xp_bitcomp.py` (simulation only; nothing here is proved).
 
-X' = `B:c0=fary+srcwf:fd=5:fs=3` of `xp_bitcomp.py`, re-expressed as a tier list of the
+X' = `B:c0=fary+srcwf:fd=5:fs=3` of `xp_bitcomp.py`, re-expressed as a level list of the
 west-first mesh in `xp_combo2.msim` (the base of the portfolio):
 
-    tiers = [xyc, esc], g = 0          (spec `route=wf:tiers=xyc+esc:thr=g0`)
+    levels = [xyc, esc], g = 0          (spec `route=wf:levels=xyc+esc:thr=g0`)
 
-  esc  the XY hop on VC0 (`escTier k 0`)
+  esc  the XY hop on VC0 (`escPriority k 0`)
   xyc  the XY hop on VC0, and the XY hop on VC1 unless the packet is `restricted`:
          fary   it is more than fd = 5 hops from its destination and a nearer packet waits at
                 its router for the same output direction: a packet in a link into the router
@@ -17,10 +17,10 @@ west-first mesh in `xp_combo2.msim` (the base of the portfolio):
                 a packet in a link into the router waits for the same output direction.
        Both read only the configuration (the channels holding packets and their destinations)
        and the packet's own channel and destination: `xyc` is a predicate
-       `Config -> chan -> dest -> hop -> Bool`, i.e. a tier in the sense of `tieredSel`.
+       `Config -> chan -> dest -> hop -> Bool`, i.e. a level in the sense of `prioritySel`.
 Every XY hop (either VC) is a permitted hop of `westFirstMesh` (XY escape on VC0, any productive
-VC1 hop), the list contains `escTier k 0`, so X' alone is `westFirstTiers_correct`, and the
-portfolio that switches among B, W, X', P (each containing `escTier k g`, g <= 8) by any
+VC1 hop), the list contains `escPriority k 0`, so X' alone is `westFirstPriorities_correct`, and the
+portfolio that switches among B, W, X', P (each containing `escPriority k g`, g <= 8) by any
 history-dependent rule is `westFirstMesh_modes_safe`.  `xp_bitcomp.bsim` itself runs on
 `xp_combo2.tables(8, 'wf')`, i.e. it was already defined on the west-first mesh; `check` shows
 the re-expression reproduces `bsim` bit for bit.
@@ -31,7 +31,7 @@ Mode sets (added to xp_portfolio.MSETS):
   x3  [B, W, X']           (no price mode)
   x4g [B, WF, X', P]       (W without its throttle: the published west-first random)
 
-Specs: `PM:<set>[:learner opts]` (xp_portfolio), `MX:<msim spec>` (msim with the xyc tier; fd /
+Specs: `PM:<set>[:learner opts]` (xp_portfolio), `MX:<msim spec>` (msim with the xyc level; fd /
 fs keys), `B:...` (xp_bitcomp), anything else xp_combo2.run_one (`A:`, `M:`).
 
 Usage:
@@ -59,20 +59,20 @@ import xp_bitcomp as BC
 X2.MDEF.setdefault('fd', 5.0)
 X2.MDEF.setdefault('fs', 3.0)
 
-XPRIME = 'route=wf:tiers=xyc+esc:thr=g0'
+XPRIME = 'route=wf:levels=xyc+esc:thr=g0'
 XPRIME_B = 'c0=fary+srcwf:fd=5:fs=3'
-MODE_X = 'route=wf:tiers=xy+esc:thr=g0'
-MODE_W = 'route=wf:tiers=all+esc:thr=g2'
-MODE_P = 'route=wf:tiers=pref+esc+vc1:sel=price'
+MODE_X = 'route=wf:levels=xy+esc:thr=g0'
+MODE_W = 'route=wf:levels=all+esc:thr=g2'
+MODE_P = 'route=wf:levels=pref+esc+vc1:sel=price'
 PF.MSETS['x4'] = [PF.MESH_B, MODE_W, XPRIME, MODE_P]
 PF.MSETS['x5'] = [PF.MESH_B, MODE_W, MODE_X, XPRIME, MODE_P]
 PF.MSETS['x3'] = [PF.MESH_B, MODE_W, XPRIME]
 PF.MSETS['x1'] = [XPRIME]
 # W without its throttle (= the published west-first random, `A:R:westFirstMesh:random`)
-MODE_WF = 'route=wf:tiers=all+esc:thr=g0'
+MODE_WF = 'route=wf:levels=all+esc:thr=g0'
 PF.MSETS['x4g'] = [PF.MESH_B, MODE_WF, XPRIME, MODE_P]
 
-# the xyc tier, inserted into msim's tier_fn
+# the xyc level, inserted into msim's tier_fn
 _XYC_SETUP_OLD = "    moves = chained = 0\n\n    def useful(q, d):\n"
 _XYC_SETUP_NEW = (
     "    moves = chained = 0\n"
@@ -141,7 +141,7 @@ _PMSIM2 = None
 
 
 def pmsim2_fn():
-    """xp_portfolio.pmsim_fn with the xyc tier available to the modes."""
+    """xp_portfolio.pmsim_fn with the xyc level available to the modes."""
     global _PMSIM2
     if _PMSIM2 is not None:
         return _PMSIM2

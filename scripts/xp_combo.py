@@ -32,7 +32,7 @@ Components of a combination (`C:<spec>`, colon-separated key=value tokens):
   thr=g4|<xp_ramp spec>     source throttle: g = 4, or an xp_ramp controller (e.g. lx2_4_36_2)
   thr2=-|<xp_ramp spec>     a second controller for sources whose last 8 destinations include
                             more than 2 nodes (spread-out traffic; the `k` signal)
-The safety of every configuration choice is `Routing/GraphDetour.lean` (any intermediate at the
+The safety of every configuration choice is `Routing/GraphTwoPhase.lean` (any intermediate at the
 source, any choice among the free minimal hops, tree escape, bounded returns); prices, learned
 latencies and estimated duals are history, outside the configuration-only selection theorems.
 
@@ -185,10 +185,10 @@ def csim(spec, rate, pattern, seed=1, chain='seq', cycles=1600, warmup=None, g=4
             e = esc[c][d]
             onesc = c % 2 == 0 and not src
             canret = not (onesc and pk[4] >= budget)
-            tiers = [vc1[u][tgt], [e]] if canret else [[e]]
+            levels = [vc1[u][tgt], [e]] if canret else [[e]]
             q = None
-            for tier in tiers:
-                free = [x for x in tier if x not in occ]
+            for level in levels:
+                free = [x for x in level if x not in occ]
                 if src:
                     if ctrl is not None:
                         free = (ctrl2 if spread[u] else ctrl).gate(u, free, lambda x: sum(1 for oo in out[head[x]] if oo not in occ))

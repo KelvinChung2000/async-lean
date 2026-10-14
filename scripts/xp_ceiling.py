@@ -38,8 +38,8 @@ Findings (simulation unless marked proved):
   beta (0.422 at beta = 0.5, density 0.69), maximal current 1/2 at bulk occupancy 1/2 reached
   only near alpha, beta >= 0.8 to 0.9 (0.497 at 0.8, 0.500 at 0.9).  Above occupancy 1/2 the
   current falls (0.69 -> 0.42, 0.81 -> 0.28): a throttle should hold lanes about half full (the
-  `g = 4` of 8 free channels of `tieredMesh`).  N = 2: J = alpha up to 1.
-* Networks (tiered selection, g = 4; mesh: XY escape; torus: tree escape, B = 2; peak over
+  `g = 4` of 8 free channels of `priorityMesh`).  N = 2: J = alpha up to 1.
+* Networks (priority selection, g = 4; mesh: XY escape; torus: tree escape, B = 2; peak over
   offered 0.5 / 0.7 / 1.0), against the fluid optimum per node (theta times the fraction of
   nodes that send) and its half:
       mesh   uniform transpose shuffle bitrev hotspot bitcomp   torus  uniform transp shuffle bitrev bitcomp tornado
@@ -472,7 +472,7 @@ FLUID = {   # exact fluid optima (proved: Flow/MeshWire, MeshPatterns, MeshWorst
 
 def net_sim(net, N, rate, pattern, g=4, budget=2, cycles=3000, warmup=1000, seed=1, k=8,
             stats=False):
-    """`routing_graph_sim.simulate` (tiered selection, source throttle g, return budget B) with
+    """`routing_graph_sim.simulate` (priority selection, source throttle g, return budget B) with
     lanes of depth N: every network lane is a FIFO of N packets (the injection channel keeps
     one); a lane ejects at most its head per cycle; every other lane non-empty at the start of
     the move phase moves at most its head (so a lane passes at most one packet per cycle), in a random order, into a permitted lane with room;
@@ -554,7 +554,7 @@ def cmd_network(args):
     for name in args.net.split(','):
         net = nets[name]()
         print(f'== 8 x 8 {name} ({"XY escape" if name == "mesh" else "spanning-tree escape, B = 2"},'
-              f' tiered, g = 4): peak accepted throughput over offered {rates} '
+              f' priority, g = 4): peak accepted throughput over offered {rates} '
               f'[max lane rate / mean of the busiest 10 % of lanes]', flush=True)
         for pat in args.patterns.split(','):
             fl = FLUID[name].get(pat)

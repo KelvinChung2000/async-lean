@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Transpose and tornado on the 8 x 8 mesh (simulation only; nothing here is proved).
 
-GOAL 1: a mode of the west-first mesh (a tier list containing the throttled escape tier
-`escTier k g`, g <= 8; tiers and preferences read only the configuration, the packet's channel
-and its destination, so `westFirstTiers_correct` / `westFirstMesh_modes_safe` cover it) that is
+GOAL 1: a mode of the west-first mesh (a level list containing the throttled escape level
+`escPriority k g`, g <= 8; levels and preferences read only the configuration, the packet's channel
+and its destination, so `westFirstPriorities_correct` / `westFirstMesh_modes_safe` cover it) that is
 strictly better than the published west-first random (`A:R:westFirstMesh:random/random` =
-`M:route=wf:tiers=all+esc:thr=g0`) on transpose, and the mesh learner with it added.
+`M:route=wf:levels=all+esc:thr=g0`) on transpose, and the mesh learner with it added.
 GOAL 2: tornado (x -> x + 3 mod 8, same row) with non-minimal schemes.
 
-`xsim` is `xp_combo2.msim` with the `xyc` tier of `xp_portfolio2` and, here, a registry of extra
-tiers (`_XT`) and selections (`_XS`), patched textually (each patch must apply exactly once);
-with the existing tier names it reproduces msim bit for bit (`check`).  `pxsim` is the same with
+`xsim` is `xp_combo2.msim` with the `xyc` level of `xp_portfolio2` and, here, a registry of extra
+levels (`_XT`) and selections (`_XS`), patched textually (each patch must apply exactly once);
+with the existing level names it reproduces msim bit for bit (`check`).  `pxsim` is the same with
 the portfolio learner of `xp_portfolio` (mode switching at the start of a cycle).
 
 Specs: `X:<msim spec>` (xsim; extra selections `sel=`: P/Pd/Pv/Pa score maxima, `_bal`/`_unb`/
 `_str` tie-breaks, `L0`/`L1` lane rules, `s` suffix = sources uniform, `c-<step>-<step>...`
 compositions, `spr<m>`/`cen<m>`), `PX:<set>[:learner opts]` (the learner on pxsim, sets MSETS here
-or xp_portfolio's), `G:<scheme>[/g<g>]` / `GX:...` (graph detour network on the mesh, GOAL 2),
+or xp_portfolio's), `G:<scheme>[/g<g>]` / `GX:...` (graph two-phase network on the mesh, GOAL 2),
 anything else `xp_portfolio2.run_one` (`A:`, `M:`, `B:`, `PM:`, `MX:`).
 
 Usage:
@@ -42,8 +42,8 @@ lane per cycle.  WN delivers 0.49 per source, ES 0.61 (seq).  Near-diagonal sour
 What does not work: pushing packets toward the diagonal's corners by s = x + y (`spr`, -5 to
 -9 %), towards its centre (`cen`, +-0), straight-on preference, throttles g >= 2, the hop into
 the router with the most free channels (`Pa`, D: -0.5 %).
-What works: a preference within west-first random's tier [all, esc] (g = 0):
-  MODE_T = route=wf:tiers=all+esc:thr=g0:sel=Pd_balL0
+What works: a preference within west-first random's level [all, esc] (g = 0):
+  MODE_T = route=wf:levels=all+esc:thr=g0:sel=Pd_balL0
   Pd   the hops into the router with the most free productive directions for this packet,
   bal  then the dimension with the larger remaining offset (route near the straight line),
   L0   then VC0 when both lanes of the chosen direction are free (leaves VC1, the only N lane of
@@ -51,17 +51,17 @@ What works: a preference within west-first random's tier [all, esc] (g = 0):
   It fills the under-used corner entry lanes (e.g. WN into (0,0): 0.92 -> 1.18 / 0.90 -> 0.98).
   12 fresh seeds (1001-1012), offered 0.6-1.0: transpose 0.4973 / 0.3701 against west-first random
   0.4817 / 0.3645: +3.2 % (z = 93) / +1.5 % (z = 49).  `N_balL0` (no score): +2.5 % / +1.7 %.
-  Proof: tiers [T1, all, esc] with T1 the filtered free hops (configuration + own channel +
-  destination), escTier k 0: `westFirstTiers_correct`; as a learner mode `westFirstMesh_modes_safe`.
+  Proof: levels [T1, all, esc] with T1 the filtered free hops (configuration + own channel +
+  destination), escPriority k 0: `westFirstPriorities_correct`; as a learner mode `westFirstMesh_modes_safe`.
 Learner `PX:t4:th=0.7:d=2:elim=0.1` = x4 with W -> MODE_T, 12000 cycles, fresh seeds 1101-1108
 (bit complement 1101-1112): strictly ahead of every published scheme on 7 of 8 patterns in both
 models (transpose +3.2 % / +1.4 %, uniform +5.9 / +4.4, shuffle +14 / +21, bit reversal +23 / +21,
 hotspot +4.5 / +4.5, bit complement +0.8 / +1.7, random permutation +2.9 / +8.5); tornado
 -0.03 % / -0.4 % as before.  At 6000 cycles transpose +2.4 % / +0.9 %.
-GOAL 2, tornado (seeds 1201-1208 / 1301-1308): on the tree-escape detour network (GraphDetour,
+GOAL 2, tornado (seeds 1201-1208 / 1301-1308): on the tree-escape two-phase network (GraphTwoPhase,
 throttle g = 4 scaled by degree): minimal 0.4290 / 0.3192, Valiant 0.3467 / 0.2485, UGAL 0.4114 /
 0.2950, row spreading rowv25/50/100 0.4176 / 0.3031 ... 0.3262 / 0.2424, banditx 0.4272 / 0.3156,
-against 0.4268 / 0.3182 published: no detour gains.  But on the mesh tornado only E/W lanes are
+against 0.4268 / 0.3182 published: no non-minimal gains.  But on the mesh tornado only E/W lanes are
 used, so an escape threshold g <= 4 never binds (the next router's 4 N/S lanes are free); g = 5
 gives 0.4359 / 0.3226 (+2.1 % / +1.4 %), g = 6 0.4317 / 0.3345 (+1.1 % / +5.1 %): a throttle that
 favours some sources over others (with unequal rates a row can carry 3 instead of 8/3 packets per
@@ -98,15 +98,15 @@ def dist(u, d, k=K):
     return abs(u % k - d % k) + abs(u // k - d // k)
 
 
-# ------------------------------------------------------------------ extra tiers / selections
-# A tier factory: f(ctx, c, u, d, src, esc) -> predicate on hops q (free permitted hops of the
+# ------------------------------------------------------------------ extra levels / selections
+# A level factory: f(ctx, c, u, d, src, esc) -> predicate on hops q (free permitted hops of the
 # west-first mesh).  A selection: f(ctx, pick, c, u, d, src) -> non-empty sub-list of pick.
 # Both may read only ctx['occ'] / ctx['nfree'] (the configuration) and c, u, d.
 _XT = {}
 _XS = {}
 
 
-def tier(name):
+def level(name):
     def reg(f):
         _XT[name] = f
         return f
@@ -428,21 +428,21 @@ def xsim(spec, rate, pattern, seed=1, chain='seq', cycles=2000, warmup=None):
     return fn(spec, rate, pattern, seed=seed, chain=chain, cycles=cycles, warmup=warmup)
 
 
-# the new transpose mode: west-first random's tier list [all, esc], g = 0, with a preference
-# within the tier (configuration, own channel and destination only):
+# the new transpose mode: west-first random's level list [all, esc], g = 0, with a preference
+# within the level (configuration, own channel and destination only):
 #   Pd   the hops into the router with the most free productive directions for this packet,
 #   bal  then the dimension with the larger remaining offset,
 #   L0   then the VC0 lane when both lanes of the chosen direction are free.
-MODE_T = 'route=wf:tiers=all+esc:thr=g0:sel=Pd_balL0'
-MODE_T2 = 'route=wf:tiers=all+esc:thr=g0:sel=N_balL0'
+MODE_T = 'route=wf:levels=all+esc:thr=g0:sel=Pd_balL0'
+MODE_T2 = 'route=wf:levels=all+esc:thr=g0:sel=N_balL0'
 MSETS = {
     't4': [PF.MESH_B, MODE_T, P2.XPRIME, P2.MODE_P],                 # x4 with W -> MODE_T
     't5': [PF.MESH_B, P2.MODE_W, MODE_T, P2.XPRIME, P2.MODE_P],      # x4 plus MODE_T (d=3: X')
     't4n': [PF.MESH_B, MODE_T2, P2.XPRIME, P2.MODE_P],
     # plus a tornado mode: west-first random with escape threshold g = 5 / 6 (on tornado only
     # E/W lanes are used, so g <= 4 never binds: the 4 N/S lanes of the next router are free)
-    't5a': [PF.MESH_B, MODE_T, P2.XPRIME, P2.MODE_P, 'route=wf:tiers=all+esc:thr=g5'],
-    't5b': [PF.MESH_B, MODE_T, P2.XPRIME, P2.MODE_P, 'route=wf:tiers=all+esc:thr=g6'],
+    't5a': [PF.MESH_B, MODE_T, P2.XPRIME, P2.MODE_P, 'route=wf:levels=all+esc:thr=g5'],
+    't5b': [PF.MESH_B, MODE_T, P2.XPRIME, P2.MODE_P, 'route=wf:levels=all+esc:thr=g6'],
 }
 
 
@@ -693,8 +693,8 @@ def run_cmd(argv):
 def check():
     ok = True
     for chn in ('seq', 'none'):
-        for sp, p, r in (('route=wf:tiers=all+esc:thr=g0', 'transpose', 0.8),
-                         ('route=wf:tiers=str+esc+vc1:sel=P:gdev=2:devset=all', 'uniform', 0.6),
+        for sp, p, r in (('route=wf:levels=all+esc:thr=g0', 'transpose', 0.8),
+                         ('route=wf:levels=str+esc+vc1:sel=P:gdev=2:devset=all', 'uniform', 0.6),
                          (P2.XPRIME, 'bitcomp', 0.3), (P2.MODE_P, 'shuffle', 0.6)):
             a = (P2.xmsim_fn()(sp, r, p, seed=3, chain=chn, cycles=900) if 'xyc' in sp
                  else X2.msim(sp, r, p, seed=3, chain=chn, cycles=900))
@@ -702,7 +702,7 @@ def check():
             ok &= tuple(a) == tuple(b)
             print('msim / xsim', chn, sp, p, a[:2], b[:2], tuple(a) == tuple(b))
         a = X2.run_one('A:R:westFirstMesh:random/random', 0.8, 'transpose', 4, chn, 900)
-        b = xsim('route=wf:tiers=all+esc:thr=g0', 0.8, 'transpose', seed=4, chain=chn, cycles=900)
+        b = xsim('route=wf:levels=all+esc:thr=g0', 0.8, 'transpose', seed=4, chain=chn, cycles=900)
         ok &= tuple(a[:2]) == tuple(b[:2])
         print('published WF / xsim', chn, a[:2], b[:2])
         a = P2.run_one('PM:x4:th=0.7:d=2', 1.0, 'transpose', 3, chn, 1500)
@@ -765,8 +765,8 @@ def learn_report(main, cycles=12000):
 # the t5b evaluation (seeds 1401-1408; 1401-1412 for transpose, tornado, bit complement):
 # pattern -> chain -> [(spec, rates, cycles)], the learner first
 _FL = 'F:PX:t5b:th=0.7:d=2:elim=0.1'
-_FDX, _FWF = 'F:X:route=wf:tiers=xy+esc:thr=g0', 'F:X:route=wf:tiers=all+esc:thr=g0'
-_FDR, _FT4 = 'F:X:route=duato:tiers=all+esc:thr=g0', 'F:X:route=duato:tiers=all+esc:thr=g4'
+_FDX, _FWF = 'F:X:route=wf:levels=xy+esc:thr=g0', 'F:X:route=wf:levels=all+esc:thr=g0'
+_FDR, _FT4 = 'F:X:route=duato:levels=all+esc:thr=g0', 'F:X:route=duato:levels=all+esc:thr=g4'
 PUBNAME = {_FDX: 'dualXY', _FWF: 'westFirstMesh', _FDR: 'duatoMesh rand', _FT4: 'duatoMesh T4'}
 FPLAN = {
     'uniform': {'seq': [(_FL, [1.0], 12000), (_FDX, [0.75, 1.0], 6000), (_FDR, [0.46, 0.48, 0.5], 6000),

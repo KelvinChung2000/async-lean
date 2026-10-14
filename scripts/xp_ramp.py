@@ -8,7 +8,7 @@ fixed rule: a packet leaves its injection channel only towards a router with at 
 its 8 outgoing channels free.  This script replaces that rule by controllers and compares.
 
 It does not re-implement the simulators: it takes the source of `routing_sim.simulate` (8 x 8
-mesh, `duatoMesh` with the `tiered` selection, XY escape) and of `torus_experiments.sim` (8 x 8
+mesh, `duatoMesh` with the `priority` selection, XY escape) and of `torus_experiments.sim` (8 x 8
 torus, `min` and `bandit2m7f5k`) and replaces, at run time, the throttle line by a call to a
 controller (`gate`) and adds a per-cycle call (`tick`).  With the controller `fix4` the result is
 bit-for-bit the original simulator's (`python3 scripts/xp_ramp.py check`).  The controllers use
@@ -263,7 +263,7 @@ def run_one(topo, spec, pattern, rate, seed, cycles=3000, warmup=1000):
     ctrl.warmup = warmup
     _CUR['ctrl'] = ctrl
     if topo == 'mesh':
-        thr, lat = MESH_SIM(K, MESH_ROUTE, rate, pattern, 'tiered', cycles=cycles,
+        thr, lat = MESH_SIM(K, MESH_ROUTE, rate, pattern, 'priority', cycles=cycles,
                             warmup=warmup, seed=seed)
     else:
         scheme = 'min' if topo == 'torus' else 'bandit2m7f5k'
@@ -275,7 +275,7 @@ def run_one(topo, spec, pattern, rate, seed, cycles=3000, warmup=1000):
 
 
 def check():
-    a = R.simulate(K, MESH_ROUTE, 0.6, 'uniform', 'T4:tiered', cycles=1500, warmup=500, seed=3)
+    a = R.simulate(K, MESH_ROUTE, 0.6, 'uniform', 'T4:priority', cycles=1500, warmup=500, seed=3)
     b = run_one('mesh', 'fix4', 'uniform', 0.6, 3, cycles=1500, warmup=500)
     print('mesh  original', a, 'hooked', (b['thr'], b['lat']))
     assert a == (b['thr'], b['lat'])

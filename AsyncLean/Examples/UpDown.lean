@@ -8,8 +8,8 @@ import AsyncLean.AxiomAudit
 /-!
 # Example: the torus with the up*/down* escape of the simulations
 
-The torus results of `AsyncLean.Examples.GraphDetour` and `AsyncLean.Examples.Strategy` use
-tree routing along a comb spanning tree rooted at the corner `(0, 0)` as the escape layer.  The
+The torus results of `AsyncLean.Examples.GraphTwoPhase` and `AsyncLean.Examples.Strategy` use
+tree routing along a comb spanning tree rooted at the corner `(0, 0)` as the escape subnetwork.  The
 simulations (`scripts/torus_experiments.py`, `scripts/xp_combo.py`, `scripts/xp_torus16.py`,
 all through `scripts/routing_graph_sim.py`, `Net(..., escape='updown', root=...)`) use instead
 **up*/down* routing over all the links of the torus**, with breadth-first levels from the
@@ -44,17 +44,17 @@ tie-breaking among them included) — and every budget `B` and choice of interme
 * `torus_ud_reach`, `torus_ud_escDep_wf` : the escape is connected (every vertex reaches every
   destination by a legal up*/down* path) and its dependency relation, with the phase in the
   channel, is well-founded;
-* `torus_ud_detour_correct`, `torus_ud_detour_correct_of_sourceSel`,
-  `torus_ud_detour_underLoad`, `torus_ud_detour_hops_le`, `torus_ud_valiant_correct` : the
-  analogues of `torus_detour_correct`, `torus_detour_correct_of_sourceSel`,
-  `torus_detour_underLoad`, `torus_detour_hops_le`, `torus_valiant_correct`;
+* `torus_ud_twoPhase_correct`, `torus_ud_twoPhase_correct_of_sourceSel`,
+  `torus_ud_twoPhase_underLoad`, `torus_ud_twoPhase_hops_le`, `torus_ud_valiant_correct` : the
+  analogues of `torus_twoPhase_correct`, `torus_twoPhase_correct_of_sourceSel`,
+  `torus_twoPhase_underLoad`, `torus_twoPhase_hops_le`, `torus_valiant_correct`;
 * `torus_ud_choice_safe`, `torus_ud_lx_correct`, `torus_ud_throttle_safe`,
   `udComboStrategy` / `torus_ud_combo_safe` : the analogues of `torus_choice_safe`,
   `torus_lx_correct`, `torus_throttle_safe`, `comboStrategy` / `torus_combo_safe`: any
   history-dependent choice among the free minimal hops and of the intermediate; the `lx`
   throttle; every history-dependent throttle (thresholds up to 8, any blocking rule, read from a
   snapshot or any history); the simulated combined scheme.
-* `simUD_detour_correct`, `simUD_throttle_safe`, `simUD_combo_safe` : the same for the exact
+* `simUD_twoPhase_correct`, `simUD_throttle_safe`, `simUD_combo_safe` : the same for the exact
   escape of the simulations (`simUD k`, centre root).
 
 ## What is not covered
@@ -269,13 +269,13 @@ theorem torus_ud_escDep_wf (k : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
 correct**: deadlock free and livelock free under every valid selection function, and starvation
 free under strongly fair scheduling, for every root, up*/down* escape and choice of
 intermediates. -/
-theorem torus_ud_detour_correct (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
+theorem torus_ud_twoPhase_correct (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
     (W : TorusV k → TorusV k → List (Option (TorusV k))) :
     (U.esc.net B W).Correct ∧ (U.esc.net B W).StarvationFree :=
   U.esc.correct B W
 
 /-- **Correct under throttled sources.** -/
-theorem torus_ud_detour_correct_of_sourceSel (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
+theorem torus_ud_twoPhase_correct_of_sourceSel (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
     (W : TorusV k → TorusV k → List (Option (TorusV k)))
     {sel : Selection (GChan (TorusV k)) (DetHdr (TorusV k))}
     (hsel : (U.esc.net B W).SourceSel U.esc.escape (fun c => c.isInj) sel) :
@@ -285,7 +285,7 @@ theorem torus_ud_detour_correct_of_sourceSel (k B : ℕ) (ρ : TorusV k) (U : (t
 
 /-- **Delivery under saturation**: under every valid selection, every packet is delivered along
 every channel-fair run. -/
-theorem torus_ud_detour_underLoad (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
+theorem torus_ud_twoPhase_underLoad (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
     (W : TorusV k → TorusV k → List (Option (TorusV k)))
     {sel : Selection (GChan (TorusV k)) (DetHdr (TorusV k))} (hsel : (U.esc.net B W).ValidSel sel) :
     (U.esc.net B W).StarvationFreeUnderLoad sel (fun _ => False) :=
@@ -293,7 +293,7 @@ theorem torus_ud_detour_underLoad (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ
 
 /-- **Hop bound**: at most `dist s w` hops towards the intermediate, then less than
 `(B + 1) * rankBound`. -/
-theorem torus_ud_detour_hops_le (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
+theorem torus_ud_twoPhase_hops_le (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown)
     (W : TorusV k → TorusV k → List (Option (TorusV k)))
     {s d w : TorusV k} {ls : List Unit} {q' : GChan (TorusV k) × DetHdr (TorusV k)}
     (h : (U.esc.net B W).packetLTS.Path (.inj s, (d, some w, B)) ls q') :
@@ -303,10 +303,10 @@ theorem torus_ud_detour_hops_le (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).
 /-- **Valiant's routing on the torus with the up*/down* escape is correct**, and delivers every
 packet under saturation along every channel-fair run. -/
 theorem torus_ud_valiant_correct (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown) :
-    (U.esc.net B (torusAt k ρ).anyDetour).Correct ∧
-      (U.esc.net B (torusAt k ρ).anyDetour).StarvationFree ∧
-      ∀ sel, (U.esc.net B (torusAt k ρ).anyDetour).ValidSel sel →
-        (U.esc.net B (torusAt k ρ).anyDetour).StarvationFreeUnderLoad sel (fun _ => False) :=
+    (U.esc.net B (torusAt k ρ).anyIntermediate).Correct ∧
+      (U.esc.net B (torusAt k ρ).anyIntermediate).StarvationFree ∧
+      ∀ sel, (U.esc.net B (torusAt k ρ).anyIntermediate).ValidSel sel →
+        (U.esc.net B (torusAt k ρ).anyIntermediate).StarvationFreeUnderLoad sel (fun _ => False) :=
   ⟨(U.esc.correct B _).1, (U.esc.correct B _).2, fun _ hsel => EscapeLayer.underLoad hsel⟩
 
 /-! ### History-dependent strategies -/
@@ -341,21 +341,21 @@ theorem torus_ud_lx_correct (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDo
 /-- **Every history-dependent throttle on the torus with the up*/down* escape and Valiant's
 intermediates is safe**: thresholds `thr h f s ≤ 8` and escape blocking `block h f s`, both
 read from anything (the configuration, a snapshot, any history), any admissible choice among
-the free hops of a tier. -/
+the free hops of a level. -/
 theorem torus_ud_throttle_safe (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown) {H : Type*}
     {σ : Strategy (GChan (TorusV k)) (DetHdr (TorusV k)) H}
     (thr : H → Config (GChan (TorusV k)) (DetHdr (TorusV k)) → TorusV k → ℕ)
     (block : H → Config (GChan (TorusV k)) (DetHdr (TorusV k)) → TorusV k → Bool)
     (hthr : ∀ h f s, thr h f s ≤ 8)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel (U.esc.throttleSel B (torusAt k ρ).anyDetour (thr h) (block h)) choose) :
-    (U.esc.net B (torusAt k ρ).anyDetour).StrategySafe σ (fun c => c.isInj) :=
-  EscapeLayer.throttle_safe (torusAt k ρ).anyDetour_ne (torusAt_dist_step k ρ) thr block
+      σ.sel h = refineSel (U.esc.throttleSel B (torusAt k ρ).anyIntermediate (thr h) (block h)) choose) :
+    (U.esc.net B (torusAt k ρ).anyIntermediate).StrategySafe σ (fun c => c.isInj) :=
+  EscapeLayer.throttle_safe (torusAt k ρ).anyIntermediate_ne (torusAt_dist_step k ρ) thr block
     (fun h f s v => by rw [torusAt_nbrs_length]; exact hthr h f s) hσ
 
 /-- **The simulated combined scheme with the up*/down* escape** (`csim` of
 `scripts/xp_combo.py` with `thr=lx…` and `thr2=lx…`, as `comboStrategy`): the snapshot `snap h`,
-the per-source flag `spread h s`, the choice `choose h` among the free hops of a tier, the
+the per-source flag `spread h s`, the choice `choose h` among the free hops of a level, the
 injection rule `admit`; the share signal, the threshold and the own-router test read from the
 snapshot. -/
 noncomputable def udComboStrategy (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDown) {H : Type*}
@@ -371,7 +371,7 @@ noncomputable def udComboStrategy (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ
       List (GChan (TorusV k) × DetHdr (TorusV k))) :
     Strategy (GChan (TorusV k)) (DetHdr (TorusV k)) H where
   init := init
-  sel h := refineSel (U.esc.throttleSel B (torusAt k ρ).anyDetour
+  sel h := refineSel (U.esc.throttleSel B (torusAt k ρ).anyIntermediate
     (fun _ s => if spread h s then (torusAt k ρ).lxThr ball₂ o₂ lo₂ hi₂ (snap h) s
       else (torusAt k ρ).lxThr ball₁ o₁ lo₁ hi₁ (snap h) s)
     (fun _ s => if spread h s then (torusAt k ρ).lxBlock ball₂ o₂ (snap h) s
@@ -395,7 +395,7 @@ theorem torus_ud_combo_safe (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDo
       DetHdr (TorusV k) → List (GChan (TorusV k) × DetHdr (TorusV k)) →
       List (GChan (TorusV k) × DetHdr (TorusV k)))
     (hch : ∀ h, ChoiceOK (choose h)) :
-    (U.esc.net B (torusAt k ρ).anyDetour).StrategySafe
+    (U.esc.net B (torusAt k ρ).anyIntermediate).StrategySafe
       (udComboStrategy k B ρ U init update admit snap spread ball₁ ball₂ o₁ lo₁ hi₁ o₂ lo₂ hi₂
         choose)
       (fun c => c.isInj) :=
@@ -408,11 +408,11 @@ theorem torus_ud_combo_safe (k B : ℕ) (ρ : TorusV k) (U : (torusAt k ρ).UpDo
 /-! ### The escape of the simulations -/
 
 /-- **The torus of every size with the escape of the simulations** (up*/down* from the centre,
-key `(level, number)`, first shortest legal next hop in port order) with detours and at most `B`
+key `(level, number)`, first shortest legal next hop in port order) with two-phase routing and at most `B`
 returns is correct. -/
-theorem simUD_detour_correct (k B : ℕ) (W : TorusV k → TorusV k → List (Option (TorusV k))) :
+theorem simUD_twoPhase_correct (k B : ℕ) (W : TorusV k → TorusV k → List (Option (TorusV k))) :
     ((simUD k).esc.net B W).Correct ∧ ((simUD k).esc.net B W).StarvationFree :=
-  torus_ud_detour_correct k B _ _ W
+  torus_ud_twoPhase_correct k B _ _ W
 
 /-- **Every history-dependent throttle with the escape of the simulations is safe.** -/
 theorem simUD_throttle_safe (k B : ℕ) {H : Type*}
@@ -421,9 +421,9 @@ theorem simUD_throttle_safe (k B : ℕ) {H : Type*}
     (block : H → Config (GChan (TorusV k)) (DetHdr (TorusV k)) → TorusV k → Bool)
     (hthr : ∀ h f s, thr h f s ≤ 8)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧ σ.sel h =
-      refineSel ((simUD k).esc.throttleSel B (torusAt k (centre k)).anyDetour (thr h) (block h))
+      refineSel ((simUD k).esc.throttleSel B (torusAt k (centre k)).anyIntermediate (thr h) (block h))
         choose) :
-    ((simUD k).esc.net B (torusAt k (centre k)).anyDetour).StrategySafe σ (fun c => c.isInj) :=
+    ((simUD k).esc.net B (torusAt k (centre k)).anyIntermediate).StrategySafe σ (fun c => c.isInj) :=
   torus_ud_throttle_safe k B _ _ thr block hthr hσ
 
 /-- **The simulated combined scheme with the escape of the simulations is safe** on the torus of
@@ -439,7 +439,7 @@ theorem simUD_combo_safe (k B : ℕ) {H : Type*} (init : H)
       DetHdr (TorusV k) → List (GChan (TorusV k) × DetHdr (TorusV k)) →
       List (GChan (TorusV k) × DetHdr (TorusV k)))
     (hch : ∀ h, ChoiceOK (choose h)) :
-    ((simUD k).esc.net B (torusAt k (centre k)).anyDetour).StrategySafe
+    ((simUD k).esc.net B (torusAt k (centre k)).anyIntermediate).StrategySafe
       (udComboStrategy k B (centre k) (simUD k) init update admit snap spread ball₁ ball₂ o₁ lo₁
         hi₁ o₂ lo₂ hi₂ choose)
       (fun c => c.isInj) :=
@@ -447,10 +447,10 @@ theorem simUD_combo_safe (k B : ℕ) {H : Type*} (init : H)
 
 #assert_standard_axioms torusAt_dep_bfs centre_idx_8 centre_idx_16 torusUD_up_iff torusUD_nxt
 #assert_standard_axioms torusUD_key_inj torusUD_down_iff_not_up
-#assert_standard_axioms torus_ud_reach torus_ud_escDep_wf torus_ud_detour_correct
-#assert_standard_axioms torus_ud_detour_correct_of_sourceSel torus_ud_detour_underLoad
-#assert_standard_axioms torus_ud_detour_hops_le torus_ud_valiant_correct torus_ud_choice_safe
+#assert_standard_axioms torus_ud_reach torus_ud_escDep_wf torus_ud_twoPhase_correct
+#assert_standard_axioms torus_ud_twoPhase_correct_of_sourceSel torus_ud_twoPhase_underLoad
+#assert_standard_axioms torus_ud_twoPhase_hops_le torus_ud_valiant_correct torus_ud_choice_safe
 #assert_standard_axioms torus_ud_lx_correct torus_ud_throttle_safe torus_ud_combo_safe
-#assert_standard_axioms simUD_detour_correct simUD_throttle_safe simUD_combo_safe
+#assert_standard_axioms simUD_twoPhase_correct simUD_throttle_safe simUD_combo_safe
 
 end AsyncLean.Examples

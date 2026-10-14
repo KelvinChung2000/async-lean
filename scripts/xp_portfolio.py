@@ -18,8 +18,8 @@ channels (configurations), i.e. history, and decides which selection is in force
 
 Every mode is a selection of ONE proved network:
   mesh   the west-first mesh (`route=wf`: XY escape on VC0, the west-first VC0 hops, any
-         productive VC1 hop); every mode's tier list contains the throttled escape tier
-         `esc` with a fixed g <= 8, so each mode alone is `westFirstTiers_correct`.  The
+         productive VC1 hop); every mode's level list contains the throttled escape level
+         `esc` with a fixed g <= 8, so each mode alone is `westFirstPriorities_correct`.  The
          switching is a history-dependent strategy whose selections satisfy SourceSel; the
          strategy theorem is instantiated for `duatoMesh` (`duatoMesh_strategy_safe`), not yet
          for `westFirstMesh` (the same `Strategy.safe` with `wf_closed`, `wf_pairs_finite`,
@@ -66,12 +66,12 @@ import xp_arbiter as XA
 import xp_ramp as XR
 
 # ------------------------------------------------------------------ mode sets
-MESH_B = 'route=wf:tiers=str+esc+vc1:sel=P:gdev=2:devset=all'      # best mesh config (g4)
+MESH_B = 'route=wf:levels=str+esc+vc1:sel=P:gdev=2:devset=all'      # best mesh config (g4)
 MSETS = {
-    # best config / west-first adaptive, weak throttle / XY on both VCs / price tiers
-    'm4': [MESH_B, 'route=wf:tiers=all+esc:thr=g2', 'route=wf:tiers=xy+esc:thr=g0',
-           'route=wf:tiers=pref+esc+vc1:sel=price'],
-    'm3': [MESH_B, 'route=wf:tiers=all+esc:thr=g2', 'route=wf:tiers=xy+esc:thr=g0'],
+    # best config / west-first adaptive, weak throttle / XY on both VCs / price levels
+    'm4': [MESH_B, 'route=wf:levels=all+esc:thr=g2', 'route=wf:levels=xy+esc:thr=g0',
+           'route=wf:levels=pref+esc+vc1:sel=price'],
+    'm3': [MESH_B, 'route=wf:levels=all+esc:thr=g2', 'route=wf:levels=xy+esc:thr=g0'],
     'm1': [MESH_B],
 }
 _TB = 'hop=price:src=toll:pm=0.2'
@@ -210,7 +210,7 @@ _PMSIM = None
 
 
 def pmsim_fn():
-    """xp_combo2.msim with the learner switching tiers / stiers / sx / sel / dev / gdev / devset
+    """xp_combo2.msim with the learner switching levels / stiers / sx / sel / dev / gdev / devset
     / fixed g at the start of a cycle."""
     global _PMSIM
     if _PMSIM is not None:
@@ -240,8 +240,8 @@ def pmsim_fn():
 
 def mesh_mode(spec):
     o = X2.mparse(spec)
-    assert o['route'] == 'wf' and o['thr'].startswith('g') and 'esc' in o['tiers'].split('+'), spec
-    tiers_n = o['tiers'].split('+')
+    assert o['route'] == 'wf' and o['thr'].startswith('g') and 'esc' in o['levels'].split('+'), spec
+    tiers_n = o['levels'].split('+')
     stiers_n = o['stiers'].split('+') if o['stiers'] else tiers_n
     sx = set(o['sx'].split('+')) if o['sx'] else set()
     return (tiers_n, stiers_n, sx, o['sel'], o['dev'], o['gdev'], o['devset'], int(o['thr'][1:]))
@@ -357,14 +357,14 @@ def check():
         b = pm_run('m1', 0.6, 'transpose', 3, ch, 900)
         print('mesh m1', ch, a[:2], b[:2], tuple(a[:2]) == tuple(b[:2]))
         a = X2.run_one('A:R:dualXY:random/random', 0.3, 'bitcomp', 3, ch, 900)
-        b = X2.msim('route=wf:tiers=xy+esc:thr=g0', 0.3, 'bitcomp', seed=3, chain=ch, cycles=900)
+        b = X2.msim('route=wf:levels=xy+esc:thr=g0', 0.3, 'bitcomp', seed=3, chain=ch, cycles=900)
         print('dualXY = wf xy+esc g0', ch, a[:2], b[:2], tuple(a[:2]) == tuple(b[:2]))
         a = X2.run_one('A:R:westFirstMesh:random/random', 0.5, 'transpose', 3, ch, 900)
-        b = X2.msim('route=wf:tiers=all+esc:thr=g0', 0.5, 'transpose', seed=3, chain=ch,
+        b = X2.msim('route=wf:levels=all+esc:thr=g0', 0.5, 'transpose', seed=3, chain=ch,
                     cycles=900)
         print('westFirst random = wf all+esc g0', ch, a[:2], b[:2], tuple(a[:2]) == tuple(b[:2]))
         a = X2.msim('sel=price', 0.5, 'hotspot', seed=3, chain=ch, cycles=900)
-        b = X2.msim('route=wf:tiers=pref+esc+vc1:sel=price', 0.5, 'hotspot', seed=3, chain=ch,
+        b = X2.msim('route=wf:levels=pref+esc+vc1:sel=price', 0.5, 'hotspot', seed=3, chain=ch,
                     cycles=900)
         print('duato ptier = wf ptier', ch, a[:2], b[:2], tuple(a[:2]) == tuple(b[:2]))
         sp = pt_spec(TSETS['t1'][0])

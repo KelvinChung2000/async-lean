@@ -18,7 +18,7 @@ channel `ch(u, dir, vc) = (u * 5 + dir) * 2 + vc`, directions 0 east, 1 west, 2 
 3. `hops` : every route of every packet has exactly the Manhattan length.
 4. `tables` : the number of different routing decisions per router (XY: 4 at inner routers, the
    turn-model meshes: at most 8).
-5. `tiered` : the tiered, source-throttled selection of `MeshTiered.lean` (`tieredMesh`), on
+5. `priority` : the priority, source-throttled selection of `MeshPriority.lean` (`priorityMesh`), on
    Duato's mesh and the two-channel west-first and north-last meshes up to 4 x 4 and every
    threshold `g <= 8`: long
    random runs of single steps (inject, hop to an offered free channel, eject) never reach a
@@ -274,11 +274,11 @@ def acyclic(m, route, esc):
     return all(visit(c) for c in list(deps) if c not in state)
 
 
-# ---------------------------------------------------------------- 5. tiered selection
+# ---------------------------------------------------------------- 5. priority selection
 
-def tiered_offers(m, route, occ, c, d, g):
-    """The hops `tieredMesh` offers the packet with destination `d` in channel `c` (the Lean
-    definition: the free permitted hops of the first tier that admits one)."""
+def priority_offers(m, route, occ, c, d, g):
+    """The hops `priorityMesh` offers the packet with destination `d` in channel `c` (the Lean
+    definition: the free permitted hops of the first priority level that admits one)."""
     k, u = m.k, m.head(c)
     yx = 2 if u // k < d // k else 3 if d // k < u // k else m.xy(u, d)
     src = dirc(c) == 4
@@ -290,15 +290,15 @@ def tiered_offers(m, route, occ, c, d, g):
 
     def open_(q):
         return not src or g <= free_out(m.head(q))
-    tiers = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1]
-    for t in tiers:
+    levels = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1]
+    for t in levels:
         offered = [q for q in route(c, d) if q not in occ and open_(q) and t(q)]
         if offered:
             return offered
     return []
 
 
-def check_tiered(k, turn_name, g, walks, steps, rnd):
+def check_priority(k, turn_name, g, walks, steps, rnd):
     m = Mesh(k)
     turn = {'west-first': m.west_first, 'north-last': m.north_last,
             'duato': lambda u, d: [m.xy(u, d)]}[turn_name]
@@ -312,7 +312,7 @@ def check_tiered(k, turn_name, g, walks, steps, rnd):
                 if m.head(c) == d:
                     moves.append(('eject', c, None))
                     continue
-                offered = tiered_offers(m, route, occ, c, d, g)
+                offered = priority_offers(m, route, occ, c, d, g)
                 assert all(q in route(c, d) and q not in occ for q in offered), (c, d, offered)
                 moves += [('hop', c, q) for q in offered]
             if occ and not moves:
@@ -387,8 +387,8 @@ def main():
         walks = args.walks // 3 if k == 4 else args.walks
         for name in ('duato', 'west-first', 'north-last'):
             for g in range(9):
-                check_tiered(k, name, g, walks, 400, rnd)
-        print(f'k={k}: tiered selection, g = 0..8: no deadlock in {walks} random runs of 400 '
+                check_priority(k, name, g, walks, 400, rnd)
+        print(f'k={k}: priority selection, g = 0..8: no deadlock in {walks} random runs of 400 '
               'steps per threshold, on Duato\'s, the west-first and the north-last mesh')
     print('all checks passed' if ok else 'FAILED')
     sys.exit(0 if ok else 1)

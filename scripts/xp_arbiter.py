@@ -25,7 +25,7 @@ first, at each router (`l:io`) raises peak throughput.  Two confounds are checke
 2. Fairness.  The published baselines (torus: `dor`, `val`, `ugal`; mesh: Duato with a random
    selection, XY on both VCs, the west-first mesh, O1TURN) get the same orders and models.
 
-The simulators are those of `xp_backpressure` (mesh `duatoMesh`/`tieredMesh` and the torus
+The simulators are those of `xp_backpressure` (mesh `duatoMesh`/`priorityMesh` and the torus
 schemes), `torus_experiments.sim_dor` and `routing_sim.simulate`, patched textually at load time
 (each patch must apply exactly once); with `chain=seq, order=random` all reproduce the originals
 bit for bit (`--check`).
@@ -35,7 +35,7 @@ Specs (`/`-separated):
          <scheme>/<sel>/<order>      xp_backpressure.sim (min, val, ugal, bandit2m7f5k, ...)
   mesh   R:<route>:<policy>/<order>  routing_sim.simulate (e.g. R:dualXY:random,
                                      R:westFirstMesh:random, R:duatoMesh:o1turn)
-         <sel>/<order>/<thr>         xp_backpressure.mesh_sim (tiered/random/g4, X2/l:io/g3)
+         <sel>/<order>/<thr>         xp_backpressure.mesh_sim (priority/random/g4, X2/l:io/g3)
   orders: random, l:io, l:old, l:inj, g:io, g:old (see xp_backpressure)
 
 Usage:
@@ -360,7 +360,7 @@ MPATS = ['uniform', 'transpose', 'shuffle', 'bitrev', 'hotspot', 'bitcomp']
 ORDERS = ['random', 'l:io']
 T_OURS = ['min/base', 'min/P', 'bandit2m7f5k/base']
 T_PUB = ['dor', 'val/base', 'ugal/base']
-M_OURS = [('tiered', 'g4'), ('X2', 'g3')]
+M_OURS = [('priority', 'g4'), ('X2', 'g3')]
 M_PUB = ['R:duatoMesh:random', 'R:duatoMesh:T4_random', 'R:dualXY:random',
          'R:westFirstMesh:random', 'R:duatoMesh:o1turn']
 SEEDS = [11, 12, 13, 14]

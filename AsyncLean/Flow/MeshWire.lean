@@ -27,13 +27,13 @@ halved (`wire`).
   middle of a row or column, carries exactly `2`.
 * `mesh_opt` : for even `k ≥ 2`, **the mesh's exact fluid throughput** is `8 (k² - 1) / k³`
   (`IsGreatest`).
-* `wire_ceiling` : **headline.**  For every `k ≥ 2` and every topology with capacities `≤ 2`,
+* `grid_wire_bound` : **headline.**  For every `k ≥ 2` and every topology with capacities `≤ 2`,
   Manhattan-respecting lengths and at most the mesh's wire `2 k (k - 1)`:
   `θ ≤ (3k / (2(k + 1))) * (8 (k² - 1) / k³) = 12 (k - 1) / k²`.  With `mesh_opt`
-  (`wire_ceiling_opt`): for even `k`, no such topology beats the mesh by more than the factor
-  `3k / (2(k + 1))`, below `3/2` for every `k` (`ceiling_factor_lt`) and `4/3` at `k = 8`
-  (`mesh_opt_eight`, `wire_ceiling_eight`).
-* `mesh_per_wire` : per unit of wire the mesh reaches `4 (k + 1) / k⁴`, against the ceiling
+  (`grid_wire_bound_opt`): for even `k`, no such topology beats the mesh by more than the factor
+  `3k / (2(k + 1))`, below `3/2` for every `k` (`grid_wire_factor_lt`) and `4/3` at `k = 8`
+  (`mesh_opt_eight`, `grid_wire_bound_eight`).
+* `mesh_per_wire` : per unit of wire the mesh reaches `4 (k + 1) / k⁴`, against the bound
   `6 / k³` of `throughput_le_wire`; their ratio is again `3k / (2(k + 1))`.
 
 All results are over `ℚ` and general in `k` except the two `k = 8` instances.
@@ -455,13 +455,18 @@ theorem sum_fst {k : ℕ} (g : Fin k → ℚ) : ∑ s : Fin k × Fin k, g s.1 = 
   rw [Fintype.sum_prod_type]
   simp only [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, ← mul_sum]
 
-/-- **Upper bound** (even `k ≥ 2`, any routing): by the cut bound for the left half of the mesh,
-uniform traffic is routable in the `k × k` mesh only at `θ ≤ 8 (k² - 1) / k³`. -/
-theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
-    (h : Routable (meshNet k) (uniform k) θ) : θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 := by
+/-- The arithmetic of the cut bound for the left half of the mesh (even `k ≥ 2`): if `θ` times
+the uniform traffic across the cut is at most the capacity of the cut, then
+`θ ≤ 8 (k² - 1) / k³`.  (Used by `mesh_upper`, and by the queueing converse in
+`AsyncLean.Flow.Backpressure`.) -/
+theorem mesh_upper_of_cut (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
+    (key : θ * ∑ s : Fin k × Fin k, ∑ d : Fin k × Fin k,
+        (if 2 * (s.1 : ℕ) < k ∧ ¬ 2 * (d.1 : ℕ) < k then uniform k s d else 0) ≤
+      ∑ u : Fin k × Fin k, ∑ v : Fin k × Fin k,
+        (if 2 * (u.1 : ℕ) < k ∧ ¬ 2 * (v.1 : ℕ) < k then (meshNet k).cap u v else 0)) :
+    θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 := by
   obtain ⟨m, hm⟩ := he
   have hmk : m < k := by omega
-  have key := cut_bound h (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k)
   -- the traffic across the cut
   have hA : ∑ s : Fin k × Fin k, (if 2 * (s.1 : ℕ) < k then (1 : ℚ) else 0) = k * m := by
     rw [sum_fst (fun i : Fin k => if 2 * (i : ℕ) < k then (1 : ℚ) else 0)]
@@ -543,6 +548,12 @@ theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
   have k3 : 4 * m * (θ * m ^ 3) ≤ 4 * m * ((m + m) ^ 2 - 1) := by nlinarith
   have k4 := le_of_mul_le_mul_left k3 (by linarith)
   nlinarith
+
+/-- **Upper bound** (even `k ≥ 2`, any routing): by the cut bound for the left half of the mesh,
+uniform traffic is routable in the `k × k` mesh only at `θ ≤ 8 (k² - 1) / k³`. -/
+theorem mesh_upper (k : ℕ) (hk : 2 ≤ k) (he : Even k) {θ : ℚ}
+    (h : Routable (meshNet k) (uniform k) θ) : θ ≤ 8 * ((k : ℚ) ^ 2 - 1) / k ^ 3 :=
+  mesh_upper_of_cut k hk he (cut_bound h (fun u : Fin k × Fin k => 2 * (u.1 : ℕ) < k))
 
 /-- **The mesh's exact fluid throughput** (even `k ≥ 2`): the largest throughput at which uniform
 traffic is routable in the `k × k` mesh is `8 (k² - 1) / k³`. -/
@@ -650,11 +661,11 @@ theorem mesh_wire (k : ℕ) (hk : 1 ≤ k) :
   unfold wire
   rw [mesh_link_count k hk]; ring
 
-/-- **The wire ceiling** (headline): on the `k × k` grid (`k ≥ 2`), every topology with capacities
-at most `2`, link lengths at least Manhattan, and at most the mesh's wire `2 k (k - 1)`, routes
-uniform traffic only at `θ ≤ (3k / (2(k + 1))) * (8 (k² - 1) / k³) = 12 (k - 1) / k²`: at most
-`3k / (2(k + 1))` times the mesh's optimum (`mesh_opt`). -/
-theorem wire_ceiling {k : ℕ} (hk : 2 ≤ k) (N : Net (Fin k × Fin k))
+/-- **The grid wire bound** (headline): on the `k × k` grid (`k ≥ 2`), every topology with
+capacities at most `2`, link lengths at least Manhattan, and at most the mesh's wire `2 k (k - 1)`,
+routes uniform traffic only at `θ ≤ (3k / (2(k + 1))) * (8 (k² - 1) / k³) = 12 (k - 1) / k²`: at
+most `3k / (2(k + 1))` times the mesh's optimum (`mesh_opt`). -/
+theorem grid_wire_bound {k : ℕ} (hk : 2 ≤ k) (N : Net (Fin k × Fin k))
     (len : Fin k × Fin k → Fin k × Fin k → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (hwire : ∀ u v, 0 < N.cap u v → manhattan (gridPos u) (gridPos v) ≤ len u v)
     (hcap : ∀ u v, N.cap u v ≤ 2) (hW : wire N len ≤ 2 * k * ((k : ℚ) - 1))
@@ -668,10 +679,10 @@ theorem wire_ceiling {k : ℕ} (hk : 2 ≤ k) (N : Net (Fin k × Fin k))
   rw [e]
   exact h1.trans (div_le_div_of_nonneg_right (by linarith) (by positivity))
 
-/-- **The wire ceiling, relative form** (even `k ≥ 2`): if `θm` is the mesh's optimal throughput for
-uniform traffic, every topology with capacities at most `2`, Manhattan-respecting lengths and no
+/-- **The grid wire bound, relative form** (even `k ≥ 2`): if `θm` is the mesh's optimal throughput
+for uniform traffic, every topology with capacities at most `2`, Manhattan-respecting lengths and no
 more wire than the mesh routes uniform traffic only at `θ ≤ 3k / (2(k + 1)) * θm`. -/
-theorem wire_ceiling_opt {k : ℕ} (hk : 2 ≤ k) (he : Even k) {θm : ℚ}
+theorem grid_wire_bound_opt {k : ℕ} (hk : 2 ≤ k) (he : Even k) {θm : ℚ}
     (hm : IsGreatest {θ : ℚ | Routable (meshNet k) (uniform k) θ} θm)
     (N : Net (Fin k × Fin k))
     (len : Fin k × Fin k → Fin k × Fin k → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
@@ -681,7 +692,7 @@ theorem wire_ceiling_opt {k : ℕ} (hk : 2 ≤ k) (he : Even k) {θm : ℚ}
     θ ≤ 3 * k / (2 * (k + 1)) * θm := by
   rw [hm.unique (mesh_opt k hk he)]
   rw [mesh_wire k (by omega)] at hW
-  exact wire_ceiling hk N len hlen hwire hcap hW h
+  exact grid_wire_bound hk N len hlen hwire hcap hW h
 
 /-- **The mesh per unit of wire**: its throughput `8 (k² - 1) / k³` divided by its wire `2k(k - 1)`
 is `4 (k + 1) / k⁴`; compare `6 / k³` per unit of wire for any topology (`throughput_le_wire`). -/
@@ -695,8 +706,8 @@ theorem mesh_per_wire (k : ℕ) (hk : 2 ≤ k) :
     exact this.ne') (by positivity)]
   ring
 
-/-- The ceiling factor `3k / (2(k + 1))` is below `3/2` for every `k`. -/
-theorem ceiling_factor_lt (k : ℕ) : 3 * (k : ℚ) / (2 * (k + 1)) < 3 / 2 := by
+/-- The factor `3k / (2(k + 1))` is below `3/2` for every `k`. -/
+theorem grid_wire_factor_lt (k : ℕ) : 3 * (k : ℚ) / (2 * (k + 1)) < 3 / 2 := by
   rw [div_lt_iff₀ (by positivity)]; linarith
 
 /-- The `8 × 8` mesh: its exact fluid throughput under uniform traffic is `63/64`. -/
@@ -708,12 +719,12 @@ theorem mesh_opt_eight :
 
 /-- On the `8 × 8` grid, every topology with capacities at most `2`, Manhattan-respecting lengths
 and at most the mesh's wire `112` routes uniform traffic only at `θ ≤ 21/16 = (4/3) * (63/64)`. -/
-theorem wire_ceiling_eight (N : Net (Fin 8 × Fin 8))
+theorem grid_wire_bound_eight (N : Net (Fin 8 × Fin 8))
     (len : Fin 8 × Fin 8 → Fin 8 × Fin 8 → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (hwire : ∀ u v, 0 < N.cap u v → manhattan (gridPos u) (gridPos v) ≤ len u v)
     (hcap : ∀ u v, N.cap u v ≤ 2) (hW : wire N len ≤ 112)
     {θ : ℚ} (h : Routable N (uniform 8) θ) : θ ≤ 21 / 16 := by
-  have := wire_ceiling (k := 8) (by norm_num) N len hlen hwire hcap (by norm_num; linarith) h
+  have := grid_wire_bound (k := 8) (by norm_num) N len hlen hwire hcap (by norm_num; linarith) h
   norm_num at this
   linarith
 

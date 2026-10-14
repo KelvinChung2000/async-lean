@@ -1,23 +1,23 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Routing.StrategyDetour
+import AsyncLean.Routing.StrategyTwoPhase
 
 /-!
-# The detour network of any graph with an abstract escape layer
+# The two-phase network of any graph with an abstract escape subnetwork
 
-`AsyncLean.Routing.GraphDetour` and `AsyncLean.Routing.StrategyDetour` prove the detour network
+`AsyncLean.Routing.GraphTwoPhase` and `AsyncLean.Routing.StrategyTwoPhase` prove the two-phase network
 (minimal adaptive routing on virtual channel 1, a source-chosen intermediate, at most `B`
 returns from virtual channel 0) safe with **tree routing** along a spanning tree as the escape
 layer on virtual channel 0.  The proofs only use a few properties of that escape; this file
 states them as a structure, `GraphData.EscapeLayer G`, and proves every theorem of those two
-files for every escape layer.  `GraphData.treeEscape` is the tree escape (and its network is
-literally `GraphData.detourNet`, `GraphData.treeEscape_net`); `AsyncLean.Routing.UpDown` gives
+files for every escape subnetwork.  `GraphData.treeEscape` is the tree escape (and its network is
+literally `GraphData.twoPhaseNet`, `GraphData.treeEscape_net`); `AsyncLean.Routing.UpDown` gives
 up*/down* routing over all the links of the graph.
 
-## The escape layer
+## The escape subnetwork
 
-An escape layer `E : G.EscapeLayer` gives, for a packet in channel `c` with destination `d`:
+An escape subnetwork `E : G.EscapeLayer` gives, for a packet in channel `c` with destination `d`:
 
 * the next vertex `E.next c d` of its escape hop, into virtual channel 0 of the link
   `c.head → E.next c d` (`E.escCh c d`).  It may depend on the **whole channel**, not only on
@@ -28,19 +28,19 @@ An escape layer `E : G.EscapeLayer` gives, for a packet in channel `c` with dest
 * an **order of the channels** `E.ord` (lexicographic on `ℕ × ℕ`) decreasing along every escape
   hop from a legal pair: the escape dependencies are acyclic;
 * an **escape distance** `E.edist` decreasing along every escape hop from a legal virtual
-  channel 0 pair, and below `E.bound` on legal virtual channel 0 pairs: the escape layer is
+  channel 0 pair, and below `E.bound` on legal virtual channel 0 pairs: the escape subnetwork is
   connected (from every legal pair, escape hops reach the destination).
 
 ## The network (`E.net B W`)
 
-Headers `(d, w, b)` as in `GraphData.detourNet`: the escape hop `E.escCh c d` towards the
-destination `d` (dropping the intermediate), and the adaptive hops of `GraphData.detAdaptive`
+Headers `(d, w, b)` as in `GraphData.twoPhaseNet`: the escape hop `E.escCh c d` towards the
+destination `d` (dropping the intermediate), and the adaptive hops of `GraphData.twoPhaseAdaptive`
 towards the target, from virtual channel 0 only while the return budget `b` is positive, at the
 cost of one unit.  With `W = fun _ _ => [none]` and `B = 0` it is the absorbing network.
 
 ## Main results
 
-For every graph `G`, escape layer `E`, budget `B` and choice of intermediates `W`:
+For every graph `G`, escape subnetwork `E`, budget `B` and choice of intermediates `W`:
 
 * `EscapeLayer.esc_wf` : the escape dependency graph is well-founded;
 * `EscapeLayer.correct`, `EscapeLayer.correct_of_escapeSel`, `EscapeLayer.correct_of_sourceSel` :
@@ -51,17 +51,17 @@ For every graph `G`, escape layer `E`, budget `B` and choice of intermediates `W
 * `EscapeLayer.hops_le_some`, `EscapeLayer.hops_le_none` : hop bounds;
 * `EscapeLayer.throttleSel_sourceSel`, `EscapeLayer.openSel_escapeSel`,
   `EscapeLayer.throttleSel_sourceSelOn`, `EscapeLayer.lxSel_sourceSel` : the selections of the
-  simulation (`GraphData.throttleTiers`: the source gate, the `lx` escape-share throttle) satisfy
+  simulation (`GraphData.throttlePriorities`: the source gate, the `lx` escape-share throttle) satisfy
   the hypotheses of the safety theorems;
 * `EscapeLayer.strategy_safe_of_escapeSel`, `EscapeLayer.strategy_safe_of_sourceSel`,
   `EscapeLayer.strategy_safe_of_sourceSelOn` : every history-dependent strategy whose selections
   satisfy them is safe (`Network.StrategySafe`, through `Network.Strategy.safe`).
-* `GraphData.treeEscape`, `GraphData.treeEscape_net` : the tree escape is an escape layer, and
-  its network is `GraphData.detourNet`.
+* `GraphData.treeEscape`, `GraphData.treeEscape_net` : the tree escape is an escape subnetwork, and
+  its network is `GraphData.twoPhaseNet`.
 
 ## What is not covered
 
-As in `AsyncLean.Routing.GraphDetour`: nothing about throughput; the starvation statements
+As in `AsyncLean.Routing.GraphTwoPhase`: nothing about throughput; the starvation statements
 inherit the caveats of `AsyncLean.Routing.Fairness` and `AsyncLean.Routing.Saturation`.
 -/
 
@@ -73,7 +73,7 @@ namespace GraphData
 
 variable {V : Type*} [DecidableEq V]
 
-/-- **An escape layer on the graph `G`**: the escape hop of a packet in channel `c` for the
+/-- **An escape subnetwork on the graph `G`**: the escape hop of a packet in channel `c` for the
 destination `d` goes to `next c d` on virtual channel 0; from the legal pairs it follows a link,
 stays legal, decreases the order `ord` of the channels (acyclic dependencies) and, from virtual
 channel 0, the escape distance `edist` (below `bound`). -/
@@ -119,14 +119,14 @@ intermediate. -/
 def escape (c : GChan V) (p : DetHdr V) : List (GChan V × DetHdr V) :=
   [(E.escCh c p.1, (p.1, none, p.2.2))]
 
-/-- **The detour network with the escape layer `E`**: headers `(d, w, b)`; from every channel
+/-- **The two-phase network with the escape subnetwork `E`**: headers `(d, w, b)`; from every channel
 the escape hop towards `d` (dropping the intermediate); the adaptive hops towards the target
-outside the escape layer, and from the escape layer while the budget is positive, at the cost
+outside the escape subnetwork, and from the escape subnetwork while the budget is positive, at the cost
 of one unit of budget.  A packet from `s` to `d` is injected with an intermediate among `W s d`
 and budget `B`. -/
 def net (B : ℕ) (W : V → V → List (Option V)) : Network (GChan V) (DetHdr V) where
   arrived c p := decide (c.head = p.1)
-  route c p := E.escape c p ++ if mayReturn c (p.1, p.2.2) then G.detAdaptive c p else []
+  route c p := E.escape c p ++ if mayReturn c (p.1, p.2.2) then G.twoPhaseAdaptive c p else []
   inject := G.verts.flatMap fun s => G.verts.flatMap fun d =>
     (W s d).map fun w => (.inj s, (d, w, B))
 
@@ -138,8 +138,8 @@ theorem arrived_false {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} 
   simpa [net] using h
 
 /-- The permitted hops: the escape hop towards the destination, dropping the intermediate; an
-adaptive hop towards the target, from outside the escape layer with the same budget, from the
-escape layer (when the budget is positive) with one unit less, dropping the intermediate on the
+adaptive hop towards the target, from outside the escape subnetwork with the same budget, from the
+escape subnetwork (when the budget is positive) with one unit less, dropping the intermediate on the
 hop into it. -/
 theorem mem_route {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} {p : DetHdr V}
     {q : GChan V × DetHdr V} (h : q ∈ (E.net B W).route c p) :
@@ -153,7 +153,7 @@ theorem mem_route {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} {p :
   · exact Or.inl h
   · right
     split_ifs at h with hm
-    · simp only [detAdaptive, adaptiveHops, List.map_map, List.mem_map, List.mem_filter,
+    · simp only [twoPhaseAdaptive, adaptiveHops, List.map_map, List.mem_map, List.mem_filter,
         decide_eq_true_eq, Function.comp_apply] at h
       obtain ⟨v, ⟨hv, hd⟩, rfl⟩ := h
       refine ⟨v, hv, hd, ?_⟩
@@ -163,9 +163,9 @@ theorem mem_route {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} {p :
         simpa [mayReturn, hc] using hm
     · simp at h
 
-/-- The legal pairs of the network: legal for the escape layer and the destination, with a
+/-- The legal pairs of the network: legal for the escape subnetwork and the destination, with a
 return budget at most `B`. -/
-def detLegal (E : G.EscapeLayer) (B : ℕ) (c : GChan V) (p : DetHdr V) : Prop :=
+def twoPhaseLegal (E : G.EscapeLayer) (B : ℕ) (c : GChan V) (p : DetHdr V) : Prop :=
   E.legal c p.1 ∧ p.2.2 ≤ B
 
 /-- **Every hop from a legal pair follows an edge of the graph.** -/
@@ -178,7 +178,7 @@ theorem route_adj {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} {p :
   · exact ⟨v, hv, true, rfl⟩
 
 /-- The legal pairs contain the injections and are closed under routing. -/
-theorem closed (B : ℕ) (W : V → V → List (Option V)) : (E.net B W).Closed (E.detLegal B) where
+theorem closed (B : ℕ) (W : V → V → List (Option V)) : (E.net B W).Closed (E.twoPhaseLegal B) where
   inject q hq := by
     simp only [net, List.mem_flatMap, List.mem_map] at hq
     obtain ⟨s, -, d, -, w, -, rfl⟩ := hq
@@ -194,14 +194,14 @@ theorem closed (B : ℕ) (W : V → V → List (Option V)) : (E.net B W).Closed 
 /-- **The escape dependency graph is well-founded** (acyclic): the order `ord` decreases along
 every dependency. -/
 theorem esc_wf (B : ℕ) (W : V → V → List (Option V)) :
-    WellFounded (flip ((E.net B W).Dep (E.detLegal B) E.escape)) :=
+    WellFounded (flip ((E.net B W).Dep (E.twoPhaseLegal B) E.escape)) :=
   Network.wf_of_lexRank E.ord fun c _ ⟨p, _, hl, ha, hq⟩ => by
     simp only [escape, List.mem_singleton, Prod.mk.injEq] at hq
     obtain ⟨rfl, -⟩ := hq
     exact E.ord_lt c p.1 hl.1 (arrived_false ha)
 
 /-- The escape subfunction offers a hop to every packet. -/
-theorem esc_conn (B : ℕ) (W : V → V → List (Option V)) : ∀ c p, E.detLegal B c p →
+theorem esc_conn (B : ℕ) (W : V → V → List (Option V)) : ∀ c p, E.twoPhaseLegal B c p →
     (E.net B W).arrived c p = false → E.escape c p ≠ [] :=
   fun _ _ _ _ => List.cons_ne_nil _ _
 
@@ -211,7 +211,7 @@ theorem escape_sub {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} {p 
   List.mem_append_left _ hq
 
 /-- The escape hop is a permitted hop (in the form of Duato's theorem). -/
-theorem esc_sub (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLegal B c p →
+theorem esc_sub (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.twoPhaseLegal B c p →
     (E.net B W).arrived c p = false → q ∈ E.escape c p → q ∈ (E.net B W).route c p :=
   fun _ _ _ _ _ hq => escape_sub hq
 
@@ -222,7 +222,7 @@ theorem route_not_inj {B : ℕ} {W : V → V → List (Option V)} {c : GChan V} 
     simp [escCh, GChan.isInj]
 
 /-- No escape hop leads into an injection channel. -/
-theorem esc_not_inj (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLegal B c p →
+theorem esc_not_inj (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.twoPhaseLegal B c p →
     (E.net B W).arrived c p = false → q ∈ E.escape c p → ¬ q.1.isInj :=
   fun _ _ _ _ _ hq => route_not_inj (B := B) (W := W) (escape_sub hq)
 
@@ -230,7 +230,7 @@ theorem esc_not_inj (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.d
 
 variable (E)
 
-/-- The ranking of a packet without an intermediate: its escape distance in the escape layer,
+/-- The ranking of a packet without an intermediate: its escape distance in the escape subnetwork,
 elsewhere a multiple of its distance estimate exceeding every escape distance. -/
 def rank (c : GChan V) (d : V) : ℕ :=
   if c.isEsc then E.edist c d else (E.bound + 1) * (G.dist c.head d + 1)
@@ -241,7 +241,7 @@ def rankBound : ℕ := (E.bound + 1) * (G.maxDist + 1) + 1
 /-- The ranking of a packet: without an intermediate, its remaining return budget times
 `rankBound` plus `rank`; while heading for its intermediate `w`, one more unit of budget than it
 has, times `rankBound`, plus its distance estimate to `w`. -/
-def detRank (c : GChan V) (p : DetHdr V) : ℕ :=
+def twoPhaseRank (c : GChan V) (p : DetHdr V) : ℕ :=
   match p.2.1 with
   | none => p.2.2 * E.rankBound + E.rank c p.1
   | some w => (p.2.2 + 1) * E.rankBound + G.dist c.head w
@@ -276,12 +276,12 @@ theorem rank_lt_rankBound {c : GChan V} {d : V} (hl : E.legal c d) : E.rank c d 
   · rw [rank_link_true]; exact Nat.lt_succ_of_le hmul
 
 /-- **The ranking decreases on every hop**: a hop that keeps the header decreases the escape
-distance (escape layer) or the distance estimate (virtual channel 1), an escape hop from virtual
+distance (escape subnetwork) or the distance estimate (virtual channel 1), an escape hop from virtual
 channel 1 lands below every multiple of `bound + 1`, a return lowers the budget, and the hop into
 the intermediate or an escape hop drops the intermediate, landing below `(b + 1) * rankBound`. -/
-theorem rank_lt (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLegal B c p →
+theorem rank_lt (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.twoPhaseLegal B c p →
     (E.net B W).arrived c p = false → q ∈ (E.net B W).route c p →
-    E.detRank q.1 q.2 < E.detRank c p := by
+    E.twoPhaseRank q.1 q.2 < E.twoPhaseRank c p := by
   rintro c ⟨d, w, b⟩ q hl ha hq
   have hne : c.head ≠ d := arrived_false ha
   have hl1 : E.legal c d := hl.1
@@ -311,7 +311,7 @@ theorem rank_lt (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLe
       rw [rank_escCh]
       have : E.edist (E.escCh c d) d < E.bound := h1
       omega
-  · -- an adaptive hop from outside the escape layer
+  · -- an adaptive hop from outside the escape subnetwork
     have hR := rank_lt_rankBound (E := E) (E.legal_adapt c.head v d)
     cases w with
     | none =>
@@ -329,7 +329,7 @@ theorem rank_lt (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLe
         omega
       · show (b + 1) * E.rankBound + G.dist v w < (b + 1) * E.rankBound + G.dist c.head w
         omega
-  · -- a return from the escape layer
+  · -- a return from the escape subnetwork
     have hR := rank_lt_rankBound (E := E) (E.legal_adapt c.head v d)
     obtain ⟨k, rfl⟩ : ∃ k, b = k + 1 := Nat.exists_eq_succ_of_ne_zero hb
     have hk : (k + 1) * E.rankBound = k * E.rankBound + E.rankBound := Nat.succ_mul k _
@@ -353,7 +353,7 @@ theorem rank_lt (B : ℕ) (W : V → V → List (Option V)) : ∀ c p q, E.detLe
         omega
 
 /-- There are finitely many legal pairs. -/
-theorem pairs_finite (B : ℕ) : {q : GChan V × DetHdr V | E.detLegal B q.1 q.2}.Finite :=
+theorem pairs_finite (B : ℕ) : {q : GChan V × DetHdr V | E.twoPhaseLegal B q.1 q.2}.Finite :=
   (Finset.finite_toSet ((GChan.all G.verts).product (G.verts.product
       ((none :: G.verts.map some).product (List.range (B + 1))))).toFinset).subset fun q hq => by
     obtain ⟨c, d, w, b⟩ := q
@@ -365,18 +365,18 @@ theorem pairs_finite (B : ℕ) : {q : GChan V × DetHdr V | E.detLegal B q.1 q.2
         List.pair_mem_product.2 ⟨hw, List.mem_range.2 hb⟩⟩⟩
 
 /-- Finitely many channels carry legal pairs. -/
-theorem chans_finite (B : ℕ) : {c | ∃ p, E.detLegal B c p}.Finite :=
+theorem chans_finite (B : ℕ) : {c | ∃ p, E.twoPhaseLegal B c p}.Finite :=
   ((pairs_finite (E := E) B).image Prod.fst).subset fun c ⟨p, hl⟩ => ⟨(c, p), hl, rfl⟩
 
 /-! ### Hop bounds -/
 
 /-- **Hop bound**: a packet injected at `s` for `d` with intermediate `w` reaches its
-destination within `detRank (.inj s) (d, w, B)` hops, along every route. -/
+destination within `twoPhaseRank (.inj s) (d, w, B)` hops, along every route. -/
 theorem hops_le {B : ℕ} {W : V → V → List (Option V)} {s d : V} {w : Option V}
     {ls : List Unit} {q' : GChan V × DetHdr V}
     (h : (E.net B W).packetLTS.Path (.inj s, (d, w, B)) ls q') :
-    ls.length ≤ E.detRank (.inj s) (d, w, B) := by
-  have := (E.net B W).packet_hops_le (closed B W) E.detRank (rank_lt B W)
+    ls.length ≤ E.twoPhaseRank (.inj s) (d, w, B) := by
+  have := (E.net B W).packet_hops_le (closed B W) E.twoPhaseRank (rank_lt B W)
     (q := (.inj s, (d, w, B))) ⟨E.legal_inj s d, le_rfl⟩ h
   exact (Nat.le_add_left _ _).trans this
 
@@ -401,16 +401,16 @@ theorem hops_le_none {B : ℕ} {W : V → V → List (Option V)} {s d : V}
 
 variable (E)
 
-/-- **The detour network with any escape layer is correct**: for every return budget `B` and
+/-- **The two-phase network with any escape subnetwork is correct**: for every return budget `B` and
 every choice of intermediates `W`, deadlock free and livelock free under every valid selection
 function, and starvation free under strongly fair scheduling. -/
 theorem correct (B : ℕ) (W : V → V → List (Option V)) :
     (E.net B W).Correct ∧ (E.net B W).StarvationFree :=
   ⟨⟨(E.net B W).deadlockFree_of_escape (closed B W) E.escape (esc_sub B W) (esc_conn B W)
       (esc_wf B W),
-    (E.net B W).livelockFree_of_ranking (closed B W) (chans_finite B) E.detRank (rank_lt B W)⟩,
+    (E.net B W).livelockFree_of_ranking (closed B W) (chans_finite B) E.twoPhaseRank (rank_lt B W)⟩,
     (E.net B W).starvationFree_of_escape_ranking (closed B W) (pairs_finite B) E.escape
-      (esc_sub B W) (esc_conn B W) (esc_wf B W) E.detRank (rank_lt B W)⟩
+      (esc_sub B W) (esc_conn B W) (esc_wf B W) E.twoPhaseRank (rank_lt B W)⟩
 
 variable {E}
 
@@ -420,10 +420,10 @@ theorem correct_of_escapeSel {B : ℕ} {W : V → V → List (Option V)}
     (E.net B W).DeadlockFreeWith sel ∧ (E.net B W).LivelockFreeWith sel ∧
       (E.net B W).StarvationFreeWith sel :=
   ⟨(E.net B W).deadlockFreeWith_of_escape (closed B W) E.escape (esc_conn B W) (esc_wf B W) hsel,
-    (E.net B W).livelockFreeWith_of_ranking (closed B W) (chans_finite B) E.detRank
+    (E.net B W).livelockFreeWith_of_ranking (closed B W) (chans_finite B) E.twoPhaseRank
       (rank_lt B W) hsel.sub,
     (E.net B W).starvationFreeWith_of_source (closed B W) (pairs_finite B) E.escape
-      (esc_conn B W) (esc_wf B W) (esc_not_inj B W) E.detRank (rank_lt B W)
+      (esc_conn B W) (esc_wf B W) (esc_not_inj B W) E.twoPhaseRank (rank_lt B W)
       (EscapeSel.sourceSel (E.net B W) hsel fun c => c.isInj = true)⟩
 
 /-- **Correct under throttled sources**. -/
@@ -434,10 +434,10 @@ theorem correct_of_sourceSel {B : ℕ} {W : V → V → List (Option V)}
       (E.net B W).StarvationFreeWith sel :=
   ⟨(E.net B W).deadlockFreeWith_of_source (closed B W) E.escape (esc_conn B W) (esc_wf B W)
       (esc_not_inj B W) hsel,
-    (E.net B W).livelockFreeWith_of_ranking (closed B W) (chans_finite B) E.detRank
+    (E.net B W).livelockFreeWith_of_ranking (closed B W) (chans_finite B) E.twoPhaseRank
       (rank_lt B W) hsel.sub,
     (E.net B W).starvationFreeWith_of_source (closed B W) (pairs_finite B) E.escape
-      (esc_conn B W) (esc_wf B W) (esc_not_inj B W) E.detRank (rank_lt B W) hsel⟩
+      (esc_conn B W) (esc_wf B W) (esc_not_inj B W) E.twoPhaseRank (rank_lt B W) hsel⟩
 
 /-- **Every packet is delivered under saturation**: under every selection that never refuses a
 free escape hop, along every channel-fair run, with injections going on for ever. -/
@@ -445,7 +445,7 @@ theorem underLoad_of_escapeSel {B : ℕ} {W : V → V → List (Option V)}
     {sel : Selection (GChan V) (DetHdr V)} (hsel : (E.net B W).EscapeSel E.escape sel) :
     (E.net B W).StarvationFreeUnderLoad sel (fun _ => False) :=
   (E.net B W).starvationFreeUnderLoad_of_escape (closed B W) E.escape (esc_conn B W) (esc_wf B W)
-    E.detRank (rank_lt B W) hsel
+    E.twoPhaseRank (rank_lt B W) hsel
 
 /-- **Every packet is delivered under saturation**, under every valid selection. -/
 theorem underLoad {B : ℕ} {W : V → V → List (Option V)} {sel : Selection (GChan V) (DetHdr V)}
@@ -459,19 +459,19 @@ theorem underLoad_of_sourceSel {B : ℕ} {W : V → V → List (Option V)}
     (hsel : (E.net B W).SourceSel E.escape (fun c => c.isInj) sel) :
     (E.net B W).StarvationFreeUnderLoad sel (fun c => c.isInj) :=
   (E.net B W).starvationFreeUnderLoad_of_source (closed B W) E.escape (esc_conn B W) (esc_wf B W)
-    (esc_not_inj B W) (fun _ _ _ _ _ hq => route_not_inj hq) E.detRank (rank_lt B W) hsel
+    (esc_not_inj B W) (fun _ _ _ _ _ hq => route_not_inj hq) E.twoPhaseRank (rank_lt B W) hsel
 
 /-! ### The selections of the simulation -/
 
 variable (E)
 
-/-- **The throttled two-tier selection** (`GraphData.throttleTiers`): the free minimal hops on
+/-- **The throttled two-level selection** (`GraphData.throttlePriorities`): the free minimal hops on
 virtual channel 1 that pass the source gate, else the escape hop if it passes the gate. -/
 def throttleSel (B : ℕ) (W : V → V → List (Option V)) (thr : Config (GChan V) (DetHdr V) → V → ℕ)
     (block : Config (GChan V) (DetHdr V) → V → Bool) : Selection (GChan V) (DetHdr V) :=
-  (E.net B W).tieredSel (G.throttleTiers thr block)
+  (E.net B W).prioritySel (G.throttlePriorities thr block)
 
-/-- The two tiers without throttling: the free minimal hops on virtual channel 1, else the
+/-- The two levels without throttling: the free minimal hops on virtual channel 1, else the
 escape hop. -/
 def openSel (B : ℕ) (W : V → V → List (Option V)) : Selection (GChan V) (DetHdr V) :=
   E.throttleSel B W (fun _ _ => 0) (fun _ _ => false)
@@ -490,8 +490,8 @@ theorem escape_isEsc {c : GChan V} {p : DetHdr V} {q : GChan V × DetHdr V}
   subst hq; rfl
 
 omit [DecidableEq V] in
-/-- The escape tier admits the escape hop from every channel outside the sources. -/
-theorem escTier_non {thr : Config (GChan V) (DetHdr V) → V → ℕ}
+/-- The escape level admits the escape hop from every channel outside the sources. -/
+theorem escPriority_non {thr : Config (GChan V) (DetHdr V) → V → ℕ}
     {block : Config (GChan V) (DetHdr V) → V → Bool} {f : Config (GChan V) (DetHdr V)}
     {c : GChan V} {p : DetHdr V} {q : GChan V × DetHdr V} (hc : ¬ c.isInj = true)
     (hq : q ∈ E.escape c p) :
@@ -506,25 +506,25 @@ theorem throttleSel_sourceSel {B : ℕ} {W : V → V → List (Option V)}
     (hthr : ∀ f s v, thr f s ≤ 2 * (G.nbrs v).length)
     (hblock : ∀ f s, (∀ c, ¬ c.isInj = true → f c = none) → block f s = false) :
     (E.net B W).SourceSel E.escape (fun c => c.isInj) (E.throttleSel B W thr block) :=
-  (E.net B W).tieredSel_sourceSel (fun _ _ _ hq => escape_sub hq)
-    (List.mem_cons_of_mem _ List.mem_cons_self) (fun _ _ _ _ hc hq => escTier_non hc hq)
+  (E.net B W).prioritySel_sourceSel (fun _ _ _ hq => escape_sub hq)
+    (List.mem_cons_of_mem _ List.mem_cons_self) (fun _ _ _ _ hc hq => escPriority_non hc hq)
     (fun f c p q _ he hq => by
       simp [srcGate, G.freeOut_of_empty he, hthr, hblock f c.head he, escape_isEsc hq])
 
-/-- **Without throttling, the two tiers never refuse a free escape hop.** -/
+/-- **Without throttling, the two levels never refuse a free escape hop.** -/
 theorem openSel_escapeSel {B : ℕ} {W : V → V → List (Option V)} :
     (E.net B W).EscapeSel E.escape (E.openSel B W) :=
-  (E.net B W).tieredSel_escapeSel (fun _ _ _ hq => escape_sub hq)
+  (E.net B W).prioritySel_escapeSel (fun _ _ _ hq => escape_sub hq)
     (List.mem_cons_of_mem _ List.mem_cons_self)
     (fun _ _ _ _ hq => by simp [srcGate, escape_isEsc hq])
 
-/-- **Any admissible choice among the free hops of the open tiers** never refuses a free escape
+/-- **Any admissible choice among the free hops of the open levels** never refuses a free escape
 hop. -/
 theorem refine_openSel_escapeSel {B : ℕ} {W : V → V → List (Option V)}
     {choose : Config (GChan V) (DetHdr V) → GChan V → DetHdr V →
       List (GChan V × DetHdr V) → List (GChan V × DetHdr V)} (hch : ChoiceOK choose) :
     (E.net B W).EscapeSel E.escape (refineSel (E.openSel B W) choose) :=
-  refineSel_escapeSel openSel_escapeSel ((E.net B W).tieredSel_freeOnly _) hch
+  refineSel_escapeSel openSel_escapeSel ((E.net B W).prioritySel_freeOnly _) hch
 
 /-- The `lx` throttle satisfies Duato's condition with throttled sources. -/
 theorem lxSel_sourceSel {B : ℕ} {W : V → V → List (Option V)} {ball : V → List V}
@@ -538,7 +538,7 @@ theorem lxSel_sourceSel {B : ℕ} {W : V → V → List (Option V)} {ball : V �
 /-- The legal pairs, refined: a packet in the injection channel of `s` does not have `s` as its
 intermediate. -/
 def srcLegal (E : G.EscapeLayer) (B : ℕ) (c : GChan V) (p : DetHdr V) : Prop :=
-  E.detLegal B c p ∧ ∀ s, c = .inj s → p.2.1 ≠ some s
+  E.twoPhaseLegal B c p ∧ ∀ s, c = .inj s → p.2.1 ≠ some s
 
 /-- The refined legal pairs are closed when no source is its own intermediate. -/
 theorem srcLegal_closed (B : ℕ) {W : V → V → List (Option V)}
@@ -583,14 +583,14 @@ theorem throttleSel_sourceSelOn {B : ℕ} {W : V → V → List (Option V)}
     (hthr : ∀ f s v, thr f s ≤ 2 * (G.nbrs v).length) :
     (E.net B W).SourceSelOn (E.srcLegal B) E.escape (fun c => c.isInj)
       (E.throttleSel B W thr block) where
-  sub _ _ _ _ h := ((E.net B W).mem_tieredSel h).1
+  sub _ _ _ _ h := ((E.net B W).mem_prioritySel h).1
   conserving f c p _ _ hc _ := fun ⟨q, hq, hfree⟩ =>
-    (E.net B W).tieredSel_conserving (List.mem_cons_of_mem _ List.mem_cons_self)
-      (escape_sub hq) hfree (escTier_non hc hq)
+    (E.net B W).prioritySel_conserving (List.mem_cons_of_mem _ List.mem_cons_self)
+      (escape_sub hq) hfree (escPriority_non hc hq)
   source f c p hl ha hc _ he := fun ⟨q, hq, hfree⟩ => by
     cases hb : block f c.head with
     | false =>
-      refine (E.net B W).tieredSel_conserving (List.mem_cons_of_mem _ List.mem_cons_self)
+      refine (E.net B W).prioritySel_conserving (List.mem_cons_of_mem _ List.mem_cons_self)
         (escape_sub hq) hfree ?_
       simp [srcGate, G.freeOut_of_empty he, hthr, hb, escape_isEsc hq]
     | true =>
@@ -605,10 +605,10 @@ theorem throttleSel_sourceSelOn {B : ℕ} {W : V → V → List (Option V)}
           (E.net B W).route (.inj s) p := by
         simp only [net, List.mem_append]
         right
-        simp only [mayReturn, GChan.isEsc, Bool.not_false, Bool.true_or, ↓reduceIte, detAdaptive,
+        simp only [mayReturn, GChan.isEsc, Bool.not_false, Bool.true_or, ↓reduceIte, twoPhaseAdaptive,
           adaptiveHops, GChan.head, List.map_map, List.mem_map, List.mem_filter]
         exact ⟨v, ⟨hv, decide_eq_true hd⟩, rfl⟩
-      refine (E.net B W).tieredSel_conserving List.mem_cons_self hmem
+      refine (E.net B W).prioritySel_conserving List.mem_cons_self hmem
         (he _ (by simp [GChan.isInj])) ?_
       simp [srcGate, G.freeOut_of_empty he, hthr, GChan.isEsc]
 
@@ -622,7 +622,7 @@ theorem strategy_safe_of_escapeSel {B : ℕ} {W : V → V → List (Option V)}
     {σ : Strategy (GChan V) (DetHdr V) H} (hσ : ∀ h, (E.net B W).EscapeSel E.escape (σ.sel h)) :
     (E.net B W).StrategySafe σ (fun _ => False) :=
   Strategy.safe (closed B W) (pairs_finite B) E.escape (esc_conn B W) (esc_wf B W)
-    (fun _ _ _ _ _ _ h => h) (fun _ _ _ _ _ _ h => h) E.detRank (rank_lt B W)
+    (fun _ _ _ _ _ _ h => h) (fun _ _ _ _ _ _ h => h) E.twoPhaseRank (rank_lt B W)
     (fun h => (hσ h).sourceSelOn _ _)
 
 /-- **Every throttling strategy whose selections satisfy Duato's condition with throttled
@@ -632,7 +632,7 @@ theorem strategy_safe_of_sourceSel {B : ℕ} {W : V → V → List (Option V)}
     (hσ : ∀ h, (E.net B W).SourceSel E.escape (fun c => c.isInj) (σ.sel h)) :
     (E.net B W).StrategySafe σ (fun c => c.isInj) :=
   Strategy.safe (closed B W) (pairs_finite B) E.escape (esc_conn B W) (esc_wf B W)
-    (esc_not_inj B W) (fun _ _ _ _ _ hq => route_not_inj hq) E.detRank (rank_lt B W)
+    (esc_not_inj B W) (fun _ _ _ _ _ hq => route_not_inj hq) E.twoPhaseRank (rank_lt B W)
     (fun h => (hσ h).sourceSelOn _)
 
 /-- **Every throttling strategy on the refined legal pairs is safe**, when no source is its own
@@ -644,7 +644,7 @@ theorem strategy_safe_of_sourceSelOn {B : ℕ} {W : V → V → List (Option V)}
   Strategy.safe (srcLegal_closed B hW) (srcLegal_finite B) E.escape
     (fun c p hl ha => esc_conn B W c p hl.1 ha) (srcLegal_wf B W)
     (fun c p q hl ha hq => esc_not_inj B W c p q hl.1 ha hq)
-    (fun _ _ _ _ _ hq => route_not_inj hq) E.detRank
+    (fun _ _ _ _ _ hq => route_not_inj hq) E.twoPhaseRank
     (fun c p q hl ha hq => rank_lt B W c p q hl.1 ha hq) hσ
 
 /-- **Every history-dependent choice is safe**: any admissible choice among the free minimal
@@ -674,13 +674,13 @@ theorem throttle_safe {B : ℕ} {W : V → V → List (Option V)}
     obtain ⟨choose, hch, he⟩ := hσ h
     rw [he]
     exact refineSel_sourceSelOn (throttleSel_sourceSelOn hdist (hthr h))
-      ((E.net B W).tieredSel_freeOnly _) hch
+      ((E.net B W).prioritySel_freeOnly _) hch
 
 end EscapeLayer
 
 /-! ### The tree escape -/
 
-/-- **Tree routing along the spanning tree is an escape layer**: legal pairs `GraphData.legal`,
+/-- **Tree routing along the spanning tree is an escape subnetwork**: legal pairs `GraphData.legal`,
 order `GraphData.escRank`, escape distance the tree distance. -/
 def treeEscape (G : GraphData V) : G.EscapeLayer where
   next c d := G.next c.head d
@@ -697,14 +697,14 @@ def treeEscape (G : GraphData V) : G.EscapeLayer where
   bound := 2 * G.height + 1
   edist_lt_bound _ v d _ := Nat.lt_succ_of_le (G.treeDist_le v d)
 
-/-- **The network of the tree escape is the detour network** `GraphData.detourNet`, so every
+/-- **The network of the tree escape is the two-phase network** `GraphData.twoPhaseNet`, so every
 theorem of `EscapeLayer` applies to it (and its throttled selections are those of
-`AsyncLean.Routing.StrategyDetour`, `GraphData.treeEscape_throttleSel`). -/
+`AsyncLean.Routing.StrategyTwoPhase`, `GraphData.treeEscape_throttleSel`). -/
 theorem treeEscape_net (G : GraphData V) (B : ℕ) (W : V → V → List (Option V)) :
-    G.treeEscape.net B W = G.detourNet B W := rfl
+    G.treeEscape.net B W = G.twoPhaseNet B W := rfl
 
-/-- The escape subfunction of the tree escape is `GraphData.detEscape`. -/
-theorem treeEscape_escape (G : GraphData V) : G.treeEscape.escape = G.detEscape := rfl
+/-- The escape subfunction of the tree escape is `GraphData.twoPhaseEscape`. -/
+theorem treeEscape_escape (G : GraphData V) : G.treeEscape.escape = G.twoPhaseEscape := rfl
 
 /-- The throttled selections of the tree escape are those of `GraphData.throttleSel`. -/
 theorem treeEscape_throttleSel (G : GraphData V) (B : ℕ) (W : V → V → List (Option V))

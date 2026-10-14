@@ -14,7 +14,7 @@ throttle g = 4, return budget B = 2). Schemes:
 * `ringv<a>`, `ringvx<a>`, `ringvd<a>`: the source picks the minimal route, the long way round
   a ring (not in `ringvx`; in `ringvd` only when the long direction is clearly less busy), or a
   random intermediate, by hops x (1 + a * smoothed occupancy of the first hop).
-* `cmb<aL>_<aV>_<g>_<m>`: no detour for routes of at most m hops; otherwise a random
+* `cmb<aL>_<aV>_<g>_<m>`: no intermediate for routes of at most m hops; otherwise a random
   intermediate weighted by aV, else the long way round a ring weighted by aL, only when the
   long direction is less busy by at least g/10.
 * `bandit<e>[h<h>]`: each source keeps the smoothed in-network latency of its packets per option
@@ -36,8 +36,8 @@ throttle g = 4, return budget B = 2). Schemes:
   (less noise when a source's destinations vary); a trailing `k` offers the random intermediate
   only to a source whose last 8 destinations include at most 2 distinct nodes (concentrated
   traffic, where Valiant spreads load; under spread-out traffic it only adds hops); `kr<r>`:
-  a detour only when its price is at least r % below the minimal route's (`w<w>`: w % for the
-  random intermediate). Anywhere in the name: `C` picks, among the free hops of a tier, those
+  an intermediate only when its price is at least r % below the minimal route's (`w<w>`: w % for the
+  random intermediate). Anywhere in the name: `C` picks, among the free hops of a level, those
   into the router with the most free output channels; `Y` drops the random-intermediate option;
   `A` offers it only when a long-way option passed its gate (a lopsided ring).
 * `fg<pL>_<pV>_<fL>_<fV>` (percentages): no learning. The long way with probability pL when the
@@ -48,7 +48,7 @@ throttle g = 4, return budget B = 2). Schemes:
 The escape always heads to the final destination and drops the intermediate.
 
 With TOPO=mesh in the environment the same schemes run on the 8 x 8 mesh (same spanning-tree
-escape; no long way round, so only the random intermediate remains as a detour).
+escape; no long way round, so only the random intermediate remains).
 
 Usage: python3 scripts/torus_experiments.py dor,min,val,ugal,ringvd30
 """
@@ -148,15 +148,15 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
             e = esc[c][d]
             onesc = c % 2 == 0 and not src
             canret = not (onesc and pk[4] >= budget)
-            tiers = []
+            levels = []
             if canret:
-                tiers.append(vc1[u][tgt])
+                levels.append(vc1[u][tgt])
                 if scheme.startswith('mis') and pk[5] > 0:
-                    tiers.append([q for q in allvc1[u] if q not in vc1[u][tgt]])
-            tiers.append([e])
+                    levels.append([q for q in allvc1[u] if q not in vc1[u][tgt]])
+            levels.append([e])
             q = None
-            for ti, tier in enumerate(tiers):
-                free = [x for x in tier if x not in occ]
+            for ti, level in enumerate(levels):
+                free = [x for x in level if x not in occ]
                 if g and src: free = [x for x in free if sum(1 for o in out[head[x]] if o not in occ) >= thr[head[x]]]
                 if free:
                     if flagC and len(free) > 1:

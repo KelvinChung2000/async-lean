@@ -3,7 +3,7 @@
 
 Usage:  python3 scripts/xp_scale.py K CMD ...    (K = grid size; sets XPV_K before importing
 `xp_validate`, which resizes the size-dependent modules)
-  K check                      the Duato-random tier list reproduces `route=duato` bit for bit
+  K check                      the Duato-random level list reproduces `route=duato` bit for bit
   K jobs FILE                  lines 'specs|pats|rates|seeds|chains|cycles'
   K pilot SPECS PATS CHAINS CYCLES SEEDS
   K table MAIN MCYC PUBS PCYC PATS CHAINS SEEDS [PSEEDS]   (xp_validate.table)
@@ -21,27 +21,27 @@ Specs: everything of `xp_validate` (MX:, MPX:, MO1, TC:, TA:), plus
                                                   injection channel is busy >= 97 % of an epoch;
                                                   fewer sources are blocked in a larger network
                                                   at the same relative load),
-                       fd = 5 r, fs = 3 r        (X' distance thresholds of the xyc tier)
+                       fd = 5 r, fs = 3 r        (X' distance thresholds of the xyc level)
                      (all equal the 8 x 8 values of t5b at k = 8: E 250, S 50, R0 2, th 0.7,
                      fd 5, fs 3); other learner opts as xp_portfolio (I0, Imax, h, far, W, d,
                      elim); re-probe intervals I0 / Imax are in epochs, so they scale with E.
                      `nosc=1` skips the rule.  Fitted at k = 16 on pilot seeds (1651).
-New tier (registered in xp_transpose._XT, read by every mesh simulator here):
-  dua   a free productive VC1 hop or the XY escape hop on VC0.  `route=wf:tiers=dua+esc:thr=g0`
-        is Duato's mesh with random selection (`route=duato:tiers=all+esc:thr=g0`, bit for bit:
-        `check`) written as a tier list of the west-first mesh: [dua, esc] with escTier k 0.
+New level (registered in xp_transpose._XT, read by every mesh simulator here):
+  dua   a free productive VC1 hop or the XY escape hop on VC0.  `route=wf:levels=dua+esc:thr=g0`
+        is Duato's mesh with random selection (`route=duato:levels=all+esc:thr=g0`, bit for bit:
+        `check`) written as a level list of the west-first mesh: [dua, esc] with escPriority k 0.
 Mode sets (xp_validate.FSETS):
-  s6   t5b + Duato random (D = route=wf:tiers=dua+esc:thr=g0)
-  s6v  t5b + Duato VC1-first (route=wf:tiers=vc1+esc:thr=g0)
-  s7   t5b + D + Duato throttled (route=wf:tiers=dua+esc:thr=g4)
-  s6g  t5b + Duato throttled (D4 = route=wf:tiers=dua+esc:thr=g4)
-Every mode of every set is a west-first tier list containing escTier k g with g <= 8:
-  B  = str+esc+vc1, g4 (sel P / gdev: selection within tiers)      escTier k 4
-  T  = all+esc, g0, sel Pd_balL0                                    escTier k 0
-  X' = xyc+esc, g0 (fd, fs: configuration + own channel/destination) escTier k 0
-  P  = pref+esc+vc1, g4, sel price                                   escTier k 4
-  W6 = all+esc, g6                                                   escTier k 6
-  D  = dua+esc, g0 / g4;  V = vc1+esc, g0                            escTier k 0 / 4
+  s6   t5b + Duato random (D = route=wf:levels=dua+esc:thr=g0)
+  s6v  t5b + Duato VC1-first (route=wf:levels=vc1+esc:thr=g0)
+  s7   t5b + D + Duato throttled (route=wf:levels=dua+esc:thr=g4)
+  s6g  t5b + Duato throttled (D4 = route=wf:levels=dua+esc:thr=g4)
+Every mode of every set is a west-first priority level list containing escPriority k g with g <= 8:
+  B  = str+esc+vc1, g4 (sel P / gdev: selection within levels)      escPriority k 4
+  T  = all+esc, g0, sel Pd_balL0                                    escPriority k 0
+  X' = xyc+esc, g0 (fd, fs: configuration + own channel/destination) escPriority k 0
+  P  = pref+esc+vc1, g4, sel price                                   escPriority k 4
+  W6 = all+esc, g6                                                   escPriority k 6
+  D  = dua+esc, g0 / g4;  V = vc1+esc, g0                            escPriority k 0 / 4
 so `westFirstMesh_modes_safe` covers any history-dependent switching among them.
 
 FINDINGS (fresh seeds; published schemes 6000 cycles, peak over fine knee sweeps)
@@ -75,15 +75,15 @@ KV = XV.KV
 XV.CACHE = os.environ.get('XPS_CACHE', os.path.join(tempfile.gettempdir(), f'xps_k{KV}.json'))
 
 
-# ------------------------------------------------------------------ the Duato tier
-@XT.tier('dua')
+# ------------------------------------------------------------------ the Duato level
+@XT.level('dua')
 def _dua(ctx, c, u, d, src, esc):
     return lambda q: q % 2 == 1 or q == esc
 
 
-MODE_D = 'route=wf:tiers=dua+esc:thr=g0'
-MODE_D4 = 'route=wf:tiers=dua+esc:thr=g4'
-MODE_V = 'route=wf:tiers=vc1+esc:thr=g0'
+MODE_D = 'route=wf:levels=dua+esc:thr=g0'
+MODE_D4 = 'route=wf:levels=dua+esc:thr=g4'
+MODE_V = 'route=wf:levels=vc1+esc:thr=g0'
 T5B = XT.MSETS['t5b']
 XV.FSETS['s6'] = T5B + [MODE_D]
 XV.FSETS['s6v'] = T5B + [MODE_V]
@@ -147,9 +147,9 @@ def check():
     ok = True
     for chn in ('seq', 'none'):
         for p, r, sd in (('hotspot', 0.5, 3), ('uniform', 0.6, 4), ('transpose', 0.4, 5)):
-            a = XV.mesh_x('route=duato:tiers=all+esc:thr=g0', r, p, sd, chn, 600)
+            a = XV.mesh_x('route=duato:levels=all+esc:thr=g0', r, p, sd, chn, 600)
             b = XV.mesh_x(MODE_D, r, p, sd, chn, 600)
-            a4 = XV.mesh_x('route=duato:tiers=all+esc:thr=g4', r, p, sd, chn, 600)
+            a4 = XV.mesh_x('route=duato:levels=all+esc:thr=g4', r, p, sd, chn, 600)
             b4 = XV.mesh_x(MODE_D4, r, p, sd, chn, 600)
             e = a == b and a4 == b4
             ok &= e

@@ -4,12 +4,12 @@ configuration-driven throttle for the torus combined scheme of `xp_combo.py` (si
 nothing here is proved).
 
 MESH (8 x 8, 2 one-packet VC lanes per link, random arbitration).  `msim` is
-`xp_backpressure.mesh_sim` (= `routing_sim.simulate(duatoMesh, 'T4:tiered')`) generalised; spec
+`xp_backpressure.mesh_sim` (= `routing_sim.simulate(duatoMesh, 'T4:priority')`) generalised; spec
 `M:<key=value:...>`:
   route=duato|wf            permitted hops: Duato's mesh (XY escape on VC0, any productive hop
                             on VC1) or the west-first mesh (also the west-first VC0 hops)
-  tiers=pref+esc+vc1        the tier list (the free hops of the first tier that has one):
-                              pref  the tieredMesh preferred hop (XY on VC0 / YX on VC1; from a
+  levels=pref+esc+vc1        the level list (the free hops of the first priority level that has one):
+                              pref  the priorityMesh preferred hop (XY on VC0 / YX on VC1; from a
                                     source either)
                               esc   the XY hop on VC0 (the escape hop)
                               xy    the XY hop on either VC        xy1  the XY hop on VC1
@@ -17,28 +17,28 @@ MESH (8 x 8, 2 one-packet VC lanes per link, random arbitration).  `msim` is
                               wf0   the extra west-first VC0 hops  all  every permitted hop
                               str   straight on (same direction as the current channel, either
                                     VC; from a source every hop)
-  stiers=<list>             the tier list for packets in an injection channel (default: tiers)
-  sel=rand|P|D|price        choice within the tier: random; the hop into the router with the most
+  stiers=<list>             the level list for packets in an injection channel (default: levels)
+  sel=rand|P|D|price        choice within the level: random; the hop into the router with the most
                             free hops this packet may take next (P); the most free outgoing
                             channels (D); the cheapest link price + propagated minimal-route
                             cost (xp_prices `ptier`; eps, a)
-  dev=<delta>               in the first tier: leave it for a free hop of `devset` (default vc1)
+  dev=<delta>               in the first priority level: leave it for a free hop of `devset` (default vc1)
                             whose P-score is at least delta higher (xp_backpressure `X<delta>`)
-  gdev=<delta>              before the tiers: a free hop of devset (not in the first tier) whose
-                            P-score is at least delta above the best P-score of the first tier's
-                            permitted hops, free or not (a configuration-dependent first tier)
+  gdev=<delta>              before the levels: a free hop of devset (not in the first priority level) whose
+                            P-score is at least delta above the best P-score of the first priority level's
+                            permitted hops, free or not (a configuration-dependent first priority level)
   thr=g<n>|<xp_ramp spec>   source throttle: n of the next router's 8 outgoing channels free, or
                             an xp_ramp controller (fix<g>, lx.., alg.., ...)
-  sx=<tiers>                tiers whose source hops are exempt from the throttle (e.g. sx=xy; lists are '+'-separated)
+  sx=<levels>                levels whose source hops are exempt from the throttle (e.g. sx=xy; lists are '+'-separated)
 Every such selection reads only the configuration (except sel=price, which reads smoothed
-flows, i.e. history), and contains the throttled escape tier when `esc` is in the list with a
-fixed g; `duatoTiers_correct` / `westFirstTiers_correct` then cover it.  A configuration-only
-xp_ramp controller is a configuration-dependent threshold in front of the escape tier (an
-earlier tier admitting a source hop only under the controller's condition, then `escTier k 8`).
+flows, i.e. history), and contains the throttled escape level when `esc` is in the list with a
+fixed g; `duatoPriorities_correct` / `westFirstPriorities_correct` then cover it.  A configuration-only
+xp_ramp controller is a configuration-dependent threshold in front of the escape level (an
+earlier level admitting a source hop only under the controller's condition, then `escPriority k 8`).
 
 Baselines (published): `A:R:dualXY:random`, `A:R:westFirstMesh:random`, `A:R:duatoMesh:o1turn`,
 `A:R:duatoMesh:random`, `A:R:duatoMesh:T4_random` (xp_arbiter.run_one, chain-patched).  Our own:
-tieredMesh `M:` (default spec), ptier `M:sel=price`, X2 `M:sel=P:dev=2:thr=g3`, throttles
+priorityMesh `M:` (default spec), ptier `M:sel=price`, X2 `M:sel=P:dev=2:thr=g3`, throttles
 `M:thr=<ctrl>`.  Patterns: the six of routing_sim plus tornado (x -> x + k/2 - 1 mod k) and the
 random permutation of routing_graph_sim.
 
@@ -111,9 +111,9 @@ def tables(k, route):
     return _T[key]
 
 
-MDEF = dict(route='duato', tiers='pref+esc+vc1', stiers='', sel='rand', dev=-1.0, gdev=-1.0, devset='vc1',
+MDEF = dict(route='duato', levels='pref+esc+vc1', stiers='', sel='rand', dev=-1.0, gdev=-1.0, devset='vc1',
             thr='g4', sx='', eps=4.0, a=0.02)
-MSTR = ('route', 'tiers', 'stiers', 'sel', 'devset', 'thr', 'sx')
+MSTR = ('route', 'levels', 'stiers', 'sel', 'devset', 'thr', 'sx')
 
 
 def mparse(spec):
@@ -135,7 +135,7 @@ def msim(spec, rate, pattern, seed=1, chain='seq', cycles=2000, warmup=None, k=8
     queues = [deque() for _ in range(n)]
     latencies = []
     nfree = [8] * n
-    tiers_n = o['tiers'].split('+')
+    tiers_n = o['levels'].split('+')
     stiers_n = o['stiers'].split('+') if o['stiers'] else tiers_n
     sx = set(o['sx'].split('+')) if o['sx'] else set()
     sel = o['sel']
@@ -266,8 +266,8 @@ def msim(spec, rate, pattern, seed=1, chain='seq', cycles=2000, warmup=None, k=8
                     free = free + [q for q in exempt if q not in free]
             pick = []
             if gdev >= 0:
-                # leave the first tier, whether or not it has a free hop, for a free hop of
-                # devset whose P-score beats the best of the first tier's permitted hops
+                # leave the first priority level, whether or not it has a free hop, for a free hop of
+                # devset whose P-score beats the best of the first priority level's permitted hops
                 t0 = tier_fn(names[0], u, d, c, src)
                 sc0 = [useful(q, d) for q in hops if t0(q)]
                 if sc0:
@@ -275,16 +275,16 @@ def msim(spec, rate, pattern, seed=1, chain='seq', cycles=2000, warmup=None, k=8
                     b0 = max(sc0) + gdev
                     pick = [q for q in free if dv(q) and not t0(q) and useful(q, d) >= b0]
             for ti, nm in enumerate(names if not pick else ()):
-                tier = tier_fn(nm, u, d, c, src)
-                if any(tier(q) for q in free):
+                level = tier_fn(nm, u, d, c, src)
+                if any(level(q) for q in free):
                     if delta >= 0 and ti == 0:
-                        best = max(useful(q, d) for q in free if tier(q))
+                        best = max(useful(q, d) for q in free if level(q))
                         dv = tier_fn(devset, u, d, c, src)
                         alt = [q for q in free if dv(q) and useful(q, d) >= best + delta]
                         if alt:
                             pick = alt
                             break
-                    pick = [q for q in free if tier(q)]
+                    pick = [q for q in free if level(q)]
                     break
             if len(pick) > 1 and sel != 'rand':
                 if sel == 'price':
@@ -392,14 +392,14 @@ def check():
     import xp_prices as XPR
     a = XP.mesh_sim(8, 0.45, 'transpose', cycles=900, warmup=300, seed=3)
     b = msim('', 0.45, 'transpose', seed=3, cycles=900, warmup=300)
-    print('tiered seq', a[:2], b[:2], a[:2] == b[:2])
+    print('priority seq', a[:2], b[:2], a[:2] == b[:2])
     a = XP.mesh_sim(8, 0.45, 'uniform', 'X2', 'random', 'g3', cycles=900, warmup=300, seed=3)
     b = msim('sel=P:dev=2:thr=g3', 0.45, 'uniform', seed=3, cycles=900, warmup=300)
     print('X2 seq', a[:2], b[:2], a[:2] == b[:2])
-    a = XA.mesh_sim(8, 0.6, 'bitcomp', 'tiered', 'random', 'g4', seed=4, chain='none',
+    a = XA.mesh_sim(8, 0.6, 'bitcomp', 'priority', 'random', 'g4', seed=4, chain='none',
                     cycles=900, warmup=300)
     b = msim('', 0.6, 'bitcomp', seed=4, chain='none', cycles=900, warmup=300)
-    print('tiered none', a[:2], b[:2], a[:2] == b[:2])
+    print('priority none', a[:2], b[:2], a[:2] == b[:2])
     a = XPR.sim_mesh('mode=ptier', 0.5, 'shuffle', cycles=900, warmup=300, seed=2)
     b = msim('sel=price', 0.5, 'shuffle', seed=2, cycles=900, warmup=300)
     print('ptier seq', a[:2], b[:2], a[:2] == b[:2])

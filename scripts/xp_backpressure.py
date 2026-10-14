@@ -4,20 +4,20 @@
 
 Ideas from queueing theory (max-weight / backpressure, age-based arbitration), adapted to
 one-packet lanes.  The mechanics are those of `routing_sim.simulate` (mesh, `duatoMesh` with
-`T4:tiered`) and `torus_experiments.sim` (torus, copied below with hooks), kept identical:
-with `sel=tiered|base`, `order=random`, `thr=g4` both reproduce the originals bit for bit
+`T4:priority`) and `torus_experiments.sim` (torus, copied below with hooks), kept identical:
+with `sel=priority|base`, `order=random`, `thr=g4` both reproduce the originals bit for bit
 (`--check`).
 
-Selections (applied among the free hops of the tier that `tieredMesh` / the torus scheme
+Selections (applied among the free hops of the level that `priorityMesh` / the torus scheme
 picks; they read only the current configuration):
-  tiered / base   the original (uniformly random among the tier's free hops)
+  priority / base   the original (uniformly random among the level's free hops)
   D               the hop into the router with the most free outgoing channels (= flag C of
                   torus_experiments; the occupancy differential to the current router, whose
                   count is the same for every candidate)
   P               the hop into the router with the most free channels *this packet may use
                   next* (its permitted hops there; destination reached = best)
-  X<delta>        mesh: as P, and leave the preferred tier for a free VC1 hop whose P-score is
-                  at least delta higher (a configuration-dependent tier list)
+  X<delta>        mesh: as P, and leave the preferred level for a free VC1 hop whose P-score is
+                  at least delta higher (a configuration-dependent level list)
 Arbitration orders (who moves first in a cycle; in hardware the arbiter):
   random          uniformly random order (the original)
   g:<key>         one global order by <key> (changes which channel frees first, i.e. how many
@@ -35,7 +35,7 @@ Source throttles (mesh): g<n> = at least n (g4: 4 of the next router's 8 outputs
 
 Usage:
   python3 scripts/xp_backpressure.py --check
-  python3 scripts/xp_backpressure.py mesh 'tiered/random/g4,D/l:old/g4' uniform,transpose 0.4,0.5 1,2,3,4
+  python3 scripts/xp_backpressure.py mesh 'priority/random/g4,D/l:old/g4' uniform,transpose 0.4,0.5 1,2,3,4
   python3 scripts/xp_backpressure.py torus 'min/base/random,min/D/l:old' uniform 0.7,0.8 11,12
 Prints, per variant and pattern, the peak (over the rates) of the mean accepted throughput,
 its standard error over the seeds, moves per cycle and the fraction of chained moves (into a
@@ -115,9 +115,9 @@ def mesh_tables(k):
     return _MESH[k]
 
 
-def mesh_sim(k, rate, pattern, sel='tiered', order='random', thr='g4', cycles=6000,
+def mesh_sim(k, rate, pattern, sel='priority', order='random', thr='g4', cycles=6000,
              warmup=2000, seed=1):
-    """`routing_sim.simulate(k, duatoMesh, rate, pattern, 'T4:tiered')` with hooks."""
+    """`routing_sim.simulate(k, duatoMesh, rate, pattern, 'T4:priority')` with hooks."""
     ch, hd, R, XY, YX = mesh_tables(k)
     rnd = random.Random(seed)
     n = k * k
@@ -185,21 +185,21 @@ def mesh_sim(k, rate, pattern, sel='tiered', order='random', thr='g4', cycles=60
                     free = [c2 for c2 in free if nfree[hd[c2]] >= g and nfree[hd[c2]] >= nfree[u] - 2]
             esc = XY[u][d]
             pref = esc if c % 2 == 0 and not src else YX[u][d]
-            tiers = (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
+            levels = (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
                      lambda q: q % 2 == 1)
-            for ti, tier in enumerate(tiers):
-                if any(tier(q) for q in free):
+            for ti, level in enumerate(levels):
+                if any(level(q) for q in free):
                     if delta is not None and ti == 0:
-                        best = max(useful(q, d) for q in free if tier(q))
+                        best = max(useful(q, d) for q in free if level(q))
                         alt = [q for q in free if q % 2 == 1 and useful(q, d) >= best + delta]
                         if alt:
                             free = alt
                             break
-                    free = [q for q in free if tier(q)]
+                    free = [q for q in free if level(q)]
                     break
             else:
                 free = []
-            if len(free) > 1 and sel != 'tiered':
+            if len(free) > 1 and sel != 'priority':
                 score = (lambda q: nfree[hd[q]]) if sel == 'D' else (lambda q: useful(q, d))
                 top = max(score(q) for q in free)
                 free = [q for q in free if score(q) == top]
@@ -338,15 +338,15 @@ def sim(scheme, rate, pattern, g=4, budget=2, mis=2, cycles=4000, warmup=1000, s
             e = esc[c][d]
             onesc = c % 2 == 0 and not src
             canret = not (onesc and pk[4] >= budget)
-            tiers = []
+            levels = []
             if canret:
-                tiers.append(vc1[u][tgt])
+                levels.append(vc1[u][tgt])
                 if scheme.startswith('mis') and pk[5] > 0:
-                    tiers.append([q for q in allvc1[u] if q not in vc1[u][tgt]])
-            tiers.append([e])
+                    levels.append([q for q in allvc1[u] if q not in vc1[u][tgt]])
+            levels.append([e])
             q = None
-            for ti, tier in enumerate(tiers):
-                free = [x for x in tier if x not in occ]
+            for ti, level in enumerate(levels):
+                free = [x for x in level if x not in occ]
                 if g and src: free = [x for x in free if sum(1 for o in out[head[x]] if o not in occ) >= thr[head[x]]]
                 if free:
                     if sel != 'base' and len(free) > 1:     # xp
@@ -502,7 +502,7 @@ def run_one(topo, spec, rate, pattern, seed, cycles=None):
 def check():
     import routing_sim as R
     import torus_experiments as T
-    a = R.simulate(8, R.mesh(8)[2]['duatoMesh'], 0.45, 'transpose', 'T4:tiered', cycles=1500,
+    a = R.simulate(8, R.mesh(8)[2]['duatoMesh'], 0.45, 'transpose', 'T4:priority', cycles=1500,
                    warmup=500, seed=3)
     b = mesh_sim(8, 0.45, 'transpose', cycles=1500, warmup=500, seed=3)
     print('mesh ', a, b[:2], a == b[:2])

@@ -15,7 +15,7 @@ carries a rate of traffic up to its capacity `cap u v`, and a traffic matrix `de
 from `s` to `d` per unit of throughput) is **routable at throughput `θ`** if a multicommodity
 flow (one commodity per destination) carries `θ * dem` within the capacities (`Fluid.Flow`).
 The throughput a network reaches with packets is at most what it reaches in the fluid model,
-under any routing, adaptive or not, with or without detours.
+under any routing, adaptive or not, minimal or not.
 
 The upper bounds here are all instances of one argument (`Fluid.potential_bound`, the weak
 duality of the maximum concurrent flow problem): give every vertex a potential `φ d v` towards
@@ -106,7 +106,7 @@ def SupportedOn (F : Flow N dem θ) (S : V → V → V → Prop) : Prop :=
   ∀ d u v, 0 < F.f d u v → S d u v
 
 /-- The flow is **minimal** for the distance `dist`: every link a commodity uses brings it
-strictly closer to its destination (no detours). -/
+strictly closer to its destination (minimal). -/
 def Minimal (F : Flow N dem θ) (dist : V → V → ℚ) : Prop :=
   F.SupportedOn fun d u v => dist v d < dist u d
 
@@ -140,6 +140,22 @@ theorem potential_bound_on (F : Flow N dem θ) {S : V → V → V → Prop} (hF 
           mul_le_mul_of_nonneg_right (F.capacity u v) (hlen u v)
 
 end Flow
+
+/-- `θ * dem` **respects every potential bound on the links allowed by `S`**: for every link
+length `len ≥ 0` and every potential `φ ≥ 0` with `φ d d = 0` dropping by at most `len u v`
+along the allowed links of positive capacity,
+`θ * ∑ s d, dem s d * φ d s ≤ ∑ u v, cap u v * len u v`.  A flow supported on `S` does
+(`Flow.potentialFeasibleOn`); so does a stable queueing run moving traffic only on `S`
+(`Fluid.Run.potentialFeasibleOn`); the dual certificates of the library only use this. -/
+def PotentialFeasibleOn (N : Net V) (S : V → V → V → Prop) (dem : V → V → ℚ) (θ : ℚ) : Prop :=
+  ∀ (len φ : V → V → ℚ), (∀ u v, 0 ≤ len u v) → (∀ d, φ d d = 0) →
+    (∀ d u v, S d u v → 0 < N.cap u v → φ d u - φ d v ≤ len u v) → (∀ d v, 0 ≤ φ d v) →
+    θ * ∑ s, ∑ d, dem s d * φ d s ≤ ∑ u, ∑ v, N.cap u v * len u v
+
+/-- A flow supported on `S` respects every potential bound on `S`. -/
+theorem Flow.potentialFeasibleOn {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (F : Flow N dem θ)
+    {S : V → V → V → Prop} (hF : F.SupportedOn S) : PotentialFeasibleOn N S dem θ :=
+  fun len φ hlen hφd hφ _ => F.potential_bound_on hF len hlen φ hφd hφ
 
 /-- **The potential bound** (weak duality).  Let `φ d v` be a potential towards every
 destination `d` with `φ d d = 0`, dropping by at most `len u v ≥ 0` along every link of positive
@@ -177,7 +193,7 @@ theorem manhattan_sub_le (p q r : ℤ × ℤ) :
 length of every link of positive capacity, at least the Manhattan distance of its ends.  If
 `θ * dem` is routable, the traffic times the distance it must travel is at most the capacity
 times the wire: `θ * ∑ s d, dem s d * dist s d ≤ ∑ u v, cap u v * len u v`.  Every topology and
-every routing (adaptive, with detours, split over many paths) is covered. -/
+every routing (adaptive, non-minimal, split over many paths) is covered. -/
 theorem wire_bound {N : Net V} {dem : V → V → ℚ} {θ : ℚ} (h : Routable N dem θ)
     (pos : V → ℤ × ℤ) (len : V → V → ℚ) (hlen : ∀ u v, 0 ≤ len u v)
     (hwire : ∀ u v, 0 < N.cap u v → manhattan (pos u) (pos v) ≤ len u v) :

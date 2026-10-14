@@ -1,4 +1,6 @@
 /.lake
 /docbuild/.lake
 /docbuild/lake-manifest.json
+/bench/out
+/bench/xfile
 __pycache__/

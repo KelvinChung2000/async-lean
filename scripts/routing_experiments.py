@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiments with selections on the mesh, beyond `tieredMesh` (nothing here is proved).
+"""Experiments with selections on the mesh, beyond `priorityMesh` (nothing here is proved).
 
 Same mechanics as `routing_sim.py` (one-packet channels, random move order, one injection
 channel per node).  A packet carries a mode, chosen at its source; a scheme is a mode or a rule
@@ -7,11 +7,11 @@ choosing modes.  `name@g` throttles the sources at `g` free channels (default 4,
 `name:w` sets the patience `w`.
 
 Modes (all take hops of Duato's mesh, those ending in `_wf` and `wf` of the west-first mesh):
-  tiered      the tiers of `tieredMesh`
-  tiered_wf   the same, then the extra west-first hops
+  priority      the levels of `priorityMesh`
+  priority_wf   the same, then the extra west-first hops
   xy2         XY on either virtual channel (with `@0`: `dualXY` of routing_sim.py)
   xyfirst(_wf) XY on either virtual channel, then any hop on virtual channel 1 (then the rest)
-  patient(_wf) XY on either virtual channel until blocked `w` cycles, then the tiered order
+  patient(_wf) XY on either virtual channel until blocked `w` cycles, then the priority order
   yx          YX on virtual channel 1, then the escape hop
   romm        two-phase XY through a random intermediate node of the minimal quadrant
   oracle      the free hop whose remaining dimension-order path is least occupied, looking at
@@ -19,20 +19,20 @@ Modes (all take hops of Duato's mesh, those ending in `_wf` and `wf` of the west
   rand, wf    random among the free hops of Duato's / the west-first mesh
 Rules choosing modes:
   learn       every source learns, per destination quadrant, the mode with the least latency
-              (epsilon-greedy over tiered, xy2, yx, rand, wf)
-  portfolio   a controller switches the mode of new packets between tiered@4, tiered_wf@4 and
+              (epsilon-greedy over priority, xy2, yx, rand, wf)
+  portfolio   a controller switches the mode of new packets between priority@4, priority_wf@4 and
               xy2@0, keeping the one with the most deliveries per epoch
-  dist<D>     xy2@0 for packets travelling at least D hops, tiered_wf@4 for the others
+  dist<D>     xy2@0 for packets travelling at least D hops, priority_wf@4 for the others
 
 Usage: python3 scripts/routing_experiments.py K SCHEMES RATES SEEDS
-  e.g. python3 scripts/routing_experiments.py 8 tiered,oracle,learn 0.15,0.2,0.3,0.4,0.6 2
+  e.g. python3 scripts/routing_experiments.py 8 priority,oracle,learn 0.15,0.2,0.3,0.4,0.6 2
 prints the peak accepted throughput (packets / node / cycle) over RATES for every pattern.
 """
 import sys, random
 from routing_sim import mesh, destination, PATTERNS
 from collections import deque
 
-ARMS = ['tiered', 'xy2', 'yx', 'rand', 'wf']
+ARMS = ['priority', 'xy2', 'yx', 'rand', 'wf']
 
 def sim(k, scheme, rate, pattern, cycles=6000, warmup=2000, seed=1, eps=0.1, alpha=0.1):
     g, w = 4, 0
@@ -69,7 +69,7 @@ def sim(k, scheme, rate, pattern, cycles=6000, warmup=2000, seed=1, eps=0.1, alp
     def key(s, d):
         return ((X(d) > X(s)) - (X(d) < X(s)), (Y(d) > Y(s)) - (Y(d) < Y(s)))
 
-    PORT = [('tiered', 4), ('tiered_wf', 4), ('xy2', 0)]
+    PORT = [('priority', 4), ('priority_wf', 4), ('xy2', 0)]
     E, R = 400, 10
     cur, dl, score = [PORT[0]], [0], {}
     for t in range(cycles):
@@ -88,49 +88,49 @@ def sim(k, scheme, rate, pattern, cycles=6000, warmup=2000, seed=1, eps=0.1, alp
             u = head(c)
             if u == d: continue
             src = c // 2 % 5 == 4
-            base = wfm if mode in ('wf', 'xyfirst_wf', 'tiered_wf', 'patient_wf') else duato
+            base = wfm if mode in ('wf', 'xyfirst_wf', 'priority_wf', 'patient_wf') else duato
             hops = base(c, d)
             free = [q for q in hops if q not in occ]
             gg = pk[6] if len(pk) > 6 else g
             if src and gg: free = [q for q in free if nfree(head(q)) >= gg]     # throttle
             esc = ch(u, xy(u, d), 0)
-            if mode == 'tiered':
+            if mode == 'priority':
                 pref = esc if c % 2 == 0 and not src else ch(u, yx(u, d), 1)
-                tiers = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1]
+                levels = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1]
             elif mode == 'xyfirst':
-                tiers = [lambda q: q // 2 == esc // 2, lambda q: q % 2 == 1]
+                levels = [lambda q: q // 2 == esc // 2, lambda q: q % 2 == 1]
             elif mode == 'xyfirst_wf':
-                tiers = [lambda q: q // 2 == esc // 2, lambda q: q % 2 == 1, lambda q: True]
-            elif mode == 'tiered_wf':
+                levels = [lambda q: q // 2 == esc // 2, lambda q: q % 2 == 1, lambda q: True]
+            elif mode == 'priority_wf':
                 pref = esc if c % 2 == 0 and not src else ch(u, yx(u, d), 1)
-                tiers = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1, lambda q: True]
+                levels = [lambda q: q == pref or (src and q == esc), lambda q: q == esc, lambda q: q % 2 == 1, lambda q: True]
             elif mode in ('patient', 'patient_wf'):
-                # XY on either virtual channel; after waiting w cycles, the tiered order (plus the
+                # XY on either virtual channel; after waiting w cycles, the priority order (plus the
                 # extra hops of the west-first mesh for patient_wf)
                 if pk[5] < w:
-                    tiers = [lambda q: q // 2 == esc // 2]
+                    levels = [lambda q: q // 2 == esc // 2]
                 else:
                     pref = esc if c % 2 == 0 and not src else ch(u, yx(u, d), 1)
-                    tiers = [lambda q: q // 2 == esc // 2, lambda q: q == pref, lambda q: q % 2 == 1, lambda q: True]
+                    levels = [lambda q: q // 2 == esc // 2, lambda q: q == pref, lambda q: q % 2 == 1, lambda q: True]
             elif mode == 'xy2':
-                tiers = [lambda q: q // 2 == esc // 2]
+                levels = [lambda q: q // 2 == esc // 2]
             elif mode == 'yx':
-                tiers = [lambda q: q == ch(u, yx(u, d), 1), lambda q: q == esc]
+                levels = [lambda q: q == ch(u, yx(u, d), 1), lambda q: q == esc]
             elif mode == 'romm':
                 # two-phase XY: XY to the intermediate on VC1, then XY to the destination on VC1;
                 # escape hop if blocked
                 if mid is not None and u == mid: pk[4] = mid = None
                 tgt = mid if mid is not None else d
-                tiers = [lambda q: q == ch(u, xy(u, tgt), 1), lambda q: q == esc]
+                levels = [lambda q: q == ch(u, xy(u, tgt), 1), lambda q: q == esc]
             elif mode == 'oracle':
-                tiers = None
+                levels = None
                 if free:
                     best = min(pathcost(u, d, q // 2 % 5) for q in free)
                     free = [q for q in free if pathcost(u, d, q // 2 % 5) == best]
             else:   # rand, wf
-                tiers = None
-            if tiers is not None:
-                for tr in tiers:
+                levels = None
+            if levels is not None:
+                for tr in levels:
                     if any(tr(q) for q in free):
                         free = [q for q in free if tr(q)]; break
                 else:
@@ -168,7 +168,7 @@ def sim(k, scheme, rate, pattern, cycles=6000, warmup=2000, seed=1, eps=0.1, alp
                     mode = cur[0]
                 elif scheme.startswith('dist'):
                     D = int(scheme[4:])
-                    mode = ('xy2', 0) if abs(X(s) - X(d)) + abs(Y(s) - Y(d)) >= D else ('tiered_wf', 4)
+                    mode = ('xy2', 0) if abs(X(s) - X(d)) + abs(Y(s) - Y(d)) >= D else ('priority_wf', 4)
                 else:
                     mode = scheme
                 gg = g

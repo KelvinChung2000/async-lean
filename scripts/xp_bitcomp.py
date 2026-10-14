@@ -6,11 +6,11 @@ The model is the one of `routing_sim.py` / `xp_combo2.msim` (2 one-packet VC lan
 random arbitration, unbounded source queues) in both move models of `xp_arbiter.py` (`seq`,
 `none`).  `bsim` is `xp_combo2.msim` restricted to the west-first mesh's permitted hops and
 specialised to XY-based selections; with the default spec it reproduces
-`xp_combo2.msim('route=wf:tiers=xy+esc:thr=g0')` = `A:R:dualXY:random` bit for bit (`check`).
+`xp_combo2.msim('route=wf:levels=xy+esc:thr=g0')` = `A:R:dualXY:random` bit for bit (`check`).
 
-Spec `B:<key=value:...>` (every option keeps the throttled escape tier `escTier k g` -- the XY
-hop on VC0 -- in the tier list, unless marked UNCOVERED):
-  c0=<classes>     packets of these classes take only the XY hop on VC0 (tier list [esc]); every
+Spec `B:<key=value:...>` (every option keeps the throttled escape level `escPriority k g` -- the XY
+hop on VC0 -- in the level list, unless marked UNCOVERED):
+  c0=<classes>     packets of these classes take only the XY hop on VC0 (level list [esc]); every
                    other packet the XY hop on either VC ([xy, esc]).  Classes ('+'-separated):
                      turn  the hop enters a router where the packet turns (X -> Y)
                      src   the packet is in its injection channel
@@ -35,11 +35,11 @@ hop on VC0 -- in the tier list, unless marked UNCOVERED):
   yld=turn|all     a packet going straight on in Y takes only the VC0 lane while a turner (all:
                    also a packet going straight in X, while a turner or a source) waits at its
                    router for the same output direction: the VC1 lane is left to the waiting
-                   packet (a configuration-dependent first tier; covered)
+                   packet (a configuration-dependent first priority level; covered)
   c1=<classes>     UNCOVERED (diagnostic): these classes take only the XY hop on VC1
   pat=<k>          patience: a packet that has not moved for k cycles may also take the free
                    hops of `dset` (vc1: productive hops on VC1 -- Duato; all: every permitted
-                   west-first hop) after its XY tier; ps=P picks the deviation into the router
+                   west-first hop) after its XY level; ps=P picks the deviation into the router
                    with the most free usable hops (history: the waiting time)
   sg=<g>           escape threshold of sources (g of the next router's 8 outgoing channels free)
   sc=<cond>        sources take an XY hop (either VC) only when cond holds, else the throttled
@@ -48,7 +48,7 @@ hop on VC0 -- in the tier list, unless marked UNCOVERED):
                    source router's 8 outgoing channels occupied), lane (both XY lanes out free),
                    gap<G> (history: at least G cycles since this source last injected),
                    ld<m> (at most m packets in the links of the source's XY row ahead)
-  dor=yx|bis       UNCOVERED by the tier theorems unless with VC1 only: YX on VC1 (O1TURN-like)
+  dor=yx|bis       UNCOVERED by the level theorems unless with VC1 only: YX on VC1 (O1TURN-like)
                    per packet: yx = every packet YX on VC1 (escape XY VC0), bis = chosen by side
 Findings (fresh seeds 101-112, 2000 cycles, peak over offered 0.29-0.34 / 0.22-0.27 for bit
 complement, 0.9 / 1.0 for random permutation):
@@ -449,11 +449,11 @@ def run_one(spec, rate, pattern, seed, chain='seq', cycles=2000):
 def check():
     for ch in ('seq', 'none'):
         for p, r in (('bitcomp', 0.3), ('randperm', 0.6), ('uniform', 0.45)):
-            a = X2.msim('route=wf:tiers=xy+esc:thr=g0', r, p, seed=3, chain=ch, cycles=900)
+            a = X2.msim('route=wf:levels=xy+esc:thr=g0', r, p, seed=3, chain=ch, cycles=900)
             b = bsim('', r, p, seed=3, chain=ch, cycles=900)
             c = X2.run_one('A:R:dualXY:random/random', r, p, 3, ch, 900)
             print('dualXY', ch, p, a[:2], b[:2], c[:2], tuple(a[:2]) == tuple(b[:2]) == tuple(c[:2]))
-        a = X2.msim('route=wf:tiers=xy+esc:thr=g4', 0.4, 'bitcomp', seed=5, chain=ch, cycles=900)
+        a = X2.msim('route=wf:levels=xy+esc:thr=g4', 0.4, 'bitcomp', seed=5, chain=ch, cycles=900)
         b = bsim('sg=4', 0.4, 'bitcomp', seed=5, chain=ch, cycles=900)
         print('xy g4', ch, a[:2], b[:2], tuple(a[:2]) == tuple(b[:2]))
 

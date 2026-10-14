@@ -10,7 +10,7 @@ generates a packet with probability `rate` into an unbounded source queue that f
 injection channel.
 
 Usage: python3 scripts/routing_sim.py [--k 8]
-           [--policy random|vc1first|vc1xy|congestion|gated<g>|tiered|o1turn|T<g>:<policy>]
+           [--policy random|vc1first|vc1xy|congestion|gated<g>|priority|o1turn|T<g>:<policy>]
            [--schemes xyMesh,westFirst1,northLast1,duatoMesh,dualXY,westFirstMesh,northLastMesh]
            [--patterns uniform,transpose,bitcomp,shuffle,bitrev,hotspot] [--rates 0.1,...,0.5]
        python3 scripts/routing_sim.py --bench [--k 8] [--rates 0.7] [--seeds 3]
@@ -18,8 +18,8 @@ Usage: python3 scripts/routing_sim.py [--k 8]
 Each cell is "accepted throughput (packets / node / cycle) / average latency (cycles)".
 
 `T<g>:<policy>` throttles the sources: a packet leaves its injection channel only towards a
-router with at least `g` of its 8 outgoing channels free.  `tiered` is the selection
-`tieredMesh` of `AsyncLean.Examples.MeshTiered` (with `T4:tiered`, the proved scheme with
+router with at least `g` of its 8 outgoing channels free.  `priority` is the selection
+`priorityMesh` of `AsyncLean.Examples.MeshPriority` (with `T4:priority`, the proved scheme with
 threshold 4).  `--bench` compares it with the existing schemes, averaged over seeds.
 """
 import argparse
@@ -147,18 +147,18 @@ def simulate(k, route, rate, pattern, policy, cycles=6000, warmup=2000, seed=1):
             free = [c2 for c2 in hops if c2 not in occ]
             if throttle is not None and c // 2 % 5 == 4:
                 free = [c2 for c2 in free if free_after(c2) >= throttle]
-            if policy == 'tiered':
-                # `tieredMesh`: the free hops of the first tier that has one -- the preferred
+            if policy == 'priority':
+                # `priorityMesh`: the free hops of the first priority level that has one -- the preferred
                 # hop (XY on virtual channel 0, YX on virtual channel 1, either from a source),
                 # the escape hop, then any hop on virtual channel 1
                 u = head(c)
                 esc = ch(u, xy(u, d), 0)
                 src = c // 2 % 5 == 4
                 pref = esc if c % 2 == 0 and not src else ch(u, yx(u, d), 1)
-                for tier in (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
+                for level in (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
                              lambda q: q % 2 == 1):
-                    if any(tier(q) for q in free):
-                        free = [q for q in free if tier(q)]
+                    if any(level(q) for q in free):
+                        free = [q for q in free if level(q)]
                         break
                 else:
                     free = []
@@ -209,7 +209,7 @@ def simulate(k, route, rate, pattern, policy, cycles=6000, warmup=2000, seed=1):
 
 
 BENCH = [('duatoMesh', 'random'), ('duatoMesh', 'T4:random'), ('dualXY', 'random'),
-         ('duatoMesh', 'o1turn'), ('westFirstMesh', 'random'), ('duatoMesh', 'T4:tiered')]
+         ('duatoMesh', 'o1turn'), ('westFirstMesh', 'random'), ('duatoMesh', 'T4:priority')]
 
 
 def _run(job):

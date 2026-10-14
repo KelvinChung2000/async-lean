@@ -28,7 +28,7 @@ packet has an escape option; it is occupied by a packet on VC0, whose escape opt
 up*/down* continuation of ITS channel; the up*/down* channel order (up channels ascending, up ->
 down, down channels descending) is acyclic, so the chain cannot close.
 
-Selection policies: 'random' (random among free permitted hops), 'tiered' (free VC1 minimal
+Selection policies: 'random' (random among free permitted hops), 'priority' (free VC1 minimal
 hops first, random among them; otherwise the escape hop).  Source throttling g: a packet leaves
 its injection channel only towards a router v with at least g * 2deg(v) / 8 of its 2deg(v)
 outgoing channels free ('scaled'); 'phantom' mode reproduces routing_sim exactly (counts the 8
@@ -213,7 +213,7 @@ class Net:
 
 
 # ---------------------------------------------------------------- simulation
-def simulate(net, rate, pattern, policy='tiered', g=0, absorbing=False, throttle_mode='scaled',
+def simulate(net, rate, pattern, policy='priority', g=0, absorbing=False, throttle_mode='scaled',
              cycles=6000, warmup=2000, seed=1, k=8, budget=None):
     # budget: a packet may return from VC0 to VC1 at most `budget` times (None: unbounded;
     # absorbing=True is budget 0)
@@ -230,7 +230,7 @@ def simulate(net, rate, pattern, policy='tiered', g=0, absorbing=False, throttle
         thr = [g + 2 * net.deg[v] - 8 for v in range(n)]   # free_real >= g - phantom
     else:
         thr = [g * 2 * net.deg[v] / 8 for v in range(n)]
-    tiered = policy == 'tiered'
+    priority = policy == 'priority'
     for t in range(cycles):
         for c in [c for c, p in occ.items() if head[c] == p[0]]:
             pk = occ.pop(c)
@@ -261,7 +261,7 @@ def simulate(net, rate, pattern, policy='tiered', g=0, absorbing=False, throttle
             if g and src and free:
                 free = [q for q in free
                         if sum(1 for o in out[head[q]] if o not in occ) >= thr[head[q]]]
-            if tiered and free:
+            if priority and free:
                 f1 = [q for q in free if q % 2 == 1]
                 free = f1 if f1 else free
             if free:
@@ -328,7 +328,7 @@ def design_adj(name, k=8):
 
 def main():
     import argparse
-    ap = argparse.ArgumentParser(description='peak throughput of topologies, tiered selection, g = 4')
+    ap = argparse.ArgumentParser(description='peak throughput of topologies, priority selection, g = 4')
     ap.add_argument('--topologies', default='mesh_xy,mesh,D_128,CA_112,DF_156')
     ap.add_argument('--budget', default='2', help="returns from VC0 to VC1: a number, 'none' or 'absorb'")
     ap.add_argument('--rates', default='0.2,0.3,0.4,0.5,0.6,0.8')
@@ -342,7 +342,7 @@ def main():
                Net(mesh_adj(8), root=27) if t == 'mesh' else Net(design_adj(t), root=27))
         cells = []
         for p in ALL_PATTERNS:
-            cells.append(max(sum(simulate(net, r, p, 'tiered', g=4, budget=budget, seed=s)['thr']
+            cells.append(max(sum(simulate(net, r, p, 'priority', g=4, budget=budget, seed=s)['thr']
                                  for s in range(args.seeds)) / args.seeds for r in rates))
         print(f'{t:<10}' + ''.join(f'{c:>10.3f}' for c in cells), flush=True)
 

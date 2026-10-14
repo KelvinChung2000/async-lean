@@ -13,9 +13,9 @@ of `scripts/xp_arbiter.py` (`chain = none`: `Network.NoChainCycle`; `chain = seq
 `Network.SeqCycle`).  Runs of cycles use any selection a strategy may use (`Strategy.Uses`), so
 the strategy's state may be updated by any rule, once per cycle or otherwise.
 
-## The west-first mesh (`westFirstMesh k`, the tier strategies of `westFirstMesh_modes_safe`)
+## The west-first mesh (`westFirstMesh k`, the level strategies of `westFirstMesh_modes_safe`)
 
-* `westFirstMesh_modes_cycles` : for every size, every tier strategy switched by any rule: in
+* `westFirstMesh_modes_cycles` : for every size, every level strategy switched by any rule: in
   both cycle models, no deadlock (a work-conserving cycle moves a packet), no livelock, drain
   within a uniform number of cycles once injections stop, every hop a routing step from a legal
   pair; in the no-chaining model, every packet outside the injection channels delivered along
@@ -58,37 +58,37 @@ theorem westFirstMesh_esc_not_inject {k c d : ℕ} {q : ℕ × ℕ} (hq : q ∈ 
   exact Mesh.esc_not_source hq
     (by rw [show q.1 = ch s 4 0 from hs]; exact dir_ch (by omega) (by omega))
 
-/-- The selections of a west-first tier strategy satisfy Duato's condition with throttled
+/-- The selections of a west-first priority level strategy satisfy Duato's condition with throttled
 sources on the legal pairs. -/
 theorem westFirstMesh_modes_sourceSelOn (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
-    (tiers : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
-    (ht : ∀ h, escTier k (g h) ∈ tiers h)
+    (levels : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
+    (ht : ∀ h, escPriority k (g h) ∈ levels h)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel ((westFirstMesh k).tieredSel (tiers h)) choose) :
+      σ.sel h = refineSel ((westFirstMesh k).prioritySel (levels h)) choose) :
     ∀ s, σ.Uses s →
       (westFirstMesh k).SourceSelOn (wfLegal k) (xyEscape k) (fun c => dir c = 4) s := by
   rintro _ ⟨h, rfl⟩
   obtain ⟨choose, hch, he⟩ := hσ h
   rw [he]
-  exact refineSel_sourceSelOn ((tieredSel_sourceSel (westFirstMesh k) (k := k)
+  exact refineSel_sourceSelOn ((prioritySel_sourceSel (westFirstMesh k) (k := k)
     (fun _ _ => by simp [westFirstMesh, turnDuatoMesh]) (hg h) (ht h)).sourceSelOn _)
-    ((westFirstMesh k).tieredSel_freeOnly _) hch
+    ((westFirstMesh k).prioritySel_freeOnly _) hch
 
-/-- **The west-first tier strategies are safe in both cycle models of the simulator**: for every
-size, every tier strategy switched by any rule (as `westFirstMesh_modes_safe`), both the
+/-- **The west-first priority level strategies are safe in both cycle models of the simulator**: for every
+size, every level strategy switched by any rule (as `westFirstMesh_modes_safe`), both the
 no-chaining and the sequential model satisfy `Network.CycleSafe` (no deadlock, no livelock,
 bounded drain, hop bounds), and in the no-chaining model every packet outside the injection
 channels is delivered along every run that is channel fair at the cycle level. -/
 theorem westFirstMesh_modes_cycles (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
-    (tiers : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
-    (ht : ∀ h, escTier k (g h) ∈ tiers h)
+    (levels : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
+    (ht : ∀ h, escPriority k (g h) ∈ levels h)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel ((westFirstMesh k).tieredSel (tiers h)) choose) :
+      σ.sel h = refineSel ((westFirstMesh k).prioritySel (levels h)) choose) :
     (westFirstMesh k).CycleSafe (westFirstMesh k).NoChainCycle (wfLegal k) σ.Uses ∧
       (westFirstMesh k).CycleSafe (westFirstMesh k).SeqCycle (wfLegal k) σ.Uses ∧
       ∀ r : CycleRun (westFirstMesh k).NoChainCycle σ.Uses, r.ChannelFair (westFirstMesh k) →
         ∀ n c, ¬ dir c = 4 → r.st n c ≠ none → r.Delivered n c := by
-  have hok := westFirstMesh_modes_sourceSelOn k tiers g hg ht hσ
+  have hok := westFirstMesh_modes_sourceSelOn k levels g hg ht hσ
   have hsub : ∀ s, σ.Uses s → ∀ f c p q, q ∈ s f c p → q ∈ (westFirstMesh k).route c p :=
     fun s hs => (hok s hs).sub
   have hconn : ∀ c p, wfLegal k c p → (westFirstMesh k).arrived c p = false → xyEscape k c p ≠ [] :=
@@ -130,7 +130,7 @@ theorem westFirstMesh_throughput (k : ℕ)
 
 /-! ### The torus with the escape of the simulations -/
 
-/-- The packets of the detour network are injected into injection channels. -/
+/-- The packets of the two-phase network are injected into injection channels. -/
 theorem escapeLayer_inject {V : Type*} [DecidableEq V] {G : GraphData V} {E : G.EscapeLayer}
     {B : ℕ} {W : V → V → List (Option V)} {q : GChan V × DetHdr V} (hq : q ∈ (E.net B W).inject) :
     q.1.isInj = true := by
@@ -154,7 +154,7 @@ theorem simUD_combo_cycles (k B : ℕ) {H : Type*} (init : H)
       DetHdr (TorusV k) → List (GChan (TorusV k) × DetHdr (TorusV k)) →
       List (GChan (TorusV k) × DetHdr (TorusV k)))
     (hch : ∀ h, ChoiceOK (choose h)) :
-    let N := (simUD k).esc.net B (torusAt k (centre k)).anyDetour
+    let N := (simUD k).esc.net B (torusAt k (centre k)).anyIntermediate
     let σ := udComboStrategy k B (centre k) (simUD k) init update admit snap spread ball₁ ball₂ o₁
       lo₁ hi₁ o₂ lo₂ hi₂ choose
     N.CycleSafe N.NoChainCycle ((simUD k).esc.srcLegal B) σ.Uses ∧
@@ -163,12 +163,12 @@ theorem simUD_combo_cycles (k B : ℕ) {H : Type*} (init : H)
         ∀ n c, ¬ c.isInj → r.st n c ≠ none → r.Delivered n c := by
   intro N σ
   let E := (simUD k).esc
-  let W := (torusAt k (centre k)).anyDetour
-  have hW : ∀ s d w, some w ∈ W s d → w ≠ s := (torusAt k (centre k)).anyDetour_ne
+  let W := (torusAt k (centre k)).anyIntermediate
+  have hW : ∀ s d w, some w ∈ W s d → w ≠ s := (torusAt k (centre k)).anyIntermediate_ne
   have hok : ∀ s, σ.Uses s → N.SourceSelOn (E.srcLegal B) E.escape (fun c => c.isInj) s := by
     rintro _ ⟨h, rfl⟩
     refine refineSel_sourceSelOn (EscapeLayer.throttleSel_sourceSelOn
-      (torusAt_dist_step k (centre k)) fun f s v => ?_) (N.tieredSel_freeOnly _) (hch h)
+      (torusAt_dist_step k (centre k)) fun f s v => ?_) (N.prioritySel_freeOnly _) (hch h)
     rw [torusAt_nbrs_length]
     split
     · exact (torusAt k (centre k)).lxThr_le h₂.1 h₂.2 _ _
@@ -180,18 +180,18 @@ theorem simUD_combo_cycles (k B : ℕ) {H : Type*} (init : H)
   have hR₁ : ∀ c p q, E.srcLegal B c p → N.arrived c p = false → q ∈ E.escape c p →
       ¬ q.1.isInj := fun c p q hl ha hq => EscapeLayer.esc_not_inj B W c p q hl.1 ha hq
   have hrk : ∀ c p q, E.srcLegal B c p → N.arrived c p = false → q ∈ N.route c p →
-      E.detRank q.1 q.2 < E.detRank c p :=
+      E.twoPhaseRank q.1 q.2 < E.twoPhaseRank c p :=
     fun c p q hl ha hq => EscapeLayer.rank_lt B W c p q hl.1 ha hq
   refine ⟨cycleSafe (EscapeLayer.srcLegal_closed B hW) (EscapeLayer.srcLegal_finite B) E.escape
-      hconn (EscapeLayer.srcLegal_wf B W) hR₁ E.detRank hrk hok (noChain_sequential hsub),
+      hconn (EscapeLayer.srcLegal_wf B W) hR₁ E.twoPhaseRank hrk hok (noChain_sequential hsub),
     cycleSafe (EscapeLayer.srcLegal_closed B hW) (EscapeLayer.srcLegal_finite B) E.escape
-      hconn (EscapeLayer.srcLegal_wf B W) hR₁ E.detRank hrk hok (seq_sequential hsub),
+      hconn (EscapeLayer.srcLegal_wf B W) hR₁ E.twoPhaseRank hrk hok (seq_sequential hsub),
     fun r hfair => ?_⟩
   exact r.delivered_of_channelFair (EscapeLayer.srcLegal_closed B hW) hok hconn
     (EscapeLayer.srcLegal_wf B W) hR₁
     (fun c p q hl ha hq p' hm =>
       hR₁ c p q hl ha hq (escapeLayer_inject (E := E) (B := B) (W := W) (q := (q.1, p')) hm))
-    (fun _ _ _ _ _ hq => EscapeLayer.route_not_inj hq) E.detRank hrk hfair
+    (fun _ _ _ _ _ hq => EscapeLayer.route_not_inj hq) E.twoPhaseRank hrk hfair
 
 /-- **The injection limit on the torus**: for every selection and strategy that only use
 permitted hops, in either cycle model, the node `s` injects at most `K` packets in any `K`
@@ -202,14 +202,14 @@ theorem simUD_throughput (k B : ℕ)
       Config (GChan (TorusV k)) (DetHdr (TorusV k)) → Cycle (GChan (TorusV k)) (DetHdr (TorusV k)) →
         Config (GChan (TorusV k)) (DetHdr (TorusV k)) → Prop}
     {ok : Selection (GChan (TorusV k)) (DetHdr (TorusV k)) → Prop}
-    (hM : ((simUD k).esc.net B (torusAt k (centre k)).anyDetour).Sequential M ok)
+    (hM : ((simUD k).esc.net B (torusAt k (centre k)).anyIntermediate).Sequential M ok)
     (r : CycleRun M ok) (K : ℕ) :
     (∀ s W, ∑ i ∈ Finset.range K, ((r.cyc (W + i)).injects.map (·.1)).count (GChan.inj s) ≤ K) ∧
       ∑ i ∈ Finset.range K, (r.cyc i).ejects.length ≤ (k + 1) * (k + 1) * K := by
   let E := (simUD k).esc
   have hfin := EscapeLayer.chans_finite (E := E) B
   let I : Finset (GChan (TorusV k)) := Finset.univ.image GChan.inj
-  have hI : ∀ q ∈ (E.net B (torusAt k (centre k)).anyDetour).inject, q.1 ∈ I := fun q hq => by
+  have hI : ∀ q ∈ (E.net B (torusAt k (centre k)).anyIntermediate).inject, q.1 ∈ I := fun q hq => by
     have h := escapeLayer_inject hq
     revert h
     cases q.1 with
@@ -217,7 +217,7 @@ theorem simUD_throughput (k B : ℕ)
     | link _ _ _ => simp [GChan.isInj]
   have hcard : I.card ≤ (k + 1) * (k + 1) := Finset.card_image_le.trans (by simp)
   refine ⟨fun s W => r.sum_count_inject_le hM _ W K, ?_⟩
-  have := r.sum_ejects_le_start (EscapeLayer.closed (E := E) B (torusAt k (centre k)).anyDetour)
+  have := r.sum_ejects_le_start (EscapeLayer.closed (E := E) B (torusAt k (centre k)).anyIntermediate)
     (T := hfin.toFinset) (fun c p h => hfin.mem_toFinset.2 ⟨p, h⟩) hM hI K
   exact this.trans (Nat.mul_le_mul_right K hcard)
 

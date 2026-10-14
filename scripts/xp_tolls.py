@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Selfish versus system-optimal source route choice on the 8 x 8 torus (and mesh), and
 marginal-cost tolls (simulation and fluid model; nothing here is proved -- the safety of every
-choice among the listed detour options is `Routing/GraphDetour.lean`).
+choice among the listed detour options is `Routing/GraphTwoPhase.lean`).
 
 Route options of a packet s -> d at its source (as in `torus_experiments.py`'s `bandit*`):
 0 minimal, 1 / 2 the long way round the x / y ring (via an intermediate), 3 a uniformly
@@ -325,12 +325,12 @@ def sim(scheme, rate, pattern, g=4, budget=2, cycles=4000, warmup=1000, seed=1, 
             e = esc[c][d]
             onesc = c % 2 == 0 and not src
             canret = not (onesc and pk[4] >= budget)
-            tiers = []
-            if canret: tiers.append(vc1[u][tgt])
-            tiers.append([e])
+            levels = []
+            if canret: levels.append(vc1[u][tgt])
+            levels.append([e])
             q = None
-            for tier in tiers:
-                free = [x for x in tier if x not in occ]
+            for level in levels:
+                free = [x for x in level if x not in occ]
                 if g and src: free = [x for x in free if sum(1 for o in out[head[x]] if o not in occ) >= thr[head[x]]]
                 if free:
                     q = rnd.choice(free); break

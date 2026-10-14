@@ -9,19 +9,19 @@ import AsyncLean.Flow.MeshPatterns.Data
 The `8 × 8` mesh (`meshNet 8`, capacity `2` on every directed link) under the standard
 patterns of the simulator (`scripts/routing_sim.py`), in the fluid model: the largest throughput
 `θ` (per active source) at which the pattern is routable, over **all** routings (adaptive, split
-over many paths, with detours) and over **minimal** routings only (`Flow.Minimal` for the
+over many paths, non-minimal) and over **minimal** routings only (`Flow.Minimal` for the
 Manhattan distance `MeshCert.mdist`).
 
 * `transpose8_opt`, `transpose8_minimal` : transpose `(x, y) ↦ (y, x)`: `θ = 10/11`.
 * `shuffle8_opt`, `shuffle8_minimal` : perfect shuffle (rotate the 6 index bits left): `θ = 1`.
 * `bitrev8_opt`, `bitrev8_minimal` : bit reversal of the 6 index bits: `θ = 20/21`.
-* For these three permutations **detours add nothing**: the optimum over all routings is reached
-  by a minimal flow.
-* `hotspot8_opt`, `hotspot8_minimal_opt`, `hotspot8_detour_gain` : hotspot traffic (every vertex
+* For these three permutations **non-minimal routing adds nothing**: the optimum over all routings
+  is reached by a minimal flow.
+* `hotspot8_opt`, `hotspot8_minimal_opt`, `hotspot8_nonminimal_gain` : hotspot traffic (every vertex
   sends `4/5` uniformly and the others send `1/5` more to the centre `(4, 4)`): `θ = 40/67` over
-  all routings but only `840/1471` over minimal routings: detours gain `4.5 %`.  The four links
-  into the centre are the bottleneck; with detours they can be loaded evenly, but a vertex in the
-  centre's row or column has only one minimal way in.
+  all routings but only `840/1471` over minimal routings: non-minimal routing gains `4.5 %`.  The
+  four links into the centre are the bottleneck; non-minimal routes can load them evenly, but a
+  vertex in the centre's row or column has only one minimal way in.
 
 Every optimum is certified by data computed in exact rational arithmetic by
 `scripts/fluid_certificates.py` (`AsyncLean.Flow.MeshPatterns.Data`): a flow at `θ` (the lower
@@ -226,7 +226,8 @@ theorem transpose8_opt :
     transposeL 10 11 (by norm_num) one_pos (by decide) (by norm_num) transpose_cons transpose_cap
     transpose_dual transpose_bound
 
-/-- **Transpose: the optimum `10/11` is reached by a minimal flow** (detours add nothing). -/
+/-- **Transpose: the optimum `10/11` is reached by a minimal flow** (non-minimal routing adds
+nothing). -/
 theorem transpose8_minimal : ∃ F : Flow (meshNet 8) transpose8 (10 / 11), F.Minimal mdist :=
   exists_minimal _ _ 1 (permDem_eq transposeMap_idx) transposeG transposeD 10 11 (by norm_num)
     one_pos (by decide) (by norm_num) transpose_cons transpose_cap transpose_min
@@ -266,9 +267,9 @@ theorem hotspot8_minimal_opt :
     (by norm_num) (by norm_num) (by decide) (by norm_num) hotspotMin_cons hotspotMin_cap
     hotspotMin_min hotspotMin_dual hotspotMin_bound
 
-/-- **Detours help the hotspot**: the minimal optimum is strictly below the optimum over all
-routings (by `4.5 %`). -/
-theorem hotspot8_detour_gain : (840 / 1471 : ℚ) < 40 / 67 := by norm_num
+/-- **Non-minimal routing helps the hotspot**: the minimal optimum is strictly below the optimum
+over all routings (by `4.5 %`). -/
+theorem hotspot8_nonminimal_gain : (840 / 1471 : ℚ) < 40 / 67 := by norm_num
 
 end Fluid
 

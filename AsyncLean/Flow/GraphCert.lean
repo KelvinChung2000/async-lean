@@ -432,25 +432,23 @@ def boundCheck (C : ℕ) (demN phi lenT : ℕ → ℕ → ℕ) (R p q : ℕ) : B
 
 variable {G}
 
-/-- **The dual certificate.**  If `dualCheck` and `boundCheck` pass, every flow of `θ * dem` in
-`G.net C` (every minimal one, when `minimal`) has `θ ≤ p / q`. -/
-theorem upper_of_check (C : ℕ) (hwf : G.wfCheck = true) (hnear : G.nearCheck = true)
+/-- **The dual certificate, for anything respecting the potential bounds.**  If `dualCheck` and
+`boundCheck` pass, every `θ` such that `θ * dem` respects the potential bounds of `G.net C` (on
+the minimal links, when `minimal`; `Fluid.PotentialFeasibleOn`) has `θ ≤ p / q`.  Flows do; so
+do stable queueing runs. -/
+theorem upper_of_check' (C : ℕ) (hwf : G.wfCheck = true) (hnear : G.nearCheck = true)
     (dem : Fin G.n → Fin G.n → ℚ) (demN : ℕ → ℕ → ℕ) (R : ℕ)
     (hdem : ∀ s d, dem s d = (demN s d : ℚ) / R) (phi lenT : ℕ → ℕ → ℕ) (minimal : Bool) (p q : ℕ) (hR : 0 < R) (hq : 0 < q)
     (hd : G.dualCheck phi lenT minimal = true) (hb : G.boundCheck C demN phi lenT R p q = true)
-    {θ : ℚ} (F : Flow (G.net C) dem θ) (hF : minimal = true → F.Minimal G.dq) :
+    {θ : ℚ}
+    (hP : PotentialFeasibleOn (G.net C) (fun d u v => minimal = false ∨ G.dq v d < G.dq u d)
+      dem θ) :
     θ ≤ (p : ℚ) / q := by
   simp only [dualCheck, Bool.and_eq_true] at hd
   obtain ⟨hd0, hd1⟩ := hd
   simp only [boundCheck, Bool.and_eq_true, decide_eq_true_eq] at hb
   obtain ⟨hA, hCA⟩ := hb
-  have hsupp : F.SupportedOn fun d u v => minimal = false ∨ G.dq v d < G.dq u d := by
-    intro d u v h
-    cases minimal with
-    | false => exact Or.inl rfl
-    | true => exact Or.inr (hF rfl d u v h)
-  have key := F.potential_bound_on hsupp (G.portVal lenT 1) (portVal_nonneg _ _)
-    (fun d v => (phi d v : ℚ))
+  have key := hP (G.portVal lenT 1) (fun d v => (phi d v : ℚ)) (portVal_nonneg _ _)
     (fun d => by
       have := allBelow_iff.1 hd0 d d.isLt
       simp only [beq_iff_eq] at this
@@ -477,7 +475,7 @@ theorem upper_of_check (C : ℕ) (hwf : G.wfCheck = true) (hnear : G.nearCheck =
       · have : ((phi d u : ℕ) : ℚ) ≤ ((phi d (G.step u i) + lenT u i : ℕ) : ℚ) := by
           exact_mod_cast h
         push_cast at this
-        linarith)
+        linarith) (fun d v => Nat.cast_nonneg _)
   -- evaluate the two sides
   have hL : ∑ s, ∑ d, dem s d * (phi d s : ℚ) = (G.demPhi demN phi : ℚ) / R := by
     simp only [hdem, demPhi, sumBelow_eq]
@@ -509,6 +507,21 @@ theorem upper_of_check (C : ℕ) (hwf : G.wfCheck = true) (hnear : G.nearCheck =
     have := mul_le_mul_of_nonneg_right key hR'.le
     rwa [mul_assoc, div_mul_cancel₀ _ hR'.ne'] at this
   nlinarith
+
+/-- **The dual certificate.**  If `dualCheck` and `boundCheck` pass, every flow of `θ * dem`
+(every minimal one, when `minimal`) has `θ ≤ p / q`. -/
+theorem upper_of_check (C : ℕ) (hwf : G.wfCheck = true) (hnear : G.nearCheck = true)
+    (dem : Fin G.n → Fin G.n → ℚ) (demN : ℕ → ℕ → ℕ) (R : ℕ)
+    (hdem : ∀ s d, dem s d = (demN s d : ℚ) / R) (phi lenT : ℕ → ℕ → ℕ) (minimal : Bool)
+    (p q : ℕ) (hR : 0 < R) (hq : 0 < q)
+    (hd : G.dualCheck phi lenT minimal = true) (hb : G.boundCheck C demN phi lenT R p q = true)
+    {θ : ℚ} (F : Flow (G.net C) dem θ) (hF : minimal = true → F.Minimal G.dq) :
+    θ ≤ (p : ℚ) / q :=
+  upper_of_check' C hwf hnear dem demN R hdem phi lenT minimal p q hR hq hd hb
+    (F.potentialFeasibleOn fun d u v h => by
+      cases minimal with
+      | false => exact Or.inl rfl
+      | true => exact Or.inr (hF rfl d u v h))
 
 /-! ### Exact optima on the port graph's network -/
 

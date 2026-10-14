@@ -1,21 +1,21 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import AsyncLean.Examples.GraphDetour
+import AsyncLean.Examples.GraphTwoPhase
 import AsyncLean.Examples.Saturation
-import AsyncLean.Routing.StrategyDetour
+import AsyncLean.Routing.StrategyTwoPhase
 import AsyncLean.AxiomAudit
 
 /-!
 # Example: history-dependent strategies on the torus and the mesh
 
-Instances of `AsyncLean.Routing.Strategy` and `AsyncLean.Routing.StrategyDetour` for the schemes
+Instances of `AsyncLean.Routing.Strategy` and `AsyncLean.Routing.StrategyTwoPhase` for the schemes
 of the simulations (`scripts/xp_combo.py`, `scripts/xp_ramp.py`).  A strategy has a state of any
 type `H` (smoothed link prices, learned latencies, per-source recent destinations, the snapshot of
 the network taken at the start of the cycle, controller state, a random generator), updated by any
 rule; each theorem holds for every such state and update.
 
-## The torus with detours (`(torus k).detourNet B anyDetour`)
+## The torus with detours (`(torus k).twoPhaseNet B anyIntermediate`)
 
 * `torus_dist_step` : on the torus every vertex other than `t` has a neighbour strictly closer to
   `t` under the wraparound distance.
@@ -43,20 +43,20 @@ rule; each theorem holds for every such state and update.
 
 ## The mesh (`duatoMesh k`)
 
-`duatoTiers_correct` needs a tier list containing `escTier k g` for one fixed `g ≤ 8`; a tier
+`duatoPriorities_correct` needs a level list containing `escPriority k g` for one fixed `g ≤ 8`; a level
 whose threshold depends on the configuration is not of that form.
 
-* `duatoTiers_append_correct` : appending `escTier k 8` to any tier list makes
-  `duatoTiers_correct` apply verbatim.  When the list already has an escape tier gated with a
-  threshold `≤ 8` and no blocking rule, the appended tier never changes the selection (whatever
-  it admits, the gated escape tier admitted first); with the escape-blocking rule it may (it
+* `duatoPriorities_append_correct` : appending `escPriority k 8` to any level list makes
+  `duatoPriorities_correct` apply verbatim.  When the list already has an escape level gated with a
+  threshold `≤ 8` and no blocking rule, the appended level never changes the selection (whatever
+  it admits, the gated escape level admitted first); with the escape-blocking rule it may (it
   admits the escape hop while the rule refuses it, if nothing else is free).
-* `Mesh.gatedTiers`, `Mesh.gatedTiers_sourceSel` : the tiers of `tieredMesh` through the source
+* `Mesh.gatedPriorities`, `Mesh.gatedPriorities_sourceSel` : the levels of `priorityMesh` through the source
   gate of the simulation, with any thresholds `≤ 8` and any blocking rule that is off when every
   link channel is empty, satisfy `Network.SourceSel`; `Mesh.meshLxThr`, `Mesh.meshLxBlock` : the
   `lx` signal on the mesh.
 * `duatoMesh_strategy_safe`, `duatoMesh_gated_safe` : every strategy on Duato's mesh whose
-  selections satisfy it — for example the gated tiers with thresholds read from history (a
+  selections satisfy it — for example the gated levels with thresholds read from history (a
   snapshot, recent destinations) and the blocking rule read from the current configuration, with
   any choice among the free hops — is safe.  The blocking rule read from a snapshot is not
   covered on the mesh (it is on the torus).
@@ -131,8 +131,8 @@ theorem torus_choice_safe (k B : ℕ) (W : TorusV k → TorusV k → List (Optio
     {H : Type*} {σ : Strategy (GChan (TorusV k)) (GraphData.DetHdr (TorusV k)) H}
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
       σ.sel h = refineSel ((torus k).openSel B W) choose) :
-    ((torus k).detourNet B W).StrategySafe σ (fun _ => False) :=
-  (torus k).detour_strategy_safe_of_escapeSel fun h => by
+    ((torus k).twoPhaseNet B W).StrategySafe σ (fun _ => False) :=
+  (torus k).twoPhase_strategy_safe_of_escapeSel fun h => by
     obtain ⟨choose, hch, he⟩ := hσ h
     rw [he]
     exact (torus k).refine_openSel_escapeSel hch
@@ -149,7 +149,7 @@ def priceStrategy (k B : ℕ) {H : Type*} (init : H)
       GraphData.DetHdr (TorusV k) → GChan (TorusV k) × GraphData.DetHdr (TorusV k) → ℕ) :
     Strategy (GChan (TorusV k)) (GraphData.DetHdr (TorusV k)) H where
   init := init
-  sel h := refineSel ((torus k).openSel B (torus k).anyDetour) (minChoice (score h))
+  sel h := refineSel ((torus k).openSel B (torus k).anyIntermediate) (minChoice (score h))
   admit := admit
   update := update
 
@@ -162,7 +162,7 @@ theorem torus_price_safe (k B : ℕ) {H : Type*} (init : H)
     (admit : H → GChan (TorusV k) → GraphData.DetHdr (TorusV k) → Prop)
     (score : H → Config (GChan (TorusV k)) (GraphData.DetHdr (TorusV k)) → GChan (TorusV k) →
       GraphData.DetHdr (TorusV k) → GChan (TorusV k) × GraphData.DetHdr (TorusV k) → ℕ) :
-    ((torus k).detourNet B (torus k).anyDetour).StrategySafe
+    ((torus k).twoPhaseNet B (torus k).anyIntermediate).StrategySafe
       (priceStrategy k B init update admit score) (fun _ => False) :=
   torus_choice_safe k B _ fun h => ⟨_, minChoice_ok (score h), rfl⟩
 
@@ -173,7 +173,7 @@ source lets its packet go once the rest of the network is empty, for every neigh
 share threshold `o` and thresholds `lo, hi ≤ 8` (`lx2_4_36_2`: `lo = 2`, `hi = 4`, `o = 36`). -/
 theorem torus_lxSel_sourceSel (k B : ℕ) (W : TorusV k → TorusV k → List (Option (TorusV k)))
     (ball : TorusV k → List (TorusV k)) {o lo hi : ℕ} (hlo : lo ≤ 8) (hhi : hi ≤ 8) :
-    ((torus k).detourNet B W).SourceSel (torus k).detEscape (fun c => c.isInj)
+    ((torus k).twoPhaseNet B W).SourceSel (torus k).twoPhaseEscape (fun c => c.isInj)
       ((torus k).lxSel B W ball o lo hi) :=
   (torus k).lxSel_sourceSel (fun v => by rw [torus_nbrs_length]; omega)
     (fun v => by rw [torus_nbrs_length]; omega)
@@ -183,19 +183,19 @@ deadlock free, livelock free and starvation free, and delivers every packet outs
 injection channels along every channel-fair run. -/
 theorem torus_lx_correct (k B : ℕ) (W : TorusV k → TorusV k → List (Option (TorusV k)))
     (ball : TorusV k → List (TorusV k)) {o lo hi : ℕ} (hlo : lo ≤ 8) (hhi : hi ≤ 8) :
-    ((torus k).detourNet B W).DeadlockFreeWith ((torus k).lxSel B W ball o lo hi) ∧
-      ((torus k).detourNet B W).LivelockFreeWith ((torus k).lxSel B W ball o lo hi) ∧
-      ((torus k).detourNet B W).StarvationFreeWith ((torus k).lxSel B W ball o lo hi) ∧
-      ((torus k).detourNet B W).StarvationFreeUnderLoad ((torus k).lxSel B W ball o lo hi)
+    ((torus k).twoPhaseNet B W).DeadlockFreeWith ((torus k).lxSel B W ball o lo hi) ∧
+      ((torus k).twoPhaseNet B W).LivelockFreeWith ((torus k).lxSel B W ball o lo hi) ∧
+      ((torus k).twoPhaseNet B W).StarvationFreeWith ((torus k).lxSel B W ball o lo hi) ∧
+      ((torus k).twoPhaseNet B W).StarvationFreeUnderLoad ((torus k).lxSel B W ball o lo hi)
         (fun c => c.isInj) :=
   have h := torus_lxSel_sourceSel k B W ball hlo hhi
-  ⟨((torus k).detour_correct_of_sourceSel h).1, ((torus k).detour_correct_of_sourceSel h).2.1,
-    ((torus k).detour_correct_of_sourceSel h).2.2, (torus k).detour_underLoad_of_sourceSel h⟩
+  ⟨((torus k).twoPhase_correct_of_sourceSel h).1, ((torus k).twoPhase_correct_of_sourceSel h).2.1,
+    ((torus k).twoPhase_correct_of_sourceSel h).2.2, (torus k).twoPhase_underLoad_of_sourceSel h⟩
 
 /-- **Every history-dependent throttle on the torus with Valiant's intermediates is safe**: in
 state `h` the strategy throttles with thresholds `thr h f s ≤ 8` and escape blocking
 `block h f s` — both arbitrary, read from the configuration, a snapshot or any history — and
-picks among the free hops of a tier with any admissible choice.  It is deadlock and livelock
+picks among the free hops of a level with any admissible choice.  It is deadlock and livelock
 free, delivers every packet outside the injection channels along every run channel fair relative
 to the selection in force, and every packet along every run strongly fair relative to it. -/
 theorem torus_throttle_safe (k B : ℕ) {H : Type*}
@@ -204,19 +204,19 @@ theorem torus_throttle_safe (k B : ℕ) {H : Type*}
     (block : H → Config (GChan (TorusV k)) (GraphData.DetHdr (TorusV k)) → TorusV k → Bool)
     (hthr : ∀ h f s, thr h f s ≤ 8)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel ((torus k).throttleSel B (torus k).anyDetour (thr h) (block h)) choose) :
-    ((torus k).detourNet B (torus k).anyDetour).StrategySafe σ (fun c => c.isInj) :=
-  (torus k).detour_strategy_safe_of_sourceSelOn (torus k).anyDetour_ne fun h => by
+      σ.sel h = refineSel ((torus k).throttleSel B (torus k).anyIntermediate (thr h) (block h)) choose) :
+    ((torus k).twoPhaseNet B (torus k).anyIntermediate).StrategySafe σ (fun c => c.isInj) :=
+  (torus k).twoPhase_strategy_safe_of_sourceSelOn (torus k).anyIntermediate_ne fun h => by
     obtain ⟨choose, hch, he⟩ := hσ h
     rw [he]
     exact refineSel_sourceSelOn ((torus k).throttleSel_sourceSelOn (torus_dist_step k)
       (fun f s v => by rw [torus_nbrs_length]; exact hthr h f s))
-      (((torus k).detourNet B (torus k).anyDetour).tieredSel_freeOnly _) hch
+      (((torus k).twoPhaseNet B (torus k).anyIntermediate).prioritySel_freeOnly _) hch
 
 /-- **The simulated combined scheme** (`csim` of `scripts/xp_combo.py` with `thr=lx…` and
 `thr2=lx…`): the state provides the snapshot `snap h` of the network taken at the start of the
 cycle, the per-source flag `spread h s` (more than two distinct recent destinations), the choice
-`choose h` among the free hops of a tier (prices), and the injection rule `admit` (tolls,
+`choose h` among the free hops of a level (prices), and the injection rule `admit` (tolls,
 learned latencies).  A source uses the `lx` controller `(ball₂, o₂, lo₂, hi₂)` when `spread`, and
 `(ball₁, o₁, lo₁, hi₁)` otherwise; the share signal, the threshold and the own-router test are
 read from the snapshot, the free channels from the current configuration. -/
@@ -233,7 +233,7 @@ def comboStrategy (k B : ℕ) {H : Type*} (init : H)
       List (GChan (TorusV k) × GraphData.DetHdr (TorusV k))) :
     Strategy (GChan (TorusV k)) (GraphData.DetHdr (TorusV k)) H where
   init := init
-  sel h := refineSel ((torus k).throttleSel B (torus k).anyDetour
+  sel h := refineSel ((torus k).throttleSel B (torus k).anyIntermediate
     (fun _ s => if spread h s then (torus k).lxThr ball₂ o₂ lo₂ hi₂ (snap h) s
       else (torus k).lxThr ball₁ o₁ lo₁ hi₁ (snap h) s)
     (fun _ s => if spread h s then (torus k).lxBlock ball₂ o₂ (snap h) s
@@ -256,7 +256,7 @@ theorem torus_combo_safe (k B : ℕ) {H : Type*} (init : H)
       GraphData.DetHdr (TorusV k) → List (GChan (TorusV k) × GraphData.DetHdr (TorusV k)) →
       List (GChan (TorusV k) × GraphData.DetHdr (TorusV k)))
     (hch : ∀ h, ChoiceOK (choose h)) :
-    ((torus k).detourNet B (torus k).anyDetour).StrategySafe
+    ((torus k).twoPhaseNet B (torus k).anyIntermediate).StrategySafe
       (comboStrategy k B init update admit snap spread ball₁ ball₂ o₁ lo₁ hi₁ o₂ lo₂ hi₂ choose)
       (fun c => c.isInj) :=
   torus_throttle_safe k B _ _ (fun h _ s => by
@@ -267,14 +267,14 @@ theorem torus_combo_safe (k B : ℕ) {H : Type*} (init : H)
 
 /-! ### The mesh -/
 
-/-- **Appending `escTier k 8`** to any tier list makes `duatoTiers_correct` apply: Duato's mesh
-under the resulting tiered selection is deadlock, livelock and starvation free, whatever the
-other tiers read. -/
-theorem duatoTiers_append_correct (k : ℕ) (tiers : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) :
-    (duatoMesh k).DeadlockFreeWith ((duatoMesh k).tieredSel (tiers ++ [Mesh.escTier k 8])) ∧
-      (duatoMesh k).LivelockFreeWith ((duatoMesh k).tieredSel (tiers ++ [Mesh.escTier k 8])) ∧
-      (duatoMesh k).StarvationFreeWith ((duatoMesh k).tieredSel (tiers ++ [Mesh.escTier k 8])) :=
-  duatoTiers_correct k le_rfl (List.mem_append_right _ List.mem_cons_self)
+/-- **Appending `escPriority k 8`** to any level list makes `duatoPriorities_correct` apply: Duato's mesh
+under the resulting priority selection is deadlock, livelock and starvation free, whatever the
+other levels read. -/
+theorem duatoPriorities_append_correct (k : ℕ) (levels : List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) :
+    (duatoMesh k).DeadlockFreeWith ((duatoMesh k).prioritySel (levels ++ [Mesh.escPriority k 8])) ∧
+      (duatoMesh k).LivelockFreeWith ((duatoMesh k).prioritySel (levels ++ [Mesh.escPriority k 8])) ∧
+      (duatoMesh k).StarvationFreeWith ((duatoMesh k).prioritySel (levels ++ [Mesh.escPriority k 8])) :=
+  duatoPriorities_correct k le_rfl (List.mem_append_right _ List.mem_cons_self)
 
 namespace Mesh
 
@@ -287,25 +287,25 @@ channels free, and only on virtual channel 1 when `block`. -/
 def meshGate (k g : ℕ) (block : Bool) (f : Config ℕ ℕ) (c : ℕ) (q : ℕ × ℕ) : Bool :=
   dir c != 4 || (decide (g ≤ freeOut f (head k q.1)) && (!block || q.1 % 2 == 1))
 
-/-- The tiers of `tieredMesh` through the source gate, with threshold `thr f s` and escape
+/-- The levels of `priorityMesh` through the source gate, with threshold `thr f s` and escape
 blocking `block f s` for the router `s = node c` of the channel: the preferred hop, the escape
 hop, any hop on virtual channel 1. -/
-def gatedTiers (k : ℕ) (thr : Config ℕ ℕ → ℕ → ℕ) (block : Config ℕ ℕ → ℕ → Bool) :
+def gatedPriorities (k : ℕ) (thr : Config ℕ ℕ → ℕ → ℕ) (block : Config ℕ ℕ → ℕ → Bool) :
     List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool) :=
   [fun f c d q => meshGate k (thr f (node c)) (block f (node c)) f c q &&
       (q.1 == prefCh k c d || (dir c == 4 && q.1 == escCh k c d)),
    fun f c d q => meshGate k (thr f (node c)) (block f (node c)) f c q && q.1 == escCh k c d,
    fun f c _ q => meshGate k (thr f (node c)) (block f (node c)) f c q && q.1 % 2 == 1]
 
-/-- **The gated tiers satisfy Duato's condition with throttled sources**, on every network whose
+/-- **The gated levels satisfy Duato's condition with throttled sources**, on every network whose
 permitted hops include the XY escape hop, for thresholds up to 8 and any blocking rule that is
 off when every link channel is empty. -/
-theorem gatedTiers_sourceSel {k : ℕ} (N : Network ℕ ℕ)
+theorem gatedPriorities_sourceSel {k : ℕ} (N : Network ℕ ℕ)
     (hesc : ∀ c d, (escCh k c d, d) ∈ N.route c d) {thr : Config ℕ ℕ → ℕ → ℕ}
     {block : Config ℕ ℕ → ℕ → Bool} (hthr : ∀ f s, thr f s ≤ 8)
     (hblock : ∀ f s, (∀ c, ¬ dir c = 4 → f c = none) → block f s = false) :
-    N.SourceSel (xyEscape k) (fun c => dir c = 4) (N.tieredSel (gatedTiers k thr block)) :=
-  N.tieredSel_sourceSel (fun c d q hq => by
+    N.SourceSel (xyEscape k) (fun c => dir c = 4) (N.prioritySel (gatedPriorities k thr block)) :=
+  N.prioritySel_sourceSel (fun c d q hq => by
       simp only [xyEscape, List.mem_singleton] at hq; subst hq; exact hesc c d)
     (List.mem_cons_of_mem _ List.mem_cons_self)
     (fun f c d q hc hq => by
@@ -369,28 +369,28 @@ theorem duatoMesh_strategy_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
     (fun _ _ _ hl ha hq => Mesh.duato_dist hl ha hq) hσ
 
 /-- **History-dependent throttles on Duato's mesh are safe**: in state `h` the strategy uses the
-gated tiers with thresholds `thr h f s ≤ 8` (read from anything: a snapshot of the escape share,
+gated levels with thresholds `thr h f s ≤ 8` (read from anything: a snapshot of the escape share,
 the source's recent destinations) and an escape-blocking rule `block h f s` that is off when
 every link channel of `f` is empty (for example `Mesh.meshLxBlock` on the current
-configuration), and picks among the free hops of a tier with any admissible choice. -/
+configuration), and picks among the free hops of a level with any admissible choice. -/
 theorem duatoMesh_gated_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
     (thr : H → Config ℕ ℕ → ℕ → ℕ) (block : H → Config ℕ ℕ → ℕ → Bool)
     (hthr : ∀ h f s, thr h f s ≤ 8)
     (hblock : ∀ h f s, (∀ c, ¬ dir c = 4 → f c = none) → block h f s = false)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel ((duatoMesh k).tieredSel (Mesh.gatedTiers k (thr h) (block h))) choose) :
+      σ.sel h = refineSel ((duatoMesh k).prioritySel (Mesh.gatedPriorities k (thr h) (block h))) choose) :
     (duatoMesh k).StrategySafe σ (fun c => dir c = 4) :=
   duatoMesh_strategy_safe k fun h => by
     obtain ⟨choose, hch, he⟩ := hσ h
     rw [he]
-    exact refineSel_sourceSelOn ((Mesh.gatedTiers_sourceSel (duatoMesh k)
+    exact refineSel_sourceSelOn ((Mesh.gatedPriorities_sourceSel (duatoMesh k)
       (fun _ _ => by simp [duatoMesh, Mesh.escCh]) (hthr h) (hblock h)).sourceSelOn _)
-      ((duatoMesh k).tieredSel_freeOnly _) hch
+      ((duatoMesh k).prioritySel_freeOnly _) hch
 
 /-- **The `lx` throttle on Duato's mesh, with the controller chosen by history, is safe**: in
 state `h` a source uses the `lx` controller `(ball₂, o₂, lo₂, hi₂)` when `spread h s` and
 `(ball₁, o₁, lo₁, hi₁)` otherwise, evaluated on the current configuration, with any admissible
-choice `choose h` among the free hops of a tier. -/
+choice `choose h` among the free hops of a level. -/
 theorem duatoMesh_lx_safe (k : ℕ) {H : Type*} (init : H)
     (update : H → Config ℕ ℕ → Act ℕ ℕ → Config ℕ ℕ → H) (admit : H → ℕ → ℕ → Prop)
     (spread : H → ℕ → Bool) (ball₁ ball₂ : ℕ → List ℕ) {o₁ lo₁ hi₁ o₂ lo₂ hi₂ : ℕ}
@@ -399,7 +399,7 @@ theorem duatoMesh_lx_safe (k : ℕ) {H : Type*} (init : H)
     (hch : ∀ h, ChoiceOK (choose h)) :
     (duatoMesh k).StrategySafe
       { init := init, admit := admit, update := update
-        sel := fun h => refineSel ((duatoMesh k).tieredSel (Mesh.gatedTiers k
+        sel := fun h => refineSel ((duatoMesh k).prioritySel (Mesh.gatedPriorities k
           (fun f s => if spread h s then Mesh.meshLxThr ball₂ o₂ lo₂ hi₂ f s
             else Mesh.meshLxThr ball₁ o₁ lo₁ hi₁ f s)
           (fun f s => if spread h s then Mesh.meshLxBlock ball₂ o₂ f s
@@ -416,14 +416,14 @@ theorem duatoMesh_lx_safe (k : ℕ) {H : Type*} (init : H)
 
 #assert_standard_axioms torus_dist_step torus_choice_safe torus_price_safe torus_lxSel_sourceSel
 #assert_standard_axioms torus_lx_correct torus_throttle_safe torus_combo_safe
-#assert_standard_axioms duatoTiers_append_correct duatoMesh_strategy_safe duatoMesh_gated_safe
-#assert_standard_axioms duatoMesh_lx_safe Mesh.gatedTiers_sourceSel
+#assert_standard_axioms duatoPriorities_append_correct duatoMesh_strategy_safe duatoMesh_gated_safe
+#assert_standard_axioms duatoMesh_lx_safe Mesh.gatedPriorities_sourceSel
 
 /-- **Every strategy on the west-first mesh whose selections satisfy Duato's condition with
 throttled sources (on the legal pairs) is safe**: deadlock and livelock free, every packet
 outside the injection channels delivered along every run channel fair relative to the selection
 in force, and every packet along every run strongly fair relative to it.  This covers switching
-between tier lists of the west-first mesh (for example a learner choosing among modes). -/
+between level lists of the west-first mesh (for example a learner choosing among modes). -/
 theorem westFirstMesh_strategy_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
     (hσ : ∀ h, (westFirstMesh k).SourceSelOn (wfLegal k) (xyEscape k) (fun c => dir c = 4)
       (σ.sel h)) :
@@ -433,22 +433,22 @@ theorem westFirstMesh_strategy_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ
     (fun _ _ _ _ _ hq => Mesh.turnDuato_not_source (fun _ _ _ _ h => westFirst_sub h) hq)
     (wfDist k) (fun _ _ _ hl ha hq => by have := wf_dist hl ha hq; omega) hσ
 
-/-- **Every tier list of the west-first mesh containing the throttled escape tier, switched by
-any history-dependent rule, is safe**: in state `h` the strategy uses `tiers h` (each containing
-`escTier k (g h)` with `g h ≤ 8`) and picks among the free hops of a tier with any admissible
+/-- **Every level list of the west-first mesh containing the throttled escape level, switched by
+any history-dependent rule, is safe**: in state `h` the strategy uses `levels h` (each containing
+`escPriority k (g h)` with `g h ≤ 8`) and picks among the free hops of a level with any admissible
 choice. -/
 theorem westFirstMesh_modes_safe (k : ℕ) {H : Type*} {σ : Strategy ℕ ℕ H}
-    (tiers : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
-    (ht : ∀ h, escTier k (g h) ∈ tiers h)
+    (levels : H → List (Config ℕ ℕ → ℕ → ℕ → ℕ × ℕ → Bool)) (g : H → ℕ) (hg : ∀ h, g h ≤ 8)
+    (ht : ∀ h, escPriority k (g h) ∈ levels h)
     (hσ : ∀ h, ∃ choose, ChoiceOK choose ∧
-      σ.sel h = refineSel ((westFirstMesh k).tieredSel (tiers h)) choose) :
+      σ.sel h = refineSel ((westFirstMesh k).prioritySel (levels h)) choose) :
     (westFirstMesh k).StrategySafe σ (fun c => dir c = 4) :=
   westFirstMesh_strategy_safe k fun h => by
     obtain ⟨choose, hch, he⟩ := hσ h
     rw [he]
-    exact refineSel_sourceSelOn ((tieredSel_sourceSel (westFirstMesh k) (k := k)
+    exact refineSel_sourceSelOn ((prioritySel_sourceSel (westFirstMesh k) (k := k)
       (fun _ _ => by simp [westFirstMesh, turnDuatoMesh]) (hg h) (ht h)).sourceSelOn _)
-      ((westFirstMesh k).tieredSel_freeOnly _) hch
+      ((westFirstMesh k).prioritySel_freeOnly _) hch
 
 #assert_standard_axioms westFirstMesh_strategy_safe westFirstMesh_modes_safe
 

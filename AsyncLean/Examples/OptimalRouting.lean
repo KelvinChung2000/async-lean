@@ -195,7 +195,7 @@ theorem dir_lt (c : ℕ) : dir c < 5 := Nat.mod_lt _ (by omega)
 
 end Mesh
 
-/-- Duato's mesh with a turn-model escape layer: virtual channel 0 offers the XY hop (listed
+/-- Duato's mesh with a turn-model escape subnetwork: virtual channel 0 offers the XY hop (listed
 first: the escape hop) and every hop of the turn model `turn`; virtual channel 1 offers every
 productive hop. -/
 def turnDuatoMesh (turn : ℕ → ℕ → ℕ → List ℕ) (k : ℕ) : Network ℕ ℕ where
@@ -206,10 +206,10 @@ def turnDuatoMesh (turn : ℕ → ℕ → ℕ → List ℕ) (k : ℕ) : Network 
       ++ (productive k u d).map fun dr => (ch u dr 1, d)
   inject := allPairs (k * k) fun s => ch s 4 0
 
-/-- Duato's mesh with a west-first escape layer. -/
+/-- Duato's mesh with a west-first escape subnetwork. -/
 abbrev westFirstMesh (k : ℕ) : Network ℕ ℕ := turnDuatoMesh westFirst k
 
-/-- Duato's mesh with a north-last escape layer. -/
+/-- Duato's mesh with a north-last escape subnetwork. -/
 abbrev northLastMesh (k : ℕ) : Network ℕ ℕ := turnDuatoMesh northLast k
 
 /-- Every productive hop on both virtual channels. -/
@@ -373,7 +373,7 @@ theorem wf_dist {k c d : ℕ} {q : ℕ × ℕ} (hl : wfLegal k c d)
 /-! #### Wormhole switching
 
 The escape channels are those of virtual channel 0.  Duato's *extended* dependency graph also
-counts the escape channels a packet requests after detours on virtual channel 1.  Such a detour
+counts the escape channels a packet requests after adaptive hops on virtual channel 1.  Such a hop
 is productive, so it keeps the head of the packet between the escape channel it left and its
 destination (`wfBox`), and the same order `wfRank` decreases. -/
 
@@ -565,7 +565,7 @@ theorem westFirstMesh_hops {k s d : ℕ} (hs : s < k * k) (hd : d < k * k) {q : 
 
 /-! #### Congestion-aware selection
 
-More adaptivity on the escape layer is not always faster: under heavy, adversarial traffic,
+More adaptivity on the escape subnetwork is not always faster: under heavy, adversarial traffic,
 packets taking the extra hops of virtual channel 0 crowd the escape channels.  (In a cycle-level
 simulation, `scripts/routing_sim.py`, an 8 × 8 west-first mesh with a random choice among the
 free hops saturates at about 0.11 packets per node and cycle under bit-complement traffic,

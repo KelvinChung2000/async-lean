@@ -38,7 +38,7 @@ the injections at its end.  Two move models are formalised:
 For every sequential cycle model (both models), with a closed legal set:
 
 * `CycleRun.legal`, `CycleRun.hop_packetStep` : every configuration is legal and every hop is a
-  routing step from a legal pair, so the hop bounds (`packet_hops_le`, the `detour_hops_le_*`
+  routing step from a legal pair, so the hop bounds (`packet_hops_le`, the `twoPhase_hops_le_*`
   theorems) hold for every packet;
 * `WorkConserving.moves_pos` : **no deadlock** — a work-conserving cycle (every arrived packet is
   ejected; if nobody hops, the selection offered nobody a free hop) in a non-empty legal

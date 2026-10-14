@@ -21,7 +21,7 @@ exponentially with the load (Garg-Koenemann / Fleischer multiplicative weights).
        when cheaper than the minimal route by the margin m;
      * adaptive hops: among the free VC1 minimal hops, the cheapest price[u][p] + C[v][tgt]
        (`hop=price`) or a random one (`hop=rand`, as `min`).
-   Both choices stay inside `detourNet` (`Routing/GraphDetour.lean`): an intermediate picked
+   Both choices stay inside `twoPhaseNet` (`Routing/GraphTwoPhase.lean`): an intermediate picked
    at the source, minimal adaptive hops, the unchanged tree escape and budget.
 
 Usage: python3 scripts/xp_prices.py fluid
@@ -219,10 +219,10 @@ def sim_price(spec, rate, pattern, g=4, budget=2, cycles=4000, warmup=1000, seed
             e = esc[c][d]
             onesc = c % 2 == 0 and not src
             canret = not (onesc and pk[4] >= budget)
-            tiers = [vc1[u][tgt], [e]] if canret else [[e]]
+            levels = [vc1[u][tgt], [e]] if canret else [[e]]
             q = None
-            for tier in tiers:
-                free = [x for x in tier if x not in occ]
+            for level in levels:
+                free = [x for x in level if x not in occ]
                 if g and src:
                     free = [x for x in free if sum(1 for o2 in out[head[x]] if o2 not in occ) >= thr[head[x]]]
                 if free:
@@ -322,8 +322,8 @@ def sim_price(spec, rate, pattern, g=4, budget=2, cycles=4000, warmup=1000, seed
 
 # ------------------------------------------------------------------ 3. mesh (routing_sim mechanics)
 def sim_mesh(spec, rate, pattern, k=8, cycles=6000, warmup=2000, seed=1, g=4):
-    """`routing_sim.simulate(duatoMesh, 'T4:tiered')` with price-based choices.  spec:
-    mode=tiered (exactly tieredMesh), mode=ptier (tieredMesh; where a tier offers two free
+    """`routing_sim.simulate(duatoMesh, 'T4:priority')` with price-based choices.  spec:
+    mode=priority (exactly priorityMesh), mode=ptier (priorityMesh; where a level offers two free
     hops, the cheapest price + C), mode=pdev (the preferred hop only when its cost is within
     (1 + tol) of the cheapest free VC1 minimal hop, otherwise that cheapest hop; then the
     escape; then any VC1 hop, cheapest)."""
@@ -374,7 +374,7 @@ def sim_mesh(spec, rate, pattern, k=8, cycles=6000, warmup=2000, seed=1, g=4):
         return [q for q, y in zip(qs, sc) if y <= mn * 1.0000001]
 
     for t in range(cycles):
-        if mode != 'tiered':
+        if mode != 'priority':
             if wocc:
                 ob = np.zeros((n, 4))
                 for c in occ:
@@ -408,11 +408,11 @@ def sim_mesh(spec, rate, pattern, k=8, cycles=6000, warmup=2000, seed=1, g=4):
             esc = ch(u, xy(u, d), 0)
             pref = esc if c % 2 == 0 and not src else ch(u, yx(u, d), 1)
             pick = []
-            if mode in ('tiered', 'ptier'):
-                for tier in (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
+            if mode in ('priority', 'ptier'):
+                for level in (lambda q: q == pref or (src and q == esc), lambda q: q == esc,
                              lambda q: q % 2 == 1):
-                    if any(tier(q) for q in free):
-                        pick = [q for q in free if tier(q)]
+                    if any(level(q) for q in free):
+                        pick = [q for q in free if level(q)]
                         break
                 if mode == 'ptier' and len(pick) > 1:
                     pick = cheapest(u, pick, d)

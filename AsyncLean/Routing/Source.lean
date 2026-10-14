@@ -4,7 +4,7 @@ Copyright (c) 2026. Released under Apache 2.0 license as described in the file L
 import AsyncLean.Routing.Fairness
 
 /-!
-# Throttled sources and tiered selections
+# Throttled sources and priority selections
 
 Duato's theorem for selection functions (`Network.deadlockFreeWith_of_escape`) asks the selection
 never to refuse a free escape hop.  Under heavy load it pays to hold packets back at their
@@ -26,10 +26,10 @@ The escape argument still goes through when the refusing channels are never the 
   deadlock- and livelock-free network it makes a run revisit every reachable configuration, the
   empty one included, so this says nothing about a network kept saturated (and nothing about a
   source's queue before its injection channel, which the model does not have).
-* `Network.tieredSel` — a selection given by a list of tiers: a packet is offered the free
-  permitted hops admitted by the first tier that admits one (for example: the preferred hop, then
-  the escape hop, then the adaptive ones).  `tieredSel_conserving`: it offers a free hop whenever
-  some tier admits a free permitted hop.
+* `Network.prioritySel` — a selection given by a list of priority levels: a packet is offered the
+  free permitted hops admitted by the first priority level that admits one (for example: the
+  preferred hop, then the escape hop, then the adaptive ones).  `prioritySel_conserving`: it offers
+  a free hop whenever some priority level admits a free permitted hop.
 -/
 
 namespace AsyncLean
@@ -130,20 +130,21 @@ theorem starvationFreeWith_of_source {legal : C → P → Prop} (hcl : N.Closed 
     (N.livelockFreeWith_of_ranking hcl hchan rk hrk hsel.sub)
     (N.reachable_finite hcl hfin hsel.sub) r hfair n c p hp
 
-/-! ### Tiered selections -/
+/-! ### Priority selections -/
 
-/-- A **tiered selection**: the packet is offered the free permitted hops admitted by the first
-tier that admits one of them (and nothing, if no tier does). -/
-def tieredSel (tiers : List (Config C P → C → P → C × P → Bool)) : Selection C P :=
-  fun f c p => ((tiers.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p q).find?
+/-- A **priority selection**: the packet is offered the free permitted hops admitted by the first
+level that admits one of them (and nothing, if no priority level does). -/
+def prioritySel (levels : List (Config C P → C → P → C × P → Bool)) : Selection C P :=
+  fun f c p => ((levels.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p
+      q).find?
     (fun l => !l.isEmpty)).getD []
 
 omit [DecidableEq C] in
-theorem mem_tieredSel {tiers : List (Config C P → C → P → C × P → Bool)} {f : Config C P}
-    {c : C} {p : P} {q : C × P} (h : q ∈ N.tieredSel tiers f c p) :
+theorem mem_prioritySel {levels : List (Config C P → C → P → C × P → Bool)} {f : Config C P}
+    {c : C} {p : P} {q : C × P} (h : q ∈ N.prioritySel levels f c p) :
     q ∈ N.route c p ∧ f q.1 = none := by
-  simp only [tieredSel] at h
-  cases hl : (tiers.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p q).find?
+  simp only [prioritySel] at h
+  cases hl : (levels.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p q).find?
       (fun l => !l.isEmpty) with
   | none => rw [hl] at h; simp at h
   | some l =>
@@ -154,12 +155,14 @@ theorem mem_tieredSel {tiers : List (Config C P → C → P → C × P → Bool)
     exact ⟨hq, hf.1⟩
 
 omit [DecidableEq C] in
-/-- A tiered selection offers a free hop whenever some tier admits a free permitted hop. -/
-theorem tieredSel_conserving {tiers : List (Config C P → C → P → C × P → Bool)}
-    {t : Config C P → C → P → C × P → Bool} (ht : t ∈ tiers) {f : Config C P} {c : C} {p : P}
+/-- A priority selection offers a free hop whenever some priority level admits a free permitted hop.
+-/
+theorem prioritySel_conserving {levels : List (Config C P → C → P → C × P → Bool)}
+    {t : Config C P → C → P → C × P → Bool} (ht : t ∈ levels) {f : Config C P} {c : C} {p : P}
     {q : C × P} (hq : q ∈ N.route c p) (hfree : f q.1 = none) (htq : t f c p q = true) :
-    ∃ q ∈ N.tieredSel tiers f c p, f q.1 = none := by
-  have hsome : ((tiers.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p q).find?
+    ∃ q ∈ N.prioritySel levels f c p, f q.1 = none := by
+  have hsome : ((levels.map fun t => (N.route c p).filter fun q => (f q.1).isNone && t f c p
+      q).find?
       (fun l => !l.isEmpty)).isSome := by
     rw [List.find?_isSome]
     refine ⟨_, List.mem_map.2 ⟨t, ht, rfl⟩, ?_⟩
@@ -174,9 +177,9 @@ theorem tieredSel_conserving {tiers : List (Config C P → C → P → C × P �
     cases l with
     | nil => simp at hne
     | cons a _ => exact ⟨a, List.mem_cons_self⟩
-  have hmem : q' ∈ N.tieredSel tiers f c p := by
-    simp only [tieredSel]; rw [hl, Option.getD_some]; exact hq'
-  exact ⟨q', hmem, (N.mem_tieredSel hmem).2⟩
+  have hmem : q' ∈ N.prioritySel levels f c p := by
+    simp only [prioritySel]; rw [hl, Option.getD_some]; exact hq'
+  exact ⟨q', hmem, (N.mem_prioritySel hmem).2⟩
 
 end Network
 

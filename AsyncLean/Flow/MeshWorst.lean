@@ -29,10 +29,10 @@ distance).
   any routing has `θ ≤ 4 / k` (cut bound for the left half: `k² / 2` vertices send across `k` links
   of capacity `2`).
 * `worst_opt` : **no routing beats O1TURN in the worst case** (even `k ≥ 2`): the best worst-case
-  throughput over all routings, adaptive or with detours, is exactly `4 / k` (`IsGreatest`); at
+  throughput over all routings, adaptive or non-minimal, is exactly `4 / k` (`IsGreatest`); at
   `k = 8` it is `1/2` (`worst_opt_eight`).
 * `bitcomp_opt`, `bitcomp_minimal` : bit-complement's exact throughput is `4 / k`, reached by a
-  minimal flow: detours add nothing.
+  minimal flow: non-minimal routing adds nothing.
 * `xy_admissible` (`xyRoutingT`) : XY routes every admissible matrix at `2 / (k - 1)`, minimally;
   `xy_worst` : this is tight: in `xyWorst k`, the vertices `(i, 0)`, `i < k - 1`, all send to the
   last column, through the link `(k - 2, 0) → (k - 1, 0)`.  `xy_worst_opt` : XY's exact
@@ -671,7 +671,8 @@ theorem bitcomp_opt (k : ℕ) (hk : 2 ≤ k) (he : Even k) :
     IsGreatest {θ : ℚ | Routable (meshNet k) (bitcomp k) θ} (4 / k) :=
   ⟨⟨o1Routing (bitcomp_admissible k)⟩, fun _ h => bitcomp_upper k hk he h⟩
 
-/-- **Detours add nothing on bit-complement**: its optimum `4 / k` is reached by a minimal flow. -/
+/-- **Non-minimal routing adds nothing on bit-complement**: its optimum `4 / k` is reached by a
+minimal flow. -/
 theorem bitcomp_minimal (k : ℕ) :
     ∃ F : Flow (meshNet k) (bitcomp k) (4 / k),
       F.Minimal (fun u v => manhattan (gridPos u) (gridPos v)) :=
@@ -679,7 +680,7 @@ theorem bitcomp_minimal (k : ℕ) :
 
 /-- **No routing has a better worst case than O1TURN** (even `k ≥ 2`): the largest throughput at
 which every admissible traffic matrix is routable in the `k × k` mesh, by any routing (adaptive,
-with detours), is `4 / k`, and O1TURN reaches it. -/
+non-minimal), is `4 / k`, and O1TURN reaches it. -/
 theorem worst_opt (k : ℕ) (hk : 2 ≤ k) (he : Even k) :
     IsGreatest {θ : ℚ | ∀ T, Admissible T → Routable (meshNet k) T θ} (4 / k) :=
   ⟨fun _ hT => ⟨o1Routing hT⟩, fun _ h => bitcomp_upper k hk he (h _ (bitcomp_admissible k))⟩

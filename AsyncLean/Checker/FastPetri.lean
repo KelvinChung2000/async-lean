@@ -343,6 +343,23 @@ noncomputable def checkFast (w B fm : ℕ) (tb : List FEntry) (k : ℕ) (dl ll l
     N.init.all (fun x => decide (x < B)) &&
     Fast.check (fsucc fm B tb) k N.trans.length dl lv s₀ c
 
+variable (N) in
+/-- The checks of `checkFast` on the literals, before the state space. -/
+noncomputable def checkFastPre (w B fm : ℕ) (tb : List FEntry) (k : ℕ) (ll : Bool) (s₀ : ℕ) :
+    Bool :=
+  N.wf && Nat.beq B (2 ^ w) && Nat.beq fm (B - 1) && kbeqList feq tb (N.ftable w) &&
+    Nat.beq k (cond ll N.imask 0) && Nat.beq s₀ (encW w N.init) &&
+    N.init.all (fun x => decide (x < B))
+
+/-- `checkFast` from its parts (`Fast.check_of_parts`). -/
+theorem checkFast_of_parts {w B fm k s₀ : ℕ} {tb : List FEntry} {dl ll lv : Bool} {c : Fast.Cert}
+    (h₁ : N.checkFastPre w B fm tb k ll s₀ = true)
+    (h₂ : Fast.checkHead (fsucc fm B tb) N.trans.length lv s₀ c = true)
+    (h₃ : Fast.checkPart (fsucc fm B tb) k dl lv c 0 0 = true) :
+    N.checkFast w B fm tb k dl ll lv s₀ c = true := by
+  change (N.checkFastPre w B fm tb k ll s₀ && Fast.check (fsucc fm B tb) k N.trans.length dl lv s₀ c) = true
+  rw [h₁, Fast.check_of_parts h₂ h₃]; rfl
+
 theorem of_checkFast {w B fm k s₀ : ℕ} {tb : List FEntry} {dl ll lv : Bool} {c : Fast.Cert}
     (h : N.checkFast w B fm tb k dl ll lv s₀ c = true) :
     (dl = true → N.toNet.lts.DeadlockFree N.M₀) ∧

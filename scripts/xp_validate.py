@@ -4,8 +4,8 @@
 
 Runs the existing simulators unchanged (imported, and patched textually where noted; every patch
 must apply exactly once):
-  mesh   `xp_transpose.xsim` (msim with the extra tiers / selections and the per-source injection
-         counters of `xp_transpose`) for the published schemes as bit-identical tier lists
+  mesh   `xp_transpose.xsim` (msim with the extra levels / selections and the per-source injection
+         counters of `xp_transpose`) for the published schemes as bit-identical level lists
          (XY on both VCs, west-first random, Duato random, Duato throttled g4), the learner of
          `xp_transpose.pxsim` (`PX:t5b:th=0.7:d=2:elim=0.1`), and O1TURN through
          `xp_arbiter.simulate` (routing_sim's `o1turn` policy on `duatoMesh`);
@@ -30,7 +30,7 @@ they are (X' fd = 5 / fs = 3, the learner's th = 0.7, epochs of 250 cycles, the 
 32 / 35 % with radius 2, the toll / price constants): the honest generalisation test.
 
 Specs (key = (k, spec, rate, pattern, seed, chain, cycles)):
-  MX:<msim spec>       mesh tier list (xsim), + [min/mean, Jain] of per-source injections
+  MX:<msim spec>       mesh level list (xsim), + [min/mean, Jain] of per-source injections
   MPX:<set>[:opts]     mesh learner (sets: xp_transpose.MSETS / FSETS here), + fairness
   MFX:<set>[:opts]     the fairness-gated learner (FairLearner below), + fairness
   MO1                  O1TURN (xp_arbiter.simulate, duatoMesh / o1turn)
@@ -327,7 +327,7 @@ def torus_a(sp, rate, pattern, seed, chain, cycles):
 # ------------------------------------------------------------------ fairness variants (mesh)
 # t5a: t5b with the g = 6 mode replaced by g = 5; t5c: both tornado modes
 FSETS['t5a'] = XT.MSETS['t5a']
-FSETS['t5c'] = XT.MSETS['t5b'] + ['route=wf:tiers=all+esc:thr=g5']
+FSETS['t5c'] = XT.MSETS['t5b'] + ['route=wf:levels=all+esc:thr=g5']
 
 
 # ------------------------------------------------------------------ driver
@@ -410,8 +410,8 @@ def jobs_of(specs, pats, rates, seeds, chains, cycles):
 def check():
     ok = True
     for chn in ('seq', 'none'):
-        a = XT.run_fair('X:route=wf:tiers=xy+esc:thr=g0', 0.4, 'tornado', 3, chn, 900)
-        b = mesh_x('route=wf:tiers=xy+esc:thr=g0', 0.4, 'tornado', 3, chn, 900)
+        a = XT.run_fair('X:route=wf:levels=xy+esc:thr=g0', 0.4, 'tornado', 3, chn, 900)
+        b = mesh_x('route=wf:levels=xy+esc:thr=g0', 0.4, 'tornado', 3, chn, 900)
         ok &= a == b
         print('xp_transpose F:X / mesh_x', chn, a[:2], a[-2:], b[-2:], a == b)
         a = XT.run_fair('PX:t5b:th=0.7:d=2:elim=0.1', 1.0, 'tornado', 3, chn, 1500)
@@ -442,9 +442,9 @@ def check():
 
 
 # ------------------------------------------------------------------ report
-NAMES = {'MX:route=wf:tiers=xy+esc:thr=g0': 'XY both VCs', 'MX:route=wf:tiers=all+esc:thr=g0':
-         'west-first rand', 'MX:route=duato:tiers=all+esc:thr=g0': 'Duato rand',
-         'MX:route=duato:tiers=all+esc:thr=g4': 'Duato T4', 'MO1': 'O1TURN', 'TA:dor': 'dor',
+NAMES = {'MX:route=wf:levels=xy+esc:thr=g0': 'XY both VCs', 'MX:route=wf:levels=all+esc:thr=g0':
+         'west-first rand', 'MX:route=duato:levels=all+esc:thr=g0': 'Duato rand',
+         'MX:route=duato:levels=all+esc:thr=g4': 'Duato T4', 'MO1': 'O1TURN', 'TA:dor': 'dor',
          'TA:val': 'val', 'TA:ugal': 'ugal'}
 
 

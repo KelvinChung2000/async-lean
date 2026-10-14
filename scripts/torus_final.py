@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The final torus comparison of the README (simulation): peak accepted throughput over offered
+"""The final torus comparison of docs/topologies.md (simulation): peak accepted throughput over offered
 loads 0.3 to 1.0, mean of 4 seeds, all nine patterns.
 
 Usage: python3 scripts/torus_final.py dor,min,val,ugal,bandit2m7f5k
